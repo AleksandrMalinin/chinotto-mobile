@@ -122,6 +122,7 @@ type Entry = {
 
 - `enqueueForSync(entry: Entry)`
 - `processSyncQueue()`
+- Optional **Firebase (Firestore)** push when `EXPO_PUBLIC_FIREBASE_*` is set — see `docs/SYNC.md`
 
 ### Behavior
 
@@ -132,7 +133,7 @@ type Entry = {
 ### Conflict strategy (v1)
 
 - Append-only → no conflicts
-- Later: dedupe by id
+- **Remote ingest (when implemented) must dedupe by `Entry.id`.** Retries can resend the same entry; the server (or desktop receiver) should treat duplicate ids as no-ops.
 
 ### Future-ready design
 
@@ -160,15 +161,11 @@ type SyncItem = {
 
 ---
 
-## Networking (future)
+## Networking
 
-Not required for v1.
+**v1 (optional):** Firestore `setDoc` from the sync queue (`docs/SYNC.md`). Capture stays local-first; network is background-only.
 
-But design should support:
-
-- REST or WebSocket sync
-- Eventually consistent model
-- Retry logic
+**Future:** pull, other transports — eventually consistent model, retry logic (SQLite queue already retries push).
 
 ---
 
@@ -178,9 +175,15 @@ But design should support:
 storage/
   db.ts
   entryRepository.ts
+auth/
+  appleFirebaseAuth.ts
+  enableAppleSync.ts
 sync/
   syncQueue.ts
   syncEngine.ts
+  firebaseConfig.ts
+  firebaseSync.ts
+  pushEntryForSync.ts
 ui/
   components
   screens
