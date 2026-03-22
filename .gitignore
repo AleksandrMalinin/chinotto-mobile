@@ -1,0 +1,67 @@
+# Chinotto Mobile — ignored paths (see notes at bottom)
+
+# Dependencies
+node_modules/
+
+# Only pnpm is used; ignore accidental npm/yarn lockfiles
+package-lock.json
+yarn.lock
+
+# pnpm: local store if created inside the repo (e.g. sandboxed CI)
+.pnpm-store/
+
+# Expo / Metro
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native projects from `expo prebuild` or `expo run:*` — regenerate locally or via EAS
+/ios
+/android
+
+# Kotlin
+.kotlin/
+
+# Build / caches
+*.tsbuildinfo
+.turbo/
+.cache/
+
+# Merge / secrets (native signing)
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# Metro
+.metro-health-check*
+
+# Logs
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+pnpm-debug.log*
+
+# Test / coverage
+coverage/
+
+# Environment (secrets; never commit)
+.env
+.env.local
+.env.*.local
+
+# macOS
+.DS_Store
+
+# Editors (uncomment if you do not want machine-local settings in git)
+# .vscode/
+# .idea/
+
+# ---
+# What we commit: source, assets, app.json, pnpm-lock.yaml, docs, scripts.
+# What stays local: node_modules, .expo, ios/android prebuild output, env files, logs, coverage.
