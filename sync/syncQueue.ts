@@ -1,0 +1,51 @@
+import { randomUUID } from 'expo-crypto';
+import type { SQLiteDatabase } from 'expo-sqlite';
+
+import type { Entry } from '../types/entry';
+import { getDatabase } from '../storage/db';
+
+/** `payload.id` is the stable entry id; remote ingest should dedupe on it when sync retries. */
+export type SyncItem = {
+  id: string;
+  payload: Entry;
+  status: 'pending' | 'synced';
+};
+
+function rowToSyncItem(row: { id: string; payload: string; status: string }): SyncItem {
+  const payload = JSON.parse(row.payload) as Entry;
+  const status = row.status === 'synced' ? 'synced' : 'pending';
+  return { id: row.id, payload, status };
+}
+
+/** Insert one pending row using an existing DB handle (e.g. inside `withTransactionAsync`). */
+export async function insertPendingSyncItem(db: SQLiteDatabase, entry: Entry): Promise<void> {
+  const id = randomUUID();
+  await db.runAsync(
+    'INSERT INTO sync_queue (id, payload, status) VALUES (?, ?, ?)',
+    id,
+    JSON.stringify(entry),
+    'pending'
+  );
+}
+
+/**
+ * Persists a queue row for background sync. Storage remains source of truth; sync is a side effect.
+ */
+export async function enqueueForSync(entry: Entry): Promise<void> {
+  const db = await getDatabase();
+  await insertPendingSyncItem(db, entry);
+}
+
+export async function getPendingSyncItems(limit: number): Promise<SyncItem[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<{ id: string; payload: string; status: string }>(
+    `SELECT id, payload, status FROM sync_queue WHERE status = 'pending' ORDER BY rowid ASC LIMIT ?`,
+    limit
+  );
+  return rows.map(rowToSyncItem);
+}
+
+export async function markSynced(queueItemId: string): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync("UPDATE sync_queue SET status = 'synced' WHERE id = ?", queueItemId);
+}

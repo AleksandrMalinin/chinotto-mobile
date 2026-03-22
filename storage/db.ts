@@ -14,6 +14,11 @@ export function initDatabase(): Promise<SQLiteDatabase> {
         id TEXT PRIMARY KEY NOT NULL,
         text TEXT NOT NULL,
         created_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS sync_queue (
+        id TEXT PRIMARY KEY NOT NULL,
+        payload TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('pending', 'synced'))
       );`
     );
     return db;

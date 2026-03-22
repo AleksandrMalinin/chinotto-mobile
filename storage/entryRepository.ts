@@ -1,6 +1,7 @@
 import { randomUUID } from 'expo-crypto';
 
 import type { Entry } from '../types/entry';
+import { insertPendingSyncItem } from '../sync/syncQueue';
 import { getDatabase } from './db';
 
 export async function saveEntry(text: string): Promise<Entry> {
@@ -16,12 +17,15 @@ export async function saveEntry(text: string): Promise<Entry> {
   };
 
   const db = await getDatabase();
-  await db.runAsync(
-    'INSERT INTO entries (id, text, created_at) VALUES (?, ?, ?)',
-    entry.id,
-    entry.text,
-    entry.createdAt
-  );
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      'INSERT INTO entries (id, text, created_at) VALUES (?, ?, ?)',
+      entry.id,
+      entry.text,
+      entry.createdAt
+    );
+    await insertPendingSyncItem(db, entry);
+  });
 
   return entry;
 }
