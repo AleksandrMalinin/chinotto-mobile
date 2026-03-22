@@ -50,10 +50,17 @@ pnpm-debug.log*
 # Test / coverage
 coverage/
 
-# Environment (secrets; never commit)
+# Environment (secrets; never commit — use `.env.example` as the template)
 .env
 .env.local
 .env.*.local
+.env.development
+.env.production
+.env.staging
+
+# Firebase native config files (if you add native SDKs later; not used by current JS-only setup)
+google-services.json
+GoogleService-Info.plist
 
 # macOS
 .DS_Store
