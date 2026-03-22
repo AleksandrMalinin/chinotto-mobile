@@ -8,6 +8,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { BrandSplash } from './components/BrandSplash';
 import { CaptureScreen } from './screens/CaptureScreen';
 import { WelcomeOnboardingScreen } from './screens/WelcomeOnboardingScreen';
+import { resolvePushEntryForSync } from './sync/pushEntryForSync';
+import { startBackgroundSync } from './sync/syncEngine';
 import { initDatabase } from './storage/db';
 import { clearWelcomeFlag, hasCompletedWelcome } from './storage/welcomeFlag';
 
@@ -52,6 +54,26 @@ export default function App() {
   useEffect(() => {
     void initDatabase().finally(() => setDbReady(true));
   }, []);
+
+  useEffect(() => {
+    if (!dbReady) {
+      return;
+    }
+    let cancelled = false;
+    let stop: (() => void) | undefined;
+
+    void (async () => {
+      if (cancelled) {
+        return;
+      }
+      stop = startBackgroundSync({ pushEntry: resolvePushEntryForSync() }).stop;
+    })();
+
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
+  }, [dbReady]);
 
   useEffect(() => {
     if (!fontsLoaded || !dbReady) {
