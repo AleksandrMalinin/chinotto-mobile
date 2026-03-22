@@ -10,9 +10,8 @@ import {
 import * as SplashScreen from 'expo-splash-screen';
 
 import { SPLASH_LOGO_SIZE_PTS, SPLASH_LOGO_STROKE_PTS } from '../constants/splashLogo';
-import { AmbientBackground } from './AmbientBackground';
+import { BrandSplashAmbient } from './BrandSplashAmbient';
 import { ChinottoLogo } from './ChinottoLogo';
-import { IntroBlobField } from './IntroBlobField';
 
 /** After logo stroke + dots; a beat of breathe begins at 3.2s — hold through that. */
 const HOLD_MS = 3600;
@@ -24,7 +23,7 @@ type Props = {
 };
 
 /**
- * Desktop intro–adjacent beat: same shell background class as main app + intro blobs +
+ * Same **full-bleed ambient** idea as capture (`AmbientBackground`), slightly more neon, then
  * `ChinottoLogo` with web-matched stroke / dot / breathe timings, then fades away.
  *
  * Logo is centered in the same coordinate space as the root view (matches iOS Launch Screen
@@ -93,8 +92,7 @@ export function BrandSplash({ onFinished }: Props) {
       pointerEvents="none"
       onLayout={onRootLayout}
     >
-      <AmbientBackground />
-      <IntroBlobField />
+      <BrandSplashAmbient />
       <View style={logoFrame} pointerEvents="none">
         <ChinottoLogo
           testID="brand-splash-logo"
