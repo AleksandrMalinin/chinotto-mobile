@@ -14,8 +14,10 @@
     "generate:icons": "node scripts/generate-app-icons.mjs"
   },
   "dependencies": {
+    "@firebase/auth": "1.10.8",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~55.0.8",
+    "expo-apple-authentication": "~55.0.9",
     "expo-crypto": "~55.0.10",
     "expo-dev-client": "~55.0.18",
     "expo-font": "^55.0.4",
@@ -23,6 +25,7 @@
     "expo-splash-screen": "^55.0.12",
     "expo-sqlite": "~55.0.11",
     "expo-status-bar": "~55.0.4",
+    "firebase": "^11.10.0",
     "react": "19.2.0",
     "react-native": "0.83.2",
     "react-native-safe-area-context": "~5.6.2",
