@@ -4,7 +4,6 @@ import {
   Animated,
   Easing,
   StyleSheet,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,13 +14,11 @@ import { useAppTheme } from '../theme';
 const PULSE_MS = 20000;
 
 /**
- * Cosmic shell: charcoal base + two violet/blue glows + top atmosphere.
- * (No full-screen BlurView on top — iOS dark blur stacks over these reads as flat black.)
- * `pointerEvents="none"` everywhere so capture stays instant.
+ * Cosmic shell: charcoal base + **full-bleed** violet/blue washes (no elliptical clips —
+ * those read as two sharp “circles” on device). Top atmosphere + bottom vignette unify edges.
  */
 export function AmbientBackground() {
   const t = useAppTheme();
-  const { width, height } = useWindowDimensions();
   const pulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -57,42 +54,54 @@ export function AmbientBackground() {
     };
   }, [pulse]);
 
-  const orb = Math.max(width, height) * 0.85;
-
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       <View style={[StyleSheet.absoluteFill, { backgroundColor: t.colors.bg }]} />
 
-      <Animated.View style={[styles.orbWrap, { opacity: pulse, left: -width * 0.15, top: -height * 0.08 }]}>
+      {/* Cool-violet wash — upper-left → center; no circular mask = no hard ring */}
+      <Animated.View style={[StyleSheet.absoluteFill, { opacity: pulse }]}>
         <LinearGradient
-          colors={['rgba(120, 140, 210, 0.42)', 'transparent']}
-          start={{ x: 0.2, y: 0.1 }}
-          end={{ x: 0.9, y: 0.9 }}
-          style={{ width: orb, height: orb * 0.75, borderRadius: orb }}
+          colors={[
+            'rgba(100, 118, 185, 0.125)',
+            'rgba(100, 118, 185, 0.038)',
+            'rgba(100, 118, 185, 0.008)',
+            'transparent',
+          ]}
+          locations={[0, 0.35, 0.62, 1]}
+          start={{ x: 0.05, y: 0 }}
+          end={{ x: 0.92, y: 0.88 }}
+          style={StyleSheet.absoluteFill}
         />
       </Animated.View>
 
-      <Animated.View style={[styles.orbWrap, { opacity: pulse, right: -width * 0.12, bottom: -height * 0.1 }]}>
+      {/* Blue-violet wash — lower-right → interior */}
+      <Animated.View style={[StyleSheet.absoluteFill, { opacity: pulse }]}>
         <LinearGradient
-          colors={['rgba(90, 115, 175, 0.36)', 'transparent']}
-          start={{ x: 0.9, y: 0.85 }}
-          end={{ x: 0.1, y: 0.15 }}
-          style={{ width: orb * 0.9, height: orb * 0.7, borderRadius: orb }}
+          colors={[
+            'transparent',
+            'rgba(75, 98, 155, 0.03)',
+            'rgba(75, 98, 155, 0.098)',
+            'rgba(75, 98, 155, 0.038)',
+          ]}
+          locations={[0, 0.38, 0.72, 1]}
+          start={{ x: 1, y: 0.95 }}
+          end={{ x: 0.08, y: 0.12 }}
+          style={StyleSheet.absoluteFill}
         />
       </Animated.View>
 
       <LinearGradient
-        colors={[t.colors.atmosphereSoft, 'transparent', 'transparent']}
-        locations={[0, 0.38, 1]}
+        colors={['rgba(58, 70, 105, 0.105)', 'rgba(58, 70, 105, 0.026)', 'transparent']}
+        locations={[0, 0.28, 1]}
         start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 0.55 }}
+        end={{ x: 0.5, y: 0.52 }}
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
 
       <LinearGradient
-        colors={['transparent', 'transparent', 'rgba(8,10,18,0.85)']}
-        locations={[0, 0.55, 1]}
+        colors={['transparent', 'rgba(5, 6, 11, 0.52)', 'rgba(5, 6, 11, 0.945)']}
+        locations={[0, 0.5, 1]}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={StyleSheet.absoluteFill}
@@ -101,9 +110,3 @@ export function AmbientBackground() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  orbWrap: {
-    position: 'absolute',
-  },
-});
