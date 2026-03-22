@@ -12,6 +12,8 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Path, Stop } from 'react-native-svg';
 
+import { IntroRadialBlobView, type IntroBlobProfile } from './introRadialBlob';
+
 /**
  * Port of `chinotto-app` `StreamFlowPanel` + `stream-flow-*` CSS.
  * @see chinotto-app/docs/stream-flow-panel-animation.md
@@ -32,9 +34,12 @@ const DUR_C_MS = 2200;
 
 const DRAW_EASING = Easing.bezier(0.22, 1, 0.36, 1);
 
-const BLOB_VIOLET = { bg: 'rgba(124, 58, 237, 0.34)', halfMs: 26000, delayStartMs: 0 };
-const BLOB_CYAN = { bg: 'rgba(6, 182, 212, 0.28)', halfMs: 19000, delayStartMs: 4000 };
-const BLOB_EMBER = { bg: 'rgba(249, 115, 22, 0.22)', halfMs: 24000, delayStartMs: 9000 };
+/** Drift timings — same roles as before; fills are `IntroRadialBlobView` (desktop intro blobs). */
+const BLOB_DRIFT: Record<IntroBlobProfile, { halfMs: number; delayStartMs: number }> = {
+  violet: { halfMs: 26000, delayStartMs: 0 },
+  cyan: { halfMs: 19000, delayStartMs: 4000 },
+  orange: { halfMs: 24000, delayStartMs: 9000 },
+};
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
@@ -217,60 +222,69 @@ function BlobField({ panelW, panelH, calm, deferMotion }: BlobFieldProps) {
   const bfH = panelH * 1.24;
   const driftX = bfW * 0.06;
   const driftY = bfH * 0.05;
+  const idPrefix = useId().replace(/:/g, '');
+
+  const vmax = Math.max(bfW, bfH);
+  const sViolet = vmax * 0.72;
+  const sCyan = vmax * 0.68;
+  const sOrange = vmax * 0.65;
+  const anchorY = bfH * 0.46;
+  const violetLeft = bfW * 0.42 - sViolet / 2;
+  const violetTop = anchorY - sViolet * 0.44;
+  const cyanLeft = bfW * 0.5 - sCyan / 2;
+  const cyanTop = anchorY - sCyan * 0.58;
+  const orangeLeft = bfW * 0.54 - sOrange / 2;
+  const orangeTop = anchorY + sOrange * 0.06;
+
+  const enabled = !calm && !deferMotion;
 
   return (
     <View
       style={[styles.blobField, { width: bfW, height: bfH, left: -panelW * 0.12, top: -panelH * 0.12 }]}
       pointerEvents="none"
     >
-      <DriftBlob
-        style={{
-          width: bfW * 0.55,
-          height: bfH * 0.48,
-          left: bfW * -0.05,
-          top: bfH * 0.08,
-          backgroundColor: BLOB_VIOLET.bg,
-        }}
-        halfMs={BLOB_VIOLET.halfMs}
-        delayStartMs={BLOB_VIOLET.delayStartMs}
+      <DriftRadialBlob
+        size={sOrange}
+        profile="orange"
+        gradientId={`${idPrefix}-o`}
+        style={{ left: orangeLeft, top: orangeTop }}
+        halfMs={BLOB_DRIFT.orange.halfMs}
+        delayStartMs={BLOB_DRIFT.orange.delayStartMs}
         driftX={driftX}
         driftY={driftY}
-        enabled={!calm && !deferMotion}
+        enabled={enabled}
       />
-      <DriftBlob
-        style={{
-          width: bfW * 0.52,
-          height: bfH * 0.52,
-          right: bfW * -0.08,
-          top: bfH * 0.28,
-          backgroundColor: BLOB_CYAN.bg,
-        }}
-        halfMs={BLOB_CYAN.halfMs}
-        delayStartMs={BLOB_CYAN.delayStartMs}
+      <DriftRadialBlob
+        size={sCyan}
+        profile="cyan"
+        gradientId={`${idPrefix}-c`}
+        style={{ left: cyanLeft, top: cyanTop }}
+        halfMs={BLOB_DRIFT.cyan.halfMs}
+        delayStartMs={BLOB_DRIFT.cyan.delayStartMs}
         driftX={driftX}
         driftY={driftY}
-        enabled={!calm && !deferMotion}
+        enabled={enabled}
       />
-      <DriftBlob
-        style={{
-          width: bfW * 0.48,
-          height: bfH * 0.44,
-          left: bfW * 0.18,
-          bottom: bfH * -0.06,
-          backgroundColor: BLOB_EMBER.bg,
-        }}
-        halfMs={BLOB_EMBER.halfMs}
-        delayStartMs={BLOB_EMBER.delayStartMs}
+      <DriftRadialBlob
+        size={sViolet}
+        profile="violet"
+        gradientId={`${idPrefix}-v`}
+        style={{ left: violetLeft, top: violetTop }}
+        halfMs={BLOB_DRIFT.violet.halfMs}
+        delayStartMs={BLOB_DRIFT.violet.delayStartMs}
         driftX={driftX}
         driftY={driftY}
-        enabled={!calm && !deferMotion}
+        enabled={enabled}
       />
     </View>
   );
 }
 
-type DriftBlobProps = {
-  style: ViewStyle;
+type DriftRadialBlobProps = {
+  size: number;
+  profile: IntroBlobProfile;
+  gradientId: string;
+  style: Pick<ViewStyle, 'left' | 'top' | 'right' | 'bottom'>;
   halfMs: number;
   delayStartMs: number;
   driftX: number;
@@ -278,7 +292,17 @@ type DriftBlobProps = {
   enabled: boolean;
 };
 
-function DriftBlob({ style, halfMs, delayStartMs, driftX, driftY, enabled }: DriftBlobProps) {
+function DriftRadialBlob({
+  size,
+  profile,
+  gradientId,
+  style,
+  halfMs,
+  delayStartMs,
+  driftX,
+  driftY,
+  enabled,
+}: DriftRadialBlobProps) {
   const t = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -330,11 +354,15 @@ function DriftBlob({ style, halfMs, delayStartMs, driftX, driftY, enabled }: Dri
         styles.blob,
         style,
         {
-          opacity: 0.85,
+          width: size,
+          height: size,
+          opacity: 0.92,
           transform: [{ translateX }, { translateY }, { scale }],
         },
       ]}
-    />
+    >
+      <IntroRadialBlobView size={size} profile={profile} gradientId={gradientId} vivid />
+    </Animated.View>
   );
 }
 
@@ -362,7 +390,6 @@ const styles = StyleSheet.create({
   },
   blob: {
     position: 'absolute',
-    borderRadius: 9999,
   },
   glass: {
     zIndex: 1,
