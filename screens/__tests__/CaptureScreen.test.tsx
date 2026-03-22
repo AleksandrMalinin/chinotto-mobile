@@ -19,6 +19,10 @@ jest.mock('../../sync/firebaseConfig', () => ({
   isFirebaseSyncConfigured: jest.fn(() => false),
 }));
 
+jest.mock('../../sync/tombstoneFlush', () => ({
+  flushSyncTombstoneOutbox: jest.fn(() => Promise.resolve()),
+}));
+
 import { CaptureScreen } from '../CaptureScreen';
 
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
@@ -35,6 +39,7 @@ jest.mock('../../storage/entryRepository', () => ({
     })
   ),
   getRecentEntries: jest.fn(() => Promise.resolve([])),
+  deleteEntry: jest.fn(() => Promise.resolve()),
 }));
 
 const safeAreaMetrics = {
@@ -117,34 +122,34 @@ describe('CaptureScreen sync auth restore', () => {
     jest.restoreAllMocks();
   });
 
-  it('does not show Enable sync while auth is restoring (before first onAuthStateChanged)', async () => {
+  it('shows Sync in header while auth is restoring (before first onAuthStateChanged)', async () => {
     mockOnAuthStateChanged.mockImplementation(() => jest.fn());
 
-    const { queryByTestId, findByTestId } = render(
+    const { getByTestId, findByTestId } = render(
       <SafeAreaProvider initialMetrics={safeAreaMetrics}>
         <CaptureScreen />
       </SafeAreaProvider>
     );
 
     await findByTestId('capture-input');
-    expect(queryByTestId('enable-sync-cta')).toBeNull();
+    expect(getByTestId('sync-header-cta')).toBeTruthy();
   });
 
-  it('does not show Enable sync when onAuthStateChanged fires with a non-anonymous user', async () => {
+  it('keeps Sync in header when onAuthStateChanged fires with a non-anonymous user', async () => {
     let listener: ((user: unknown) => void) | undefined;
     mockOnAuthStateChanged.mockImplementation((_auth, cb) => {
       listener = cb;
       return jest.fn();
     });
 
-    const { queryByTestId, findByTestId } = render(
+    const { getByTestId, findByTestId } = render(
       <SafeAreaProvider initialMetrics={safeAreaMetrics}>
         <CaptureScreen />
       </SafeAreaProvider>
     );
 
     await findByTestId('capture-input');
-    expect(queryByTestId('enable-sync-cta')).toBeNull();
+    expect(getByTestId('sync-header-cta')).toBeTruthy();
 
     await act(async () => {
       listener?.({
@@ -154,10 +159,10 @@ describe('CaptureScreen sync auth restore', () => {
       });
     });
 
-    expect(queryByTestId('enable-sync-cta')).toBeNull();
+    expect(getByTestId('sync-header-cta')).toBeTruthy();
   });
 
-  it('shows Enable sync after restore when user is anonymous only', async () => {
+  it('shows Sync in header after restore when user is anonymous only', async () => {
     let listener: ((user: unknown) => void) | undefined;
     mockOnAuthStateChanged.mockImplementation((_auth, cb) => {
       listener = cb;
@@ -180,10 +185,10 @@ describe('CaptureScreen sync auth restore', () => {
       });
     });
 
-    expect(getByTestId('enable-sync-cta')).toBeTruthy();
+    expect(getByTestId('sync-header-cta')).toBeTruthy();
   });
 
-  it('shows Enable sync only after restore completes with no signed-in user', async () => {
+  it('shows Sync in header after restore completes with no signed-in user', async () => {
     let listener: ((user: unknown) => void) | undefined;
     mockOnAuthStateChanged.mockImplementation((_auth, cb) => {
       listener = cb;
@@ -203,6 +208,6 @@ describe('CaptureScreen sync auth restore', () => {
       listener?.(null);
     });
 
-    expect(getByTestId('enable-sync-cta')).toBeTruthy();
+    expect(getByTestId('sync-header-cta')).toBeTruthy();
   });
 });

@@ -6,13 +6,13 @@ import {
   NativeSyntheticEvent,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { ScrollView } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AmbientBackground } from '../components/AmbientBackground';
@@ -22,9 +22,10 @@ import { EnableSyncModal } from '../components/EnableSyncModal';
 import { RecentList } from '../components/RecentList';
 import type { Entry } from '../types/entry';
 import { showDevMenu } from '../dev/showDevMenu';
-import { getRecentEntries, saveEntry } from '../storage/entryRepository';
+import { deleteEntry, getRecentEntries, saveEntry } from '../storage/entryRepository';
 import { isFirebaseSyncConfigured } from '../sync/firebaseConfig';
 import { getOrInitAuth } from '../sync/firebaseAuth';
+import { flushSyncTombstoneOutbox } from '../sync/tombstoneFlush';
 import { fonts, screenContentGutter, useAppTheme } from '../theme';
 
 const RECENT_LIMIT = 20;
@@ -36,9 +37,11 @@ export type AuthRestorePhase = 'restoring' | 'signed_in' | 'signed_out';
 export type CaptureScreenProps = {
   /** `__DEV__` only: long-press header logo opens dev menu (e.g. reset welcome). */
   onDevMenu?: () => void;
+  /** Increment when Firestore ingest applies remote changes (desktop → mobile). */
+  remoteIngestVersion?: number;
 };
 
-export function CaptureScreen({ onDevMenu }: CaptureScreenProps = {}) {
+export function CaptureScreen({ onDevMenu, remoteIngestVersion = 0 }: CaptureScreenProps = {}) {
   const [text, setText] = useState('');
   const [entries, setEntries] = useState<Entry[]>([]);
   const [revealByScroll, setRevealByScroll] = useState(false);
@@ -68,6 +71,21 @@ export function CaptureScreen({ onDevMenu }: CaptureScreenProps = {}) {
 
   useEffect(() => {
     void refreshEntries();
+  }, [refreshEntries, remoteIngestVersion]);
+
+  /** Optimistic UI: row disappears immediately; SQLite + tombstone outbox stay non-blocking. */
+  const handleEntryDelete = useCallback((entry: Entry) => {
+    setEntries((prev) => prev.filter((e) => e.id !== entry.id));
+    void deleteEntry(entry.id)
+      .then(() => {
+        void flushSyncTombstoneOutbox();
+      })
+      .catch((err) => {
+        if (__DEV__) {
+          console.warn('deleteEntry failed', err);
+        }
+        void refreshEntries();
+      });
   }, [refreshEntries]);
 
   useEffect(() => {
@@ -152,23 +170,22 @@ export function CaptureScreen({ onDevMenu }: CaptureScreenProps = {}) {
       <AmbientBackground />
       <SafeAreaView style={styles.safe} edges={['top', 'right', 'left', 'bottom']}>
         <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            nestedScrollEnabled
-            scrollEventThrottle={16}
-            onScroll={handleScroll}
-            contentContainerStyle={[
-              styles.scrollContent,
+          <View
+            style={[
+              styles.headerBar,
               {
-                flexGrow: 1,
-                minHeight: windowHeight,
-                paddingTop: t.spacing.xs,
                 paddingHorizontal: gutter,
+                paddingTop: t.spacing.xs,
+                marginBottom: t.spacing.sm,
               },
-              needsScrollSpacer && { minHeight: windowHeight + 160 },
             ]}
           >
-            <View style={[styles.brandRow, { marginBottom: t.spacing.sm }]}>
+            <View
+              style={[
+                styles.headerLogoSlot,
+                isFirebaseSyncConfigured() && Platform.OS === 'ios' && styles.headerReserveDevMenuTray,
+              ]}
+            >
               {onDevMenu != null ? (
                 <Pressable
                   accessibilityLabel="Chinotto"
@@ -182,7 +199,53 @@ export function CaptureScreen({ onDevMenu }: CaptureScreenProps = {}) {
               ) : (
                 <ChinottoLogo testID="header-logo" size={32} color={t.colors.fgDim} />
               )}
+              {isFirebaseSyncConfigured() && Platform.OS === 'ios' ? (
+                <Pressable
+                  testID="sync-header-cta"
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    authRestorePhase === 'signed_in'
+                      ? 'Sync, on'
+                      : authRestorePhase === 'restoring'
+                        ? 'Sync, checking sign-in'
+                        : 'Sync, set up with Apple'
+                  }
+                  hitSlop={10}
+                  onPress={() => setSyncModalVisible(true)}
+                  style={({ pressed }) => [
+                    styles.syncAfterLogo,
+                    { opacity: pressed ? 0.65 : 1 },
+                  ]}
+                >
+                  <Text
+                    style={{
+                      color: t.colors.muted,
+                      fontFamily: fonts.medium,
+                      fontSize: 15,
+                    }}
+                  >
+                    Sync
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
+          </View>
+          <ScrollView
+            style={styles.scrollFlex}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+            scrollEventThrottle={16}
+            onScroll={handleScroll}
+            contentContainerStyle={[
+              styles.scrollContent,
+              {
+                flexGrow: 1,
+                minHeight: windowHeight,
+                paddingHorizontal: gutter,
+              },
+              needsScrollSpacer && { minHeight: windowHeight + 160 },
+            ]}
+          >
             <View>
               <CaptureInput
                 ref={inputRef}
@@ -193,26 +256,7 @@ export function CaptureScreen({ onDevMenu }: CaptureScreenProps = {}) {
                 maxHeight={composerMaxHeight}
               />
             </View>
-            <RecentList entries={entries} visible={showRecent} />
-            {isFirebaseSyncConfigured() && Platform.OS === 'ios' && authRestorePhase === 'signed_out' ? (
-              <Pressable
-                testID="enable-sync-cta"
-                accessibilityRole="button"
-                accessibilityLabel="Enable sync"
-                onPress={() => setSyncModalVisible(true)}
-                style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1, alignSelf: 'flex-start', marginTop: t.spacing.md }]}
-              >
-                <Text
-                  style={{
-                    color: t.colors.muted,
-                    fontFamily: fonts.regular,
-                    fontSize: 14,
-                  }}
-                >
-                  Enable sync
-                </Text>
-              </Pressable>
-            ) : null}
+            <RecentList entries={entries} visible={showRecent} onEntryDelete={handleEntryDelete} />
             <View style={[styles.bottomFill, { flexGrow: 1, minHeight: 1 }]} />
           </ScrollView>
         </KeyboardAvoidingView>
@@ -221,6 +265,7 @@ export function CaptureScreen({ onDevMenu }: CaptureScreenProps = {}) {
         visible={syncModalVisible}
         onClose={() => setSyncModalVisible(false)}
         onEnabled={() => setAuthRestorePhase('signed_in')}
+        authPhase={authRestorePhase}
         fg={t.colors.fg}
         fgDim={t.colors.fgDim}
         muted={t.colors.muted}
@@ -241,13 +286,31 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   flex: { flex: 1 },
+  scrollFlex: {
+    flex: 1,
+  },
   scrollContent: {
     flexGrow: 1,
   },
-  brandRow: {
+  headerBar: {
     flexDirection: 'row',
     alignItems: 'center',
     minHeight: 40,
+  },
+  headerLogoSlot: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 40,
+  },
+  /** When Sync is shown, keep the top-trailing corner clear for expo-dev-client’s floating menu. */
+  headerReserveDevMenuTray: {
+    paddingRight: 56,
+  },
+  syncAfterLogo: {
+    marginLeft: 14,
+    paddingVertical: 6,
+    paddingRight: 4,
   },
   bottomFill: {},
 });

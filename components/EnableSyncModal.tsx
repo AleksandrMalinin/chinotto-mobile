@@ -13,10 +13,14 @@ import { AppleSyncIdentityError } from '../auth/appleFirebaseAuth';
 import { AppleUserCanceledError, enableAppleSyncWithFirebase } from '../auth/enableAppleSync';
 import { fonts, radius, spacing } from '../theme';
 
+export type SyncModalAuthPhase = 'restoring' | 'signed_in' | 'signed_out';
+
 export type EnableSyncModalProps = {
   visible: boolean;
   onClose: () => void;
   onEnabled: () => void;
+  /** Drives copy: enable Apple vs status-only sheet */
+  authPhase: SyncModalAuthPhase;
   /** Design tokens */
   fg: string;
   fgDim: string;
@@ -29,6 +33,7 @@ export function EnableSyncModal({
   visible,
   onClose,
   onEnabled,
+  authPhase,
   fg,
   fgDim,
   muted,
@@ -71,6 +76,8 @@ export function EnableSyncModal({
     return null;
   }
 
+  const showEnableFlow = authPhase === 'signed_out';
+
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={handleClose}>
       <Pressable style={styles.backdrop} onPress={handleClose} disabled={busy}>
@@ -78,48 +85,81 @@ export function EnableSyncModal({
           style={[styles.sheet, { backgroundColor: bgElevated, borderColor: border }]}
           onPress={(ev) => ev.stopPropagation()}
         >
-          <Text style={[styles.title, { color: fg, fontFamily: fonts.medium }]}>Enable sync</Text>
-          <Text style={[styles.body, { color: fgDim, fontFamily: fonts.regular }]}>
-            Use Apple to connect your devices.
-          </Text>
-          <Text style={[styles.note, { color: muted, fontFamily: fonts.regular }]}>
-            Chinotto does not create its own account.
-          </Text>
+          <Text style={[styles.title, { color: fg, fontFamily: fonts.medium }]}>Sync</Text>
 
-          {errorMessage != null ? (
-            <Text style={[styles.error, { color: fgDim, fontFamily: fonts.regular }]} accessibilityLiveRegion="polite">
-              {errorMessage}
+          {authPhase === 'restoring' ? (
+            <>
+              <Text style={[styles.body, { color: fgDim, fontFamily: fonts.regular }]}>
+                Checking sign-in…
+              </Text>
+              <ActivityIndicator style={styles.spinner} color={fg} />
+            </>
+          ) : null}
+
+          {authPhase === 'signed_in' ? (
+            <Text style={[styles.body, { color: fgDim, fontFamily: fonts.regular }]}>
+              You're signed in with Apple. New thoughts sync in the background.
             </Text>
           ) : null}
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Continue with Apple"
-            disabled={busy}
-            style={({ pressed }) => [
-              styles.appleButton,
-              { backgroundColor: fg, opacity: busy ? 0.5 : pressed ? 0.88 : 1 },
-            ]}
-            onPress={() => void handleApple()}
-          >
-            {busy ? (
-              <ActivityIndicator color={bgElevated} />
-            ) : (
-              <Text style={[styles.appleLabel, { color: bgElevated, fontFamily: fonts.medium }]}>
-                Continue with Apple
+          {showEnableFlow ? (
+            <>
+              <Text style={[styles.body, { color: fgDim, fontFamily: fonts.regular }]}>
+                Use Apple to connect your devices.
               </Text>
-            )}
-          </Pressable>
+              <Text style={[styles.note, { color: muted, fontFamily: fonts.regular }]}>
+                Chinotto does not create its own account.
+              </Text>
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Close"
-            disabled={busy}
-            onPress={handleClose}
-            style={styles.later}
-          >
-            <Text style={{ color: muted, fontFamily: fonts.regular }}>Not now</Text>
-          </Pressable>
+              {errorMessage != null ? (
+                <Text
+                  style={[styles.error, { color: fgDim, fontFamily: fonts.regular }]}
+                  accessibilityLiveRegion="polite"
+                >
+                  {errorMessage}
+                </Text>
+              ) : null}
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Continue with Apple"
+                disabled={busy}
+                style={({ pressed }) => [
+                  styles.appleButton,
+                  { backgroundColor: fg, opacity: busy ? 0.5 : pressed ? 0.88 : 1 },
+                ]}
+                onPress={() => void handleApple()}
+              >
+                {busy ? (
+                  <ActivityIndicator color={bgElevated} />
+                ) : (
+                  <Text style={[styles.appleLabel, { color: bgElevated, fontFamily: fonts.medium }]}>
+                    Continue with Apple
+                  </Text>
+                )}
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                disabled={busy}
+                onPress={handleClose}
+                style={styles.later}
+              >
+                <Text style={{ color: muted, fontFamily: fonts.regular }}>Not now</Text>
+              </Pressable>
+            </>
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Done"
+              disabled={busy}
+              onPress={handleClose}
+              style={({ pressed }) => [styles.doneButton, { opacity: pressed ? 0.85 : 1 }]}
+            >
+              <Text style={{ color: fg, fontFamily: fonts.medium, fontSize: 16 }}>Done</Text>
+            </Pressable>
+          )}
         </Pressable>
       </Pressable>
     </Modal>
@@ -171,5 +211,14 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     alignSelf: 'center',
     paddingVertical: spacing.xs,
+  },
+  spinner: {
+    marginVertical: spacing.lg,
+  },
+  doneButton: {
+    marginTop: spacing.md,
+    alignSelf: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
   },
 });
