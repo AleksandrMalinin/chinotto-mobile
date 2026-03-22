@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
 import {
   KeyboardAvoidingView,
   NativeScrollEvent,
@@ -7,6 +8,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Text,
   TextInput,
   useWindowDimensions,
   View,
@@ -16,14 +18,20 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AmbientBackground } from '../components/AmbientBackground';
 import { CaptureInput } from '../components/CaptureInput';
 import { ChinottoLogo } from '../components/ChinottoLogo';
+import { EnableSyncModal } from '../components/EnableSyncModal';
 import { RecentList } from '../components/RecentList';
 import type { Entry } from '../types/entry';
 import { showDevMenu } from '../dev/showDevMenu';
 import { getRecentEntries, saveEntry } from '../storage/entryRepository';
-import { screenContentGutter, useAppTheme } from '../theme';
+import { isFirebaseSyncConfigured } from '../sync/firebaseConfig';
+import { getOrInitAuth } from '../sync/firebaseAuth';
+import { fonts, screenContentGutter, useAppTheme } from '../theme';
 
 const RECENT_LIMIT = 20;
 const SCROLL_REVEAL_OFFSET = 20;
+
+/** Firebase session restore vs signed-out; avoids showing Enable sync before persistence restores. */
+export type AuthRestorePhase = 'restoring' | 'signed_in' | 'signed_out';
 
 export type CaptureScreenProps = {
   /** `__DEV__` only: long-press header logo opens dev menu (e.g. reset welcome). */
@@ -34,6 +42,10 @@ export function CaptureScreen({ onDevMenu }: CaptureScreenProps = {}) {
   const [text, setText] = useState('');
   const [entries, setEntries] = useState<Entry[]>([]);
   const [revealByScroll, setRevealByScroll] = useState(false);
+  const [syncModalVisible, setSyncModalVisible] = useState(false);
+  const [authRestorePhase, setAuthRestorePhase] = useState<AuthRestorePhase>(() =>
+    isFirebaseSyncConfigured() && Platform.OS === 'ios' ? 'restoring' : 'signed_out'
+  );
   const inputRef = useRef<TextInput>(null);
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const t = useAppTheme();
@@ -64,6 +76,46 @@ export function CaptureScreen({ onDevMenu }: CaptureScreenProps = {}) {
     }
   }, [isInputEmpty]);
 
+  useEffect(() => {
+    if (!isFirebaseSyncConfigured() || Platform.OS !== 'ios') {
+      return;
+    }
+
+    if (__DEV__) {
+      console.log('[ChinottoAuth] launch: attaching auth listener', { platform: Platform.OS });
+    }
+
+    const auth = getOrInitAuth();
+
+    if (__DEV__) {
+      const u = auth.currentUser;
+      console.log('[ChinottoAuth] auth init: immediate currentUser', {
+        uid: u?.uid ?? null,
+        isAnonymous: u?.isAnonymous ?? null,
+        providerIds: u?.providerData?.map((p) => p.providerId) ?? [],
+      });
+    }
+
+    return onAuthStateChanged(auth, (user) => {
+      const syncEnabled = Boolean(user && !user.isAnonymous);
+      const nextPhase: AuthRestorePhase = syncEnabled ? 'signed_in' : 'signed_out';
+
+      if (__DEV__) {
+        console.log('[ChinottoAuth] onAuthStateChanged', {
+          uid: user?.uid ?? null,
+          isAnonymous: user?.isAnonymous ?? null,
+          providerIds: user?.providerData?.map((p) => p.providerId) ?? [],
+        });
+        console.log('[ChinottoAuth] sync UI decision', {
+          phase: nextPhase,
+          treatAsSyncEnabled: syncEnabled,
+        });
+      }
+
+      setAuthRestorePhase(nextPhase);
+    });
+  }, []);
+
   const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (e.nativeEvent.contentOffset.y > SCROLL_REVEAL_OFFSET) {
       setRevealByScroll(true);
@@ -76,13 +128,14 @@ export function CaptureScreen({ onDevMenu }: CaptureScreenProps = {}) {
       return;
     }
 
-    setText('');
-    requestAnimationFrame(() => {
-      inputRef.current?.focus();
-    });
-
     void saveEntry(trimmed)
-      .then(() => refreshEntries())
+      .then(() => {
+        setText('');
+        requestAnimationFrame(() => {
+          inputRef.current?.focus();
+        });
+        void refreshEntries();
+      })
       .catch((err) => {
         if (__DEV__) {
           console.warn('saveEntry failed', err);
@@ -141,10 +194,39 @@ export function CaptureScreen({ onDevMenu }: CaptureScreenProps = {}) {
               />
             </View>
             <RecentList entries={entries} visible={showRecent} />
+            {isFirebaseSyncConfigured() && Platform.OS === 'ios' && authRestorePhase === 'signed_out' ? (
+              <Pressable
+                testID="enable-sync-cta"
+                accessibilityRole="button"
+                accessibilityLabel="Enable sync"
+                onPress={() => setSyncModalVisible(true)}
+                style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1, alignSelf: 'flex-start', marginTop: t.spacing.md }]}
+              >
+                <Text
+                  style={{
+                    color: t.colors.muted,
+                    fontFamily: fonts.regular,
+                    fontSize: 14,
+                  }}
+                >
+                  Enable sync
+                </Text>
+              </Pressable>
+            ) : null}
             <View style={[styles.bottomFill, { flexGrow: 1, minHeight: 1 }]} />
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+      <EnableSyncModal
+        visible={syncModalVisible}
+        onClose={() => setSyncModalVisible(false)}
+        onEnabled={() => setAuthRestorePhase('signed_in')}
+        fg={t.colors.fg}
+        fgDim={t.colors.fgDim}
+        muted={t.colors.muted}
+        bgElevated={t.colors.bgElevated}
+        border={t.colors.border}
+      />
     </View>
   );
 }
