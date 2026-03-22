@@ -20,7 +20,7 @@ import { RecentList } from '../components/RecentList';
 import type { Entry } from '../types/entry';
 import { showDevMenu } from '../dev/showDevMenu';
 import { getRecentEntries, saveEntry } from '../storage/entryRepository';
-import { useAppTheme } from '../theme';
+import { screenContentGutter, useAppTheme } from '../theme';
 
 const RECENT_LIMIT = 20;
 const SCROLL_REVEAL_OFFSET = 20;
@@ -35,8 +35,9 @@ export function CaptureScreen({ onDevMenu }: CaptureScreenProps = {}) {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [revealByScroll, setRevealByScroll] = useState(false);
   const inputRef = useRef<TextInput>(null);
-  const { height: windowHeight } = useWindowDimensions();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const t = useAppTheme();
+  const gutter = screenContentGutter(windowWidth);
 
   const isInputEmpty = text.trim().length === 0;
   const showRecent = isInputEmpty || revealByScroll;
@@ -89,7 +90,9 @@ export function CaptureScreen({ onDevMenu }: CaptureScreenProps = {}) {
       });
   }, [text, refreshEntries]);
 
-  const inputMinHeight = Math.max(160, windowHeight * 0.38);
+  /** Compact 1–2 lines; sits close to the stream below. */
+  const composerMinHeight = 48;
+  const composerMaxHeight = 80;
 
   return (
     <View style={styles.shell}>
@@ -103,11 +106,16 @@ export function CaptureScreen({ onDevMenu }: CaptureScreenProps = {}) {
             onScroll={handleScroll}
             contentContainerStyle={[
               styles.scrollContent,
+              {
+                flexGrow: 1,
+                minHeight: windowHeight,
+                paddingTop: t.spacing.xs,
+                paddingHorizontal: gutter,
+              },
               needsScrollSpacer && { minHeight: windowHeight + 160 },
-              { paddingTop: t.spacing.xs },
             ]}
           >
-            <View style={[styles.brandRow, { paddingHorizontal: t.spacing.md, marginBottom: t.spacing.xs }]}>
+            <View style={[styles.brandRow, { marginBottom: t.spacing.sm }]}>
               {onDevMenu != null ? (
                 <Pressable
                   accessibilityLabel="Chinotto"
@@ -122,14 +130,18 @@ export function CaptureScreen({ onDevMenu }: CaptureScreenProps = {}) {
                 <ChinottoLogo testID="header-logo" size={32} color={t.colors.fgDim} />
               )}
             </View>
-            <CaptureInput
-              ref={inputRef}
-              value={text}
-              onChangeText={setText}
-              onSubmit={handleSubmit}
-              minHeight={inputMinHeight}
-            />
+            <View>
+              <CaptureInput
+                ref={inputRef}
+                value={text}
+                onChangeText={setText}
+                onSubmit={handleSubmit}
+                minHeight={composerMinHeight}
+                maxHeight={composerMaxHeight}
+              />
+            </View>
             <RecentList entries={entries} visible={showRecent} />
+            <View style={[styles.bottomFill, { flexGrow: 1, minHeight: 1 }]} />
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -155,4 +167,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minHeight: 40,
   },
+  bottomFill: {},
 });

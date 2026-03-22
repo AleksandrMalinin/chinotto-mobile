@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useState } from 'react';
+import { forwardRef } from 'react';
 import { Platform, StyleSheet, TextInput, useWindowDimensions } from 'react-native';
 
 import { useAppTheme } from '../theme';
@@ -8,21 +8,19 @@ export type CaptureInputProps = {
   onChangeText: (text: string) => void;
   onSubmit: () => void;
   minHeight: number;
+  /** When omitted, caps growth for a large composer (~45% window, max 340). */
+  maxHeight?: number;
 };
 
 export const CaptureInput = forwardRef<TextInput, CaptureInputProps>(
-  function CaptureInput({ value, onChangeText, onSubmit, minHeight }, ref) {
+  function CaptureInput({ value, onChangeText, onSubmit, minHeight, maxHeight: maxHeightProp }, ref) {
     const t = useAppTheme();
     const { height: windowHeight } = useWindowDimensions();
-    const maxHeight = Math.min(windowHeight * 0.45, 340);
-    const [focused, setFocused] = useState(false);
-
-    const onFocus = useCallback(() => setFocused(true), []);
-    const onBlur = useCallback(() => setFocused(false), []);
+    const maxHeight =
+      maxHeightProp ?? Math.min(windowHeight * 0.45, 340);
 
     const { colors, typography } = t;
     const { capture } = typography;
-    const underline = focused ? colors.borderFocus : colors.border;
 
     return (
       <TextInput
@@ -34,20 +32,17 @@ export const CaptureInput = forwardRef<TextInput, CaptureInputProps>(
             color: colors.fg,
             minHeight,
             maxHeight,
-            borderBottomColor: underline,
             fontFamily: capture.fontFamily,
             fontSize: capture.fontSize,
             letterSpacing: capture.letterSpacing,
             lineHeight: capture.lineHeight,
-            paddingHorizontal: t.spacing.md,
-            paddingTop: t.spacing.sm,
-            paddingBottom: t.spacing.md,
+            paddingHorizontal: 0,
+            paddingTop: 6,
+            paddingBottom: 8,
           },
         ]}
         value={value}
         onChangeText={onChangeText}
-        onFocus={onFocus}
-        onBlur={onBlur}
         multiline
         autoFocus
         autoCorrect
@@ -62,6 +57,7 @@ export const CaptureInput = forwardRef<TextInput, CaptureInputProps>(
         importantForAutofill="no"
         selectionColor={colors.accent}
         cursorColor={colors.accent}
+        underlineColorAndroid="transparent"
       />
     );
   }
@@ -70,7 +66,6 @@ export const CaptureInput = forwardRef<TextInput, CaptureInputProps>(
 const styles = StyleSheet.create({
   field: {
     width: '100%',
-    borderBottomWidth: StyleSheet.hairlineWidth,
     ...(Platform.OS === 'android' ? { includeFontPadding: false } : null),
   },
 });
