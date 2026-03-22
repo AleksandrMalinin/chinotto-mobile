@@ -2,9 +2,18 @@
 
 **Scope:** data contract, Firestore transport, mobile implementation pointers, identity decisions, and cross-device philosophy. **Normative for** mobile ↔ desktop `Entry` sync; implementation code lives under `sync/` and `storage/`.
 
+**Phases**
+
+| Phase | Status | Summary |
+|--------|--------|---------|
+| **Phase 1** | Shipped (v1) | Append-only create sync; mobile push; desktop ingest by `id` dedupe. No delete over the wire. |
+| **Phase 2** | Desktop **shipped**; mobile **shipped** (this repo) | Tombstone `deletedAt`, suppression bridge, tombstone outbox flush, dual `onSnapshot` (ingest + tombstones), swipe/long-press delete. Normative spec **§8**. **Handoff / alignment:** `chinotto-app/docs/sync-deletion-v2.md`. |
+
+**Cross-repo docs:** **`chinotto-app/docs/sync-deletion-v2.md`** — contract + **Desktop implementation (shipped)** + **Mobile implementation (handoff)**. **§8** below is the normative copy in this repo; keep the two aligned.
+
 ---
 
-## 1. Data contract (`Entry`)
+## 1. Data contract (`Entry`) — Phase 1
 
 Mobile and desktop MUST use the same shape for sync payloads.
 
@@ -14,7 +23,7 @@ Mobile and desktop MUST use the same shape for sync payloads.
 | `text` | `string` | User-visible body. Trimmed on mobile at save; ingest stores as received (aside from transport decoding). |
 | `createdAt` | `string` | ISO 8601 UTC (e.g. `2025-03-22T12:00:00.000Z`). |
 
-**Invariants:** `id` and `createdAt` immutable; v1 **append-only** (no edit/delete via sync). Globally unique **`id`** for dedupe and ordering tie-break.
+**Invariants:** `id` and `createdAt` immutable; Phase 1 **append-only** (no edit/delete via sync payload alone). Globally unique **`id`** for dedupe and ordering tie-break. **Phase 2** adds remote tombstones and delete ops — §8.
 
 ### Source of truth
 
@@ -42,13 +51,15 @@ Mobile and desktop MUST use the same shape for sync payloads.
 
 - Same payload may be resent; receiver **must** be idempotent on `entry.id`.
 
-### v1 scope
+### Phase 1 scope
 
-| In scope | Out of v1 |
-|----------|-----------|
+| In scope | Out of Phase 1 |
+|----------|----------------|
 | Create / append, dedupe by `id` | Edit sync, delete sync, full conflict resolution |
 
-**Future (non-normative):** desktop → mobile pull, bidirectional sync, stronger auth boundaries.
+**Phase 2 (normative):** cross-device delete via tombstones — §8.
+
+**Future (non-normative beyond Phase 2):** full bidirectional edit sync, stronger auth boundaries where not already covered.
 
 ---
 
@@ -71,8 +82,9 @@ users/{firebaseUid}/entries/{entryId}
 ```
 
 - **`entryId`** = `Entry.id`.  
-- **Document fields:** `text` (string), `createdAt` (string, ISO UTC).  
-- **Writes:** `setDoc` — retries are safe (same doc id and payload).
+- **Phase 1 document fields:** `text` (string), `createdAt` (string, ISO UTC).  
+- **Phase 2:** optional tombstone field **`deletedAt`** — see §8 (type `Timestamp`, not ISO string in Firestore).  
+- **Creates (Phase 1):** `setDoc` — retries are safe (same doc id and payload). **Deletes (Phase 2):** `setDoc` with **`{ merge: true }`** and `deletedAt: serverTimestamp()` (preferred over `updateDoc` alone so missing remote docs still tombstone). Idempotent if already tombstoned.
 
 **Security Rules** (paste in console → Firestore → Rules → Publish):
 
@@ -87,7 +99,12 @@ service cloud.firestore {
 }
 ```
 
-**Indexes:** Single-field `orderBy('createdAt')` on `entries` is often auto-created; add a composite index if the console requests it.
+**Indexes:**
+
+- `orderBy('createdAt')` on `entries` (ingest listener) — often auto-created; add a composite if the console requests it (e.g. mixed `createdAt` types).
+- **Tombstone listener:** `where('deletedAt', '!=', null)` + `orderBy('deletedAt', 'desc')` + `limit` requires a **composite index** on `deletedAt` (inequality + descending sort). If the listener fails at runtime, check the dev console for **`[ChinottoSync] tombstone snapshot error`** and use the link in the Firebase error to create the index, then restart the app.
+
+**Phase 2 — Rules:** extend so the authenticated user may **update** their entry documents to set **`deletedAt`** (tombstone), in addition to create/read. Reject writes that mutate `text` / `createdAt` on existing docs unless product explicitly allows edit sync later.
 
 ---
 
@@ -98,12 +115,25 @@ service cloud.firestore {
 | `sync/firebaseConfig.ts` | `EXPO_PUBLIC_FIREBASE_*`; `isFirebaseSyncConfigured()`. |
 | `sync/firebaseSync.ts` | Firebase app, Firestore (**memory** cache), `getOrInitApp()`, `firebasePushEntry(entry)`. |
 | `sync/pushEntryForSync.ts` | `resolvePushEntryForSync()` → Firestore or mock. |
-| `sync/syncQueue.ts` / `syncEngine.ts` | Persistent queue, `processSyncQueue`, background interval. |
+| `sync/syncQueue.ts` / `syncEngine.ts` | Persistent queue, `processSyncQueue`, background interval; tombstone flush after each tick. |
+| `sync/tombstoneOutbox.ts` / `tombstoneFlush.ts` | Durable tombstone outbox (coalesced per `entry_id`); `flushSyncTombstoneOutbox` → Firestore `setDoc` + merge (`deletedAt`). |
+| `sync/ingestSuppression.ts` | `firestore_ingest_suppressed_ids` bridge (local delete until tombstone ack). |
+| `sync/firestoreTombstone.ts` | `isFirestoreDocumentTombstoned` for snapshot rows. |
+| `sync/firestoreIngest.ts` | `startMobileFirestoreIngest` — `onSnapshot` ingest + remote tombstones. |
+| `storage/entryRepository.ts` | `deleteEntry`, `applyRemoteTombstoneDeletes`, `ingestRemoteFirestoreRows`. |
 | `auth/appleFirebaseAuth.ts` | `applyAppleCredentialToFirebase` — anonymous → **`linkWithCredential`**, else **`signInWithCredential`**. |
 | `auth/enableAppleSync.ts` | Sign in with Apple (nonce + `OAuthProvider('apple.com')`) + Firebase. |
 | `components/EnableSyncModal.tsx` | “Enable sync” / “Continue with Apple” (iOS only). |
-| `screens/CaptureScreen.tsx` | “Enable sync” entry when Firebase configured and user not yet on stable (non-anonymous) auth. |
+| `screens/CaptureScreen.tsx` | Header **Sync** (iOS + configured Firebase); gesture delete; `flushSyncTombstoneOutbox` after local delete. |
 | `App.tsx` | After SQLite init: `startBackgroundSync({ pushEntry })` — **no** auto anonymous sign-in. |
+
+### Phase 2 (sync v2) — mobile (this repo)
+
+**Implemented:** `sync_tombstone_outbox` + `firestore_ingest_suppressed_ids` in SQLite; **`deleteEntry`** (suppression + outbox); **`flushSyncTombstoneOutbox`** after delete (capture screen) and on ingest/background tick; **`firebaseApplyTombstoneEntry`** uses **`setDoc` + `merge`** with `deletedAt: serverTimestamp()` (not `updateDoc`, so missing remote docs still get a tombstone and other clients see the delete); **`startMobileFirestoreIngest`** — **two** `onSnapshot` queries on `users/{uid}/entries`: (1) **`orderBy('createdAt', 'desc')` + limit 500** for recent creates/edits ingest (same window as desktop); (2) **dedicated tombstone query** `where('deletedAt', '!=', null)` + **`orderBy('deletedAt', 'desc')`** + **limit 1000** so **new** tombstones are not missed (Firestore’s default sort for `!= null` is ascending; without `orderBy('deletedAt', 'desc')` only the oldest tombstones would fill the limit). **`applyRemoteTombstoneDeletes`** / **`ingestRemoteFirestoreRows`**; background tick runs create queue then tombstone flush. **UX:** swipe or long-press to delete (local-first, no confirmation modal).
+
+**Caveats:** The **createdAt** listener only sees the latest **500** docs by `createdAt`; **tombstones** for older rows still apply via the separate query (up to **1000** newest tombstones). If you have more than 1000 tombstones, raise the limit or add backfill later. **`createdAt` type mixing** may require an extra composite index for the ingest query.
+
+**Rules:** Authenticated user must be allowed to **update** `deletedAt` on their entry docs (see §3 / §8).
 
 **Stable sync identity:** **Sign in with Apple** (Firebase Auth). Product copy: *Enable sync* / *Continue with Apple* — not “sign up”.
 
@@ -128,7 +158,8 @@ service cloud.firestore {
 1. Same Firebase project; same Auth user (`uid`) as mobile for the same person.  
 2. Query `users/{uid}/entries` with `orderBy('createdAt', 'desc')` (or `asc` — be consistent).  
 3. Recommended: **`onSnapshot`**; polling is acceptable.  
-4. Merge into local SQLite: **insert if `id` absent** (primary key / `INSERT OR IGNORE`).
+4. **Phase 1 merge:** **insert if `id` absent** (primary key / `INSERT OR IGNORE`).  
+5. **Phase 2:** on snapshot, if doc has **`deletedAt` set** → physical local delete for that `entryId`; suppression bridge until rollout complete — **§8**.
 
 ---
 
@@ -153,7 +184,7 @@ service cloud.firestore {
 
 ---
 
-## 7. Identity architecture (locked for v1 / v2)
+## 7. Identity architecture (locked; independent of sync Phase 2)
 
 **Decision:** Remote data is keyed by **Firebase Auth `uid`** (not a separate Chinotto id in Firestore):
 
@@ -180,7 +211,82 @@ users/{firebaseUid}/entries/{entryId}
 
 ---
 
-## 8. Optional: Firestore vs Realtime DB (historical)
+## 8. Phase 2 — cross-device deletion (sync v2)
+
+**Status:** normative contract. **Desktop (`chinotto-app`):** **shipped** — `docs/sync-deletion-v2.md` (Desktop implementation). **Mobile (`chinotto-mobile`):** **shipped** — `sync/firestoreIngest.ts`, `sync/tombstoneFlush.ts`, `storage/entryRepository.ts` (`deleteEntry`, ingest helpers), **§4** above. **Tombstone model only** — hard delete of Firestore documents was rejected. Both apps use **`firestore_ingest_suppressed_ids`** (SQLite) as a **rollout bridge** until all clients honor `deletedAt`.
+
+### 8.1 `deletedAt` contract (Firestore)
+
+| Rule | Detail |
+|------|--------|
+| **Path** | `users/{uid}/entries/{entryId}` → field **`deletedAt`**. |
+| **Canonical type** | Firestore **`Timestamp`** (JS SDK `Timestamp` / native `com.google.firebase.Timestamp`). |
+| **Active entry** | Field **absent** or **`null`**. |
+| **Deleted (tombstone)** | **Non-null `Timestamp`** — entry is deleted for all UX and list logic. |
+| **Writers** | **Must** use **`serverTimestamp()`** (or platform equivalent) for client-initiated tombstones so all devices share one authoritative instant. **Do not** write `deletedAt` as a plain ISO string **in Firestore** — strings are out of contract for v2. |
+
+**SQLite / logs:** any local “when deleted” for debugging is **derived** (e.g. `timestamp.toDate().toISOString()`). That ISO string is **not** the canonical Firestore type.
+
+**Why `Timestamp`:** native Firestore type for rules, indexes, ordering; consistent with `createdAt` handling patterns; avoids string/numeric ambiguity in security rules.
+
+### 8.2 Local SQLite policy (mobile + desktop)
+
+**Choice: physically delete** the row from `entries` when a remote tombstone is applied (and on local user delete, same as today).
+
+**Ingest / snapshot handling:** for doc `entryId`, if `deletedAt != null` → run the same local delete path as user delete (`DELETE FROM entries` for that id; cascades via existing triggers/FKs as on each platform). **Do not** add a `deleted_at` column on `entries` for Phase 2.
+
+**Rationale:** one list/query path without `WHERE deleted_at IS NULL` everywhere; matches “gone from stream”; reuses existing schema.
+
+### 8.3 Delete ordering (user action)
+
+**Order: local delete first → enqueue remote tombstone → async flush.**
+
+1. **Local:** in one DB transaction (or equivalent): remove row from `entries` (and cascades). **During rollout:** if suppression is still used, record `entryId` in `firestore_ingest_suppressed_ids` (desktop) or equivalent bridge on mobile if applicable.  
+2. **Queue:** append **`{ "op": "tombstone", "entryId": "<string>" }`** (same id as Firestore doc id and SQLite id).  
+3. **Async flush:** worker sends Firestore **`updateDoc`** with **`deletedAt: serverTimestamp()`** (idempotent if already set).
+
+**Rationale:** local-first, instant UI; offline devices hold the op until connectivity; suppression (while enabled) blocks stale active remote docs from reappearing before the tombstone lands.
+
+**Rejected:** remote-first delete (would block or roll back local UX on network failure).
+
+### 8.4 Sync queue — delete payload (normative)
+
+```json
+{
+  "op": "tombstone",
+  "entryId": "<string, same id as Firestore doc id and SQLite id>"
+}
+```
+
+- **Idempotency:** applying a tombstone twice is valid.  
+- **Coalescing:** for Phase 2, do not multiply pending tombstones for the same `entryId` — **one** pending tombstone per `entryId`.  
+- **No `deletedAt` in queue payload** — server time is always set at flush via `serverTimestamp()` to avoid clock skew.
+
+**Storage:** implementation-specific (e.g. SQLite outbox on desktop, durable queue on mobile); the **logical** record above is normative.
+
+### 8.5 Suppression table rollout (desktop; bridge)
+
+**Table:** `firestore_ingest_suppressed_ids` (desktop SQLite).
+
+| Phase | Behavior |
+|-------|----------|
+| **While used** | After **local** delete, until **tombstone flush succeeded** for that `entryId`. Also while **legacy** clients exist that do not write `deletedAt`, so stale active remote docs cannot re-ingest. |
+| **Stop writing** | For a given delete: stop suppression updates once tombstone write is **confirmed**. Optionally delete the suppression row for that `entryId` on success. |
+| **Remove table** | When (1) all shipped clients write/apply tombstones; (2) no supported path needs suppression; (3) migration or version gate cleared remaining rows — then drop skip-on-suppression ingest logic and the table. |
+
+**Invariant until removal:** ingest must **never** insert a local row for an id that is **suppressed** or **remotely tombstoned**.
+
+### 8.6 Phase 2 implementation checklist (cross-platform)
+
+1. **Rules:** allow authenticated user to set **`deletedAt`** on their `entries/{entryId}` (tombstone updates).  
+2. **Listener / ingest:** on doc change, if `deletedAt` set → physical local delete for `entryId`; if active → existing upsert/insert (respect suppression until removed).  
+3. **Delete UX:** local delete (+ suppression per rollout) → enqueue §8.4 → background tombstone flush → on success, clear suppression row for `entryId` (desktop).  
+4. **Mobile:** same ordering and queue semantics; same Firestore field type.  
+5. **Tests:** offline queue replay; tombstone idempotency; mobile tombstone → desktop row gone; desktop delete → mobile applies tombstone; legacy doc without `deletedAt` still ingests as active.
+
+---
+
+## 9. Optional: Firestore vs Realtime DB (historical)
 
 Both support append-only `Entry` and idempotent writes. **Firestore** was chosen for **structured queries**, **ordered desktop reads**, and **rules** on collection paths. Realtime DB stays a possible niche for very small prototypes; not the Chinotto default.
 
@@ -188,6 +294,6 @@ Both support append-only `Entry` and idempotent writes. **Firestore** was chosen
 
 ## Practical checklist
 
-1. **Console:** Rules (§3); **Authentication** → enable **Apple** (and optional Anonymous only for dev/legacy).  
-2. **Mobile:** `.env` from `.env.example`; `npx expo prebuild` / dev build after adding Apple plugin; restart Metro after env changes.  
-3. **Desktop:** Same project, same **`uid`**, listener + local merge by `id`.
+1. **Console:** Rules (§3); **Authentication** → enable **Apple** (and optional Anonymous only for dev/legacy). **Phase 2:** extend rules for **`deletedAt`** tombstone updates (§8).  
+2. **Mobile:** `.env` from `.env.example`; `npx expo prebuild` / dev build after adding Apple plugin; restart Metro after env changes. **Phase 2:** tombstone queue + `updateDoc` flush per §8.  
+3. **Desktop:** Same project, same **`uid`**, listener + local merge by `id`. **Phase 2:** ingest tombstones + suppression bridge per §8; align with `chinotto-app/docs/sync-deletion-v2.md`.

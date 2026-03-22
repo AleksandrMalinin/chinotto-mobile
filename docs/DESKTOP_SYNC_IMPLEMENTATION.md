@@ -10,11 +10,12 @@
 
 - After the user signs in with **the same identity as on mobile** (same **Firebase Auth `uid`**), the desktop app **ingests** entries from Firestore into **local SQLite** (desktop remains **local-first**).
 - **No Chinotto accounts** — product copy is **device linking** (e.g. “Enable sync” / “Continue with Apple”), not signup/login.
-- **v1:** **append-only**, **create-only** ingest from cloud. No edit/delete sync, no bidirectional push from desktop in this spec unless you explicitly extend scope.
+- **Phase 1 (v1):** **append-only**, **create-only** ingest from cloud. No edit/delete sync, no bidirectional push from desktop in this spec unless you explicitly extend scope.
+- **Phase 2 (sync v2):** cross-device **tombstone** deletion — normative contract **[SYNC.md §8](./SYNC.md)**; desktop **shipped** (see `chinotto-app/docs/sync-deletion-v2.md` → **Desktop implementation**). Mobile handoff: same file → **Mobile implementation**.
 
 ---
 
-## Non-goals (v1)
+## Non-goals (Phase 1)
 
 - Google sign-in, email auth, pairing codes, internal `chinottoUserId` layer, sync-space model.
 - Moving **source of truth** to Firestore — **SQLite stays authoritative** on desktop.
@@ -32,7 +33,9 @@ type Entry = {
 };
 ```
 
-**Ingest rule:** For each remote document, if `id` **already exists** locally → **skip** (idempotent). Else **insert** row with `id`, `text`, `createdAt`. Never overwrite `id` / `createdAt` for an existing row from sync.
+**Ingest rule (Phase 1):** For each remote document, if `id` **already exists** locally → **skip** (idempotent). Else **insert** row with `id`, `text`, `createdAt`. Never overwrite `id` / `createdAt` for an existing row from sync.
+
+**Ingest rule (Phase 2 — sync v2):** If the remote document has **`deletedAt`** set (non-null Firestore `Timestamp`), **delete** the local SQLite row for that `id` if it exists (physical delete); **do not** insert from that snapshot. If `deletedAt` is absent or null, apply the Phase 1 rule above. Normative detail: **[SYNC.md §8](./SYNC.md)**.
 
 **Ordering (display):** `createdAt` descending (newest first) to align with mobile; tie-break by `id` lexicographically.
 
@@ -48,22 +51,9 @@ users/{firebaseUid}/entries/{entryId}
 |--------|--------|
 | `firebaseUid` | `auth.currentUser.uid` after sign-in (**must match mobile** for the same person). |
 | `entryId` | Same as `Entry.id` (document id in Firestore). |
-| Document fields | `text: string`, `createdAt: string` (ISO UTC). |
+| Document fields | **Phase 1:** `text: string`, `createdAt: string` (ISO UTC). **Phase 2:** optional `deletedAt` (`Timestamp`) — [SYNC.md §8](./SYNC.md). |
 
-**Security rules** (already deployed in Firebase — do not weaken):
-
-```txt
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /users/{userId}/entries/{entryId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-  }
-}
-```
-
-Reads require **`request.auth.uid == userId`**, so the client must query **`users/{currentUser.uid}/entries`**.
+**Security rules:** Same as mobile — see **[SYNC.md §3 — Firestore layout & rules](./SYNC.md#3-firestore-layout--rules)** (paste-ready snippet). Reads require **`request.auth.uid == userId`**, so the client must query **`users/{currentUser.uid}/entries`**.
 
 ---
 
