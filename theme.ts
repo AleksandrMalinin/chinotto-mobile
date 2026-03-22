@@ -68,6 +68,11 @@ export const spacing = {
   xl: 32,
 } as const;
 
+/** Horizontal inset for the main shell (mobile capture surface). */
+export function screenContentGutter(_width: number): number {
+  return 20;
+}
+
 /** From design-system.md “Radius scale” (search 12px, entry row 8px). */
 export const radius = {
   none: 0,
