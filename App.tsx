@@ -14,7 +14,10 @@ import { clearWelcomeFlag, hasCompletedWelcome } from './storage/welcomeFlag';
 /** Keep native splash visible until we call hide (fonts + DB + short beat). */
 void SplashScreen.preventAutoHideAsync();
 
-/** Native splash visible briefly before JS brand layer (same bg as shell). */
+/**
+ * Delay before mounting BrandSplash. Native splash stays up until BrandSplash’s first
+ * `onLayout` calls `SplashScreen.hideAsync()` so the JS logo is already positioned underneath.
+ */
 const NATIVE_SPLASH_BEAT_MS = 400;
 
 type AppPhase = 'boot' | 'brand' | 'welcome' | 'main';
@@ -63,7 +66,6 @@ export default function App() {
       }
       welcomeDoneRef.current = seen;
       timer = setTimeout(() => {
-        void SplashScreen.hideAsync();
         setPhase('brand');
       }, NATIVE_SPLASH_BEAT_MS);
     })();

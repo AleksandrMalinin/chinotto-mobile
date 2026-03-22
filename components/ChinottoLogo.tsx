@@ -24,6 +24,8 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 export type ChinottoLogoProps = {
   size?: number;
+  /** Ring stroke width in user units (default matches desktop; splash PNG uses 2.5). */
+  strokeWidth?: number;
   /** Ring + dots; desktop header uses `--fg-dim`; intro / splash uses near-white */
   color?: ColorValue;
   /** Stroke draw, staggered dots, subtle breathe — same beats as web intro */
@@ -36,6 +38,7 @@ export type ChinottoLogoProps = {
 
 export function ChinottoLogo({
   size = 64,
+  strokeWidth = 2,
   color = 'rgba(255, 255, 255, 0.92)',
   animated = false,
   reduceMotion: reduceMotionProp,
@@ -126,7 +129,7 @@ export function ChinottoLogo({
             cy={32}
             r={OUTER_R}
             stroke={color}
-            strokeWidth={2}
+            strokeWidth={strokeWidth}
             fill="none"
             strokeDasharray={strokeDasharray}
             strokeDashoffset={dashOffset}
