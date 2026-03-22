@@ -1,5 +1,25 @@
 // Shared Jest setup (e.g. matchers). Keep minimal per project policy.
 
+jest.mock('react-native-gesture-handler', () => {
+  const React = require('react');
+  const { View, ScrollView } = require('react-native');
+  const Swipeable = ({ children }) => children;
+  return {
+    GestureHandlerRootView: View,
+    Swipeable,
+    ScrollView,
+  };
+});
+
+jest.mock('react-native-gesture-handler/Swipeable', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    __esModule: true,
+    default: ({ children }) => children,
+  };
+});
+
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock')
 );
