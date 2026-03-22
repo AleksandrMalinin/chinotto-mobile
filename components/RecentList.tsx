@@ -6,8 +6,8 @@ import { useAppTheme } from '../theme';
 import { formatEntryTime, groupEntriesByDate } from '../utils/groupEntriesByDate';
 
 /**
- * Time-grouped stream — quiet section labels (desktop `.stream-section-title` spirit),
- * entry body + subtle time; spacing only, no borders (see design-system-mobile-companion).
+ * Time-grouped stream — section labels (`.stream-section-title`), entry rows with
+ * hairline separators like desktop `.entry-row` / `var(--border)`, plus inline time.
  */
 export type RecentListProps = {
   entries: Entry[];
@@ -53,55 +53,59 @@ function RecentListInner({ entries, visible }: RecentListProps) {
           >
             {section.label}
           </Text>
-          {section.items.map((item, index) => (
-            <Pressable
-              key={item.id}
-              accessible={true}
-              accessibilityLabel={`${item.text}, ${formatEntryTime(item.createdAt)}`}
-              onPress={() => {}}
-              style={({ pressed }) => [
-                styles.entry,
-                {
-                  marginBottom: index < section.items.length - 1 ? t.spacing.sm : 0,
-                  paddingVertical: t.spacing.xs,
-                  backgroundColor: pressed ? ROW_PRESS_TINT : 'transparent',
-                },
-              ]}
-            >
-              <View style={styles.entryRow}>
-                <Text
-                  style={[
-                    styles.line,
-                    {
-                      flex: 1,
-                      color: colors.entryBody,
-                      fontFamily: body.fontFamily,
-                      fontSize: body.fontSize,
-                      lineHeight: body.lineHeight,
-                      letterSpacing: 0.16,
-                      marginRight: t.spacing.sm,
-                    },
-                  ]}
-                  numberOfLines={4}
-                >
-                  {item.text}
-                </Text>
-                <Text
-                  style={[
-                    styles.time,
-                    {
-                      color: colors.metaFg,
-                      fontFamily: meta.fontFamily,
-                      fontSize: 12,
-                      lineHeight: 16,
-                    },
-                  ]}
-                >
-                  {formatEntryTime(item.createdAt)}
-                </Text>
-              </View>
-            </Pressable>
-          ))}
+          {section.items.map((item, index) => {
+            const isLastInSection = index === section.items.length - 1;
+            return (
+              <Pressable
+                key={item.id}
+                accessible={true}
+                accessibilityLabel={`${item.text}, ${formatEntryTime(item.createdAt)}`}
+                onPress={() => {}}
+                style={({ pressed }) => [
+                  styles.entry,
+                  {
+                    paddingVertical: t.spacing.sm,
+                    borderBottomWidth: isLastInSection ? 0 : StyleSheet.hairlineWidth,
+                    borderBottomColor: colors.border,
+                    backgroundColor: pressed ? ROW_PRESS_TINT : 'transparent',
+                  },
+                ]}
+              >
+                <View style={styles.entryRow}>
+                  <Text
+                    style={[
+                      styles.line,
+                      {
+                        flex: 1,
+                        color: colors.entryBody,
+                        fontFamily: body.fontFamily,
+                        fontSize: body.fontSize,
+                        lineHeight: body.lineHeight,
+                        letterSpacing: 0.16,
+                        marginRight: t.spacing.sm,
+                      },
+                    ]}
+                    numberOfLines={4}
+                  >
+                    {item.text}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.time,
+                      {
+                        color: colors.metaFg,
+                        fontFamily: meta.fontFamily,
+                        fontSize: 12,
+                        lineHeight: 16,
+                      },
+                    ]}
+                  >
+                    {formatEntryTime(item.createdAt)}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
         </View>
       ))}
     </View>
