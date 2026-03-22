@@ -1,7 +1,13 @@
 import { randomUUID } from 'expo-crypto';
 
 import { getDatabase } from '../../storage/db';
-import { enqueueForSync, getPendingSyncItems, insertPendingSyncItem, markSynced } from '../syncQueue';
+import {
+  enqueueForSync,
+  getPendingSyncItems,
+  insertPendingSyncItem,
+  markSynced,
+  removePendingSyncItemsForEntry,
+} from '../syncQueue';
 
 jest.mock('expo-crypto', () => ({
   randomUUID: jest.fn(),
@@ -89,6 +95,26 @@ describe('syncQueue', () => {
       await markSynced('q1');
 
       expect(runAsync).toHaveBeenCalledWith("UPDATE sync_queue SET status = 'synced' WHERE id = ?", 'q1');
+    });
+  });
+
+  describe('removePendingSyncItemsForEntry', () => {
+    it('deletes only pending queue rows whose serialized Entry id matches', async () => {
+      const db = { runAsync, getAllAsync } as never;
+      const e1 = { id: 'e1', text: 'a', createdAt: '2025-01-01T00:00:00.000Z' };
+      getAllAsync.mockResolvedValueOnce([
+        { id: 'q1', payload: JSON.stringify(e1), status: 'pending' },
+        {
+          id: 'q2',
+          payload: JSON.stringify({ id: 'e2', text: 'b', createdAt: '2025-01-02T00:00:00.000Z' }),
+          status: 'pending',
+        },
+      ]);
+
+      await removePendingSyncItemsForEntry(db, 'e1');
+
+      expect(runAsync).toHaveBeenCalledWith('DELETE FROM sync_queue WHERE id = ?', 'q1');
+      expect(runAsync).not.toHaveBeenCalledWith('DELETE FROM sync_queue WHERE id = ?', 'q2');
     });
   });
 });

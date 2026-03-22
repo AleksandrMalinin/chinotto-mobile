@@ -1,5 +1,6 @@
 import type { Entry } from '../types/entry';
 import { getPendingSyncItems, markSynced } from './syncQueue';
+import { flushSyncTombstoneOutbox } from './tombstoneFlush';
 
 export type PushEntryFn = (entry: Entry) => Promise<void>;
 
@@ -48,11 +49,16 @@ export function startBackgroundSync(options?: {
   const intervalMs = options?.intervalMs ?? 15_000;
   const pushEntry = options?.pushEntry ?? mockPushEntryToRemote;
 
-  const id = setInterval(() => {
-    void processSyncQueue(pushEntry);
-  }, intervalMs);
+  const tick = () => {
+    void (async () => {
+      await processSyncQueue(pushEntry);
+      await flushSyncTombstoneOutbox();
+    })();
+  };
 
-  void processSyncQueue(pushEntry);
+  const id = setInterval(tick, intervalMs);
+
+  tick();
 
   return {
     stop: () => clearInterval(id),

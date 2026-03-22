@@ -1,4 +1,11 @@
-import { doc, initializeFirestore, memoryLocalCache, setDoc, type Firestore } from 'firebase/firestore';
+import {
+  doc,
+  initializeFirestore,
+  memoryLocalCache,
+  serverTimestamp,
+  setDoc,
+  type Firestore,
+} from 'firebase/firestore';
 
 import type { Entry } from '../types/entry';
 import { isFirebaseSyncConfigured } from './firebaseConfig';
@@ -9,7 +16,7 @@ export { getOrInitApp } from './firebaseApp';
 
 let firestoreSingleton: Firestore | null = null;
 
-function getOrInitFirestore(): Firestore {
+export function getOrInitFirestore(): Firestore {
   if (firestoreSingleton) {
     return firestoreSingleton;
   }
@@ -41,4 +48,26 @@ export async function firebasePushEntry(entry: Entry): Promise<void> {
     text: entry.text,
     createdAt: entry.createdAt,
   });
+}
+
+/**
+ * Phase 2: tombstone on Firestore. Uses `setDoc` + merge so the write succeeds whether or not the
+ * doc exists yet (`updateDoc` fails with not-found on missing docs). Idempotent with merge.
+ */
+export async function firebaseApplyTombstoneEntry(entryId: string): Promise<void> {
+  if (!isFirebaseSyncConfigured()) {
+    throw new Error('Firebase sync is not configured');
+  }
+  const auth = getOrInitAuth();
+  const user = auth.currentUser;
+  if (!user) {
+    throw new Error('Firebase Auth has no user');
+  }
+  if (user.isAnonymous) {
+    throw new Error('Enable sync with Apple to sync deletes');
+  }
+  const uid = user.uid;
+  const db = getOrInitFirestore();
+  const ref = doc(db, 'users', uid, 'entries', entryId);
+  await setDoc(ref, { deletedAt: serverTimestamp() }, { merge: true });
 }

@@ -2,6 +2,10 @@ import type { Entry } from '../../types/entry';
 import { getPendingSyncItems, markSynced } from '../syncQueue';
 import { processSyncQueue, startBackgroundSync } from '../syncEngine';
 
+jest.mock('../tombstoneFlush', () => ({
+  flushSyncTombstoneOutbox: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.mock('../syncQueue', () => ({
   getPendingSyncItems: jest.fn(),
   markSynced: jest.fn(),

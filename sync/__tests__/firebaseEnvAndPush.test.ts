@@ -3,6 +3,10 @@ jest.mock('../firebaseSync', () => ({
   ensureFirebaseAuthReady: jest.fn(() => Promise.resolve()),
 }));
 
+jest.mock('../tombstoneFlush', () => ({
+  flushSyncTombstoneOutbox: jest.fn().mockResolvedValue(undefined),
+}));
+
 import { isFirebaseSyncConfigured } from '../firebaseConfig';
 import { firebasePushEntry } from '../firebaseSync';
 import { mockPushEntryToRemote } from '../syncEngine';

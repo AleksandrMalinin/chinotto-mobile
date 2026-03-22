@@ -3,6 +3,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { Entry } from '../types/entry';
 import { getDatabase } from '../storage/db';
+import { runSerializedDb } from '../storage/runSerializedDb';
 
 /** `payload.id` is the stable entry id; remote ingest should dedupe on it when sync retries. */
 export type SyncItem = {
@@ -32,20 +33,43 @@ export async function insertPendingSyncItem(db: SQLiteDatabase, entry: Entry): P
  * Persists a queue row for background sync. Storage remains source of truth; sync is a side effect.
  */
 export async function enqueueForSync(entry: Entry): Promise<void> {
-  const db = await getDatabase();
-  await insertPendingSyncItem(db, entry);
+  await runSerializedDb(async () => {
+    const db = await getDatabase();
+    await insertPendingSyncItem(db, entry);
+  });
 }
 
 export async function getPendingSyncItems(limit: number): Promise<SyncItem[]> {
-  const db = await getDatabase();
-  const rows = await db.getAllAsync<{ id: string; payload: string; status: string }>(
-    `SELECT id, payload, status FROM sync_queue WHERE status = 'pending' ORDER BY rowid ASC LIMIT ?`,
-    limit
-  );
-  return rows.map(rowToSyncItem);
+  return runSerializedDb(async () => {
+    const db = await getDatabase();
+    const rows = await db.getAllAsync<{ id: string; payload: string; status: string }>(
+      `SELECT id, payload, status FROM sync_queue WHERE status = 'pending' ORDER BY rowid ASC LIMIT ?`,
+      limit
+    );
+    return rows.map(rowToSyncItem);
+  });
 }
 
 export async function markSynced(queueItemId: string): Promise<void> {
-  const db = await getDatabase();
-  await db.runAsync("UPDATE sync_queue SET status = 'synced' WHERE id = ?", queueItemId);
+  await runSerializedDb(async () => {
+    const db = await getDatabase();
+    await db.runAsync("UPDATE sync_queue SET status = 'synced' WHERE id = ?", queueItemId);
+  });
+}
+
+/** Remove pending create-sync rows for an entry (e.g. after local delete before push). */
+export async function removePendingSyncItemsForEntry(db: SQLiteDatabase, entryId: string): Promise<void> {
+  const rows = await db.getAllAsync<{ id: string; payload: string }>(
+    `SELECT id, payload FROM sync_queue WHERE status = 'pending'`
+  );
+  for (const row of rows) {
+    try {
+      const p = JSON.parse(row.payload) as { id?: string };
+      if (p != null && typeof p.id === 'string' && p.id === entryId) {
+        await db.runAsync('DELETE FROM sync_queue WHERE id = ?', row.id);
+      }
+    } catch {
+      /* ignore malformed */
+    }
+  }
 }

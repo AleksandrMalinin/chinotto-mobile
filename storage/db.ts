@@ -19,6 +19,14 @@ export function initDatabase(): Promise<SQLiteDatabase> {
         id TEXT PRIMARY KEY NOT NULL,
         payload TEXT NOT NULL,
         status TEXT NOT NULL CHECK (status IN ('pending', 'synced'))
+      );
+      CREATE TABLE IF NOT EXISTS sync_tombstone_outbox (
+        entry_id TEXT PRIMARY KEY NOT NULL,
+        enqueued_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS firestore_ingest_suppressed_ids (
+        id TEXT PRIMARY KEY NOT NULL,
+        suppressed_at TEXT NOT NULL
       );`
     );
     return db;

@@ -3,11 +3,13 @@ import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { BrandSplash } from './components/BrandSplash';
 import { CaptureScreen } from './screens/CaptureScreen';
 import { WelcomeOnboardingScreen } from './screens/WelcomeOnboardingScreen';
+import { startMobileFirestoreIngest } from './sync/firestoreIngest';
 import { resolvePushEntryForSync } from './sync/pushEntryForSync';
 import { startBackgroundSync } from './sync/syncEngine';
 import { initDatabase } from './storage/db';
@@ -30,6 +32,7 @@ export default function App() {
     'OpenSauceOne-500': require('./assets/fonts/OpenSauceOne-Medium.ttf'),
   });
   const [dbReady, setDbReady] = useState(false);
+  const [remoteIngestVersion, setRemoteIngestVersion] = useState(0);
   const [phase, setPhase] = useState<AppPhase>('boot');
   /** Snapshot after `hasCompletedWelcome()` — drives brand → welcome vs main. */
   const welcomeDoneRef = useRef(true);
@@ -76,6 +79,16 @@ export default function App() {
   }, [dbReady]);
 
   useEffect(() => {
+    if (!dbReady) {
+      return;
+    }
+    const stopIngest = startMobileFirestoreIngest(() => {
+      setRemoteIngestVersion((v) => v + 1);
+    });
+    return stopIngest;
+  }, [dbReady]);
+
+  useEffect(() => {
     if (!fontsLoaded || !dbReady) {
       return;
     }
@@ -104,8 +117,9 @@ export default function App() {
   }
 
   return (
-    <SafeAreaProvider>
-      <StatusBar style="light" />
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <StatusBar style="light" />
       {phase === 'welcome' ? (
         <View style={{ flex: 1, backgroundColor: '#0a0a0e' }}>
           <WelcomeOnboardingScreen onComplete={onWelcomeComplete} />
@@ -115,8 +129,12 @@ export default function App() {
           <BrandSplash onFinished={onBrandFinished} />
         </View>
       ) : (
-        <CaptureScreen {...(__DEV__ ? { onDevMenu: onDevResetWelcome } : {})} />
+        <CaptureScreen
+          remoteIngestVersion={remoteIngestVersion}
+          {...(__DEV__ ? { onDevMenu: onDevResetWelcome } : {})}
+        />
       )}
-    </SafeAreaProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
