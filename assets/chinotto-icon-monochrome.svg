@@ -1,0 +1,10 @@
+<!-- Android monochrome / themed icon (single-color silhouette). -->
+<svg width="1024" height="1024" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <g transform="translate(40 40) scale(0.82) translate(-40 -40)">
+    <circle cx="40" cy="40" r="22" stroke="#ffffff" stroke-width="2" fill="none"/>
+    <circle cx="40" cy="31" r="5" fill="#ffffff"/>
+    <circle cx="32" cy="42" r="4" fill="#ffffff"/>
+    <circle cx="48" cy="42" r="4" fill="#ffffff"/>
+    <circle cx="40" cy="49" r="3" fill="#ffffff"/>
+  </g>
+</svg>
