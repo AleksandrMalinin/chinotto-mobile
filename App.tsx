@@ -20,6 +20,9 @@ import { startBackgroundSync } from './sync/syncEngine';
 import { initDatabase } from './storage/db';
 import { saveEntry } from './storage/entryRepository';
 import { clearWelcomeFlag, hasCompletedWelcome } from './storage/welcomeFlag';
+import { useCaptureWidgetDeepLinkFocus } from './widgets/useCaptureWidgetDeepLinkFocus';
+import { useExperimentalIosHomeWidgetRegistration } from './widgets/useExperimentalIosHomeWidget';
+
 /** Keep native splash visible until we call hide (fonts + DB + short beat). */
 void SplashScreen.preventAutoHideAsync();
 
@@ -73,6 +76,7 @@ export default function App() {
   const welcomeDoneRef = useRef(true);
   const [shareSavedAck, setShareSavedAck] = useState(false);
   const [externalEntriesEpoch, setExternalEntriesEpoch] = useState(0);
+  const [captureFocusNonce, setCaptureFocusNonce] = useState(0);
   const {
     resolvedSharedPayloads,
     sharedPayloads,
@@ -100,6 +104,14 @@ export default function App() {
   useEffect(() => {
     void initDatabase().finally(() => setDbReady(true));
   }, []);
+
+  useExperimentalIosHomeWidgetRegistration(dbReady);
+
+  useCaptureWidgetDeepLinkFocus(
+    useCallback(() => {
+      setCaptureFocusNonce((n) => n + 1);
+    }, [])
+  );
 
   useEffect(() => {
     if (!dbReady || isResolving) {
@@ -227,6 +239,7 @@ export default function App() {
             <CaptureScreen
               remoteIngestVersion={remoteIngestVersion}
               externalEntriesEpoch={externalEntriesEpoch}
+              captureFocusNonce={captureFocusNonce}
               {...(__DEV__ ? { onDevMenu: onDevResetWelcome } : {})}
             />
           )}

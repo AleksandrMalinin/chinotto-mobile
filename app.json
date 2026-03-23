@@ -33,6 +33,21 @@
       "expo-apple-authentication",
       "expo-sqlite",
       [
+        "expo-widgets",
+        {
+          "groupIdentifier": "group.com.chinotto.mobile",
+          "bundleIdentifier": "com.chinotto.mobile.ExpoWidgetsTarget",
+          "widgets": [
+            {
+              "name": "CaptureHomeWidget",
+              "displayName": "Chinotto",
+              "description": "Open capture to jot a thought.",
+              "supportedFamilies": ["systemSmall"]
+            }
+          ]
+        }
+      ],
+      [
         "expo-sharing",
         {
           "ios": {

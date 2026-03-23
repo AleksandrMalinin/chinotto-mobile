@@ -47,6 +47,38 @@ jest.mock('expo-linking', () => ({
   parse: jest.fn(),
 }));
 
+jest.mock('expo-widgets', () => ({
+  createWidget: jest.fn(() => ({
+    updateSnapshot: jest.fn(),
+    reload: jest.fn(),
+    updateTimeline: jest.fn(),
+    getTimeline: jest.fn(() => Promise.resolve([])),
+  })),
+}));
+
+jest.mock('@expo/ui/swift-ui', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  const Passthrough = (p) => React.createElement(View, p, p.children);
+  return {
+    Text: Passthrough,
+    VStack: Passthrough,
+    Link: Passthrough,
+    HStack: Passthrough,
+  };
+});
+
+jest.mock('@expo/ui/swift-ui/modifiers', () => ({
+  font: jest.fn(() => ({})),
+  foregroundStyle: jest.fn(() => ({})),
+  padding: jest.fn(() => ({})),
+  widgetURL: jest.fn(() => ({})),
+  background: jest.fn(() => ({})),
+  shapes: {
+    roundedRectangle: jest.fn(() => ({ shape: 'roundedRectangle' })),
+  },
+}));
+
 jest.mock('react-native-svg', () => {
   const React = require('react');
   const { View } = require('react-native');
