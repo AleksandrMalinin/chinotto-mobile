@@ -1,0 +1,2 @@
+patchedDependencies:
+  expo-widgets@55.0.7: patches/expo-widgets@55.0.7.patch
