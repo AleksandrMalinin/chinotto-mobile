@@ -3,6 +3,7 @@
     "name": "Chinotto",
     "slug": "chinotto-mobile",
     "version": "1.0.0",
+    "scheme": "chinotto",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -31,6 +32,24 @@
     "plugins": [
       "expo-apple-authentication",
       "expo-sqlite",
+      [
+        "expo-sharing",
+        {
+          "ios": {
+            "enabled": true,
+            "activationRule": {
+              "supportsText": true,
+              "supportsWebUrlWithMaxCount": 5,
+              "supportsWebPageWithMaxCount": 5
+            }
+          },
+          "android": {
+            "enabled": true,
+            "singleShareMimeTypes": ["text/plain", "text/*"],
+            "multipleShareMimeTypes": ["text/plain", "text/*"]
+          }
+        }
+      ],
       [
         "./plugins/withIosSplashLogoFixedConstraints.js",
         {

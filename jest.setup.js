@@ -40,6 +40,13 @@ jest.mock('expo-linear-gradient', () => {
   };
 });
 
+jest.mock('expo-linking', () => ({
+  addEventListener: jest.fn(() => ({ remove: jest.fn() })),
+  getInitialURL: jest.fn(() => Promise.resolve(null)),
+  createURL: jest.fn((path) => `chinotto:/${path}`),
+  parse: jest.fn(),
+}));
+
 jest.mock('react-native-svg', () => {
   const React = require('react');
   const { View } = require('react-native');
