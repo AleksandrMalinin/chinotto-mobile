@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 
 import { RecentList } from '../RecentList';
 
@@ -23,5 +23,16 @@ describe('RecentList', () => {
     const { queryByTestId } = render(<RecentList entries={[entryToday('hello')]} visible={false} />);
 
     expect(queryByTestId('recent-list')).toBeNull();
+  });
+
+  it('invokes onEntryPress when a row is pressed', () => {
+    const e = entryToday('tap me');
+    const onEntryPress = jest.fn();
+    const { getByTestId } = render(
+      <RecentList entries={[e]} visible onEntryPress={onEntryPress} onEntryDelete={jest.fn()} />
+    );
+
+    fireEvent.press(getByTestId(`recent-entry-${e.id}`));
+    expect(onEntryPress).toHaveBeenCalledWith(e);
   });
 });

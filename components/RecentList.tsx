@@ -16,6 +16,8 @@ import { formatEntryTime, groupEntriesByDate } from '../utils/groupEntriesByDate
 export type RecentListProps = {
   entries: Entry[];
   visible: boolean;
+  /** Opens full-text read sheet (companion recall). */
+  onEntryPress?: (entry: Entry) => void;
   onEntryDelete?: (entry: Entry) => void;
 };
 
@@ -25,7 +27,7 @@ const DELETE_ACTION_WIDTH = 76;
 /** Muted destructive — readable on dark shell without loud chrome. */
 const DELETE_TRACK_BG = 'rgba(160, 72, 72, 0.92)';
 
-function RecentListInner({ entries, visible, onEntryDelete }: RecentListProps) {
+function RecentListInner({ entries, visible, onEntryPress, onEntryDelete }: RecentListProps) {
   const t = useAppTheme();
   const { colors, typography } = t;
   const { body, meta } = typography;
@@ -41,7 +43,14 @@ function RecentListInner({ entries, visible, onEntryDelete }: RecentListProps) {
       <Pressable
         accessible={true}
         accessibilityLabel={`${item.text}, ${formatEntryTime(item.createdAt)}`}
-        accessibilityHint={onEntryDelete != null ? 'Swipe left to delete, or long press to delete' : undefined}
+        accessibilityHint={
+          [
+            onEntryPress != null ? 'Double tap to read full text' : null,
+            onEntryDelete != null ? 'Swipe left to delete, or long press to delete' : null,
+          ]
+            .filter(Boolean)
+            .join('. ') || undefined
+        }
         accessibilityActions={onEntryDelete != null ? [{ name: 'delete', label: 'Delete' }] : undefined}
         onAccessibilityAction={
           onEntryDelete != null
@@ -52,9 +61,10 @@ function RecentListInner({ entries, visible, onEntryDelete }: RecentListProps) {
               }
             : undefined
         }
+        testID={`recent-entry-${item.id}`}
         delayLongPress={onEntryDelete != null ? 380 : undefined}
         onLongPress={onEntryDelete != null ? () => onEntryDelete(item) : undefined}
-        onPress={() => {}}
+        onPress={onEntryPress != null ? () => onEntryPress(item) : undefined}
         style={({ pressed }) => [
           styles.entry,
           {

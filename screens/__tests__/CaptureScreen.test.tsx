@@ -1,4 +1,5 @@
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
+import { TextInput } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import * as entryRepository from '../../storage/entryRepository';
@@ -21,6 +22,10 @@ jest.mock('../../sync/firebaseConfig', () => ({
 
 jest.mock('../../sync/tombstoneFlush', () => ({
   flushSyncTombstoneOutbox: jest.fn(() => Promise.resolve()),
+}));
+
+jest.mock('expo-clipboard', () => ({
+  setStringAsync: jest.fn(() => Promise.resolve()),
 }));
 
 import { CaptureScreen } from '../CaptureScreen';
@@ -78,6 +83,73 @@ describe('CaptureScreen', () => {
 
     await waitFor(() => {
       expect(getByTestId('capture-input').props.value).toBe('');
+    });
+  });
+
+  it('refetches recent entries when externalEntriesEpoch increments', async () => {
+    jest.mocked(entryRepository.getRecentEntries).mockClear();
+    const { rerender, findByTestId } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <CaptureScreen externalEntriesEpoch={0} />
+      </SafeAreaProvider>
+    );
+    await findByTestId('capture-input');
+    const callsAfterMount = jest.mocked(entryRepository.getRecentEntries).mock.calls.length;
+    rerender(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <CaptureScreen externalEntriesEpoch={1} />
+      </SafeAreaProvider>
+    );
+    await waitFor(() => {
+      expect(jest.mocked(entryRepository.getRecentEntries).mock.calls.length).toBeGreaterThan(
+        callsAfterMount
+      );
+    });
+  });
+
+  it('requests focus on the capture field when captureFocusNonce increments', async () => {
+    const focusSpy = jest.spyOn(TextInput.prototype, 'focus');
+    try {
+      const { rerender, findByTestId } = render(
+        <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+          <CaptureScreen captureFocusNonce={0} />
+        </SafeAreaProvider>
+      );
+      await findByTestId('capture-input');
+      const afterMount = focusSpy.mock.calls.length;
+      rerender(
+        <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+          <CaptureScreen captureFocusNonce={1} />
+        </SafeAreaProvider>
+      );
+      await waitFor(() => {
+        expect(focusSpy.mock.calls.length).toBeGreaterThan(afterMount);
+      });
+    } finally {
+      focusSpy.mockRestore();
+    }
+  });
+
+  it('opens read sheet with full entry text when a recent row is pressed', async () => {
+    const remoteEntry = {
+      id: 'row-1',
+      text: 'First line\nSecond line',
+      createdAt: '2025-03-10T16:00:00.000Z',
+    };
+    jest.mocked(entryRepository.getRecentEntries).mockResolvedValueOnce([remoteEntry]);
+
+    const { findByTestId, getByTestId } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <CaptureScreen />
+      </SafeAreaProvider>
+    );
+
+    fireEvent.press(await findByTestId('recent-entry-row-1'));
+
+    await waitFor(() => {
+      expect(
+        within(getByTestId('entry-read-sheet')).getByText('First line\nSecond line')
+      ).toBeTruthy();
     });
   });
 

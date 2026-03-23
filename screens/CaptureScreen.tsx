@@ -19,6 +19,7 @@ import { AmbientBackground } from '../components/AmbientBackground';
 import { CaptureInput } from '../components/CaptureInput';
 import { ChinottoLogo } from '../components/ChinottoLogo';
 import { EnableSyncModal } from '../components/EnableSyncModal';
+import { EntryReadSheet } from '../components/EntryReadSheet';
 import { RecentList } from '../components/RecentList';
 import type { Entry } from '../types/entry';
 import { showDevMenu } from '../dev/showDevMenu';
@@ -39,13 +40,23 @@ export type CaptureScreenProps = {
   onDevMenu?: () => void;
   /** Increment when Firestore ingest applies remote changes (desktop → mobile). */
   remoteIngestVersion?: number;
+  /** Increment when entries change outside this screen (e.g. system share). */
+  externalEntriesEpoch?: number;
+  /** Increment when the app should move focus to capture (e.g. home screen widget open). */
+  captureFocusNonce?: number;
 };
 
-export function CaptureScreen({ onDevMenu, remoteIngestVersion = 0 }: CaptureScreenProps = {}) {
+export function CaptureScreen({
+  onDevMenu,
+  remoteIngestVersion = 0,
+  externalEntriesEpoch = 0,
+  captureFocusNonce = 0,
+}: CaptureScreenProps = {}) {
   const [text, setText] = useState('');
   const [entries, setEntries] = useState<Entry[]>([]);
   const [revealByScroll, setRevealByScroll] = useState(false);
   const [syncModalVisible, setSyncModalVisible] = useState(false);
+  const [readEntry, setReadEntry] = useState<Entry | null>(null);
   const [authRestorePhase, setAuthRestorePhase] = useState<AuthRestorePhase>(() =>
     isFirebaseSyncConfigured() && Platform.OS === 'ios' ? 'restoring' : 'signed_out'
   );
@@ -71,10 +82,21 @@ export function CaptureScreen({ onDevMenu, remoteIngestVersion = 0 }: CaptureScr
 
   useEffect(() => {
     void refreshEntries();
-  }, [refreshEntries, remoteIngestVersion]);
+  }, [refreshEntries, remoteIngestVersion, externalEntriesEpoch]);
+
+  useEffect(() => {
+    if (!captureFocusNonce) {
+      return;
+    }
+    const id = requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [captureFocusNonce]);
 
   /** Optimistic UI: row disappears immediately; SQLite + tombstone outbox stay non-blocking. */
   const handleEntryDelete = useCallback((entry: Entry) => {
+    setReadEntry((current) => (current?.id === entry.id ? null : current));
     setEntries((prev) => prev.filter((e) => e.id !== entry.id));
     void deleteEntry(entry.id)
       .then(() => {
@@ -256,7 +278,12 @@ export function CaptureScreen({ onDevMenu, remoteIngestVersion = 0 }: CaptureScr
                 maxHeight={composerMaxHeight}
               />
             </View>
-            <RecentList entries={entries} visible={showRecent} onEntryDelete={handleEntryDelete} />
+            <RecentList
+              entries={entries}
+              visible={showRecent}
+              onEntryPress={setReadEntry}
+              onEntryDelete={handleEntryDelete}
+            />
             <View style={[styles.bottomFill, { flexGrow: 1, minHeight: 1 }]} />
           </ScrollView>
         </KeyboardAvoidingView>
@@ -271,6 +298,11 @@ export function CaptureScreen({ onDevMenu, remoteIngestVersion = 0 }: CaptureScr
         muted={t.colors.muted}
         bgElevated={t.colors.bgElevated}
         border={t.colors.border}
+      />
+      <EntryReadSheet
+        visible={readEntry != null}
+        entry={readEntry}
+        onClose={() => setReadEntry(null)}
       />
     </View>
   );
