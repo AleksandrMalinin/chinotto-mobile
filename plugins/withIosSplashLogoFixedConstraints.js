@@ -11,11 +11,16 @@
  * `expo-splash-screen` plugin `imageWidth` in app.json.
  */
 function withIosSplashLogoFixedConstraints(config, props = {}) {
+  const path = require('path');
   const imageWidth = props.imageWidth ?? 120;
 
-  const {
-    withIosSplashScreenStoryboard,
-  } = require('@expo/prebuild-config/build/plugins/unversioned/expo-splash-screen/withIosSplashScreenStoryboard');
+  // pnpm does not hoist @expo/prebuild-config to the project root; resolve it from expo's graph.
+  const expoRoot = path.dirname(require.resolve('expo/package.json'));
+  const storyboardPluginPath = require.resolve(
+    '@expo/prebuild-config/build/plugins/unversioned/expo-splash-screen/withIosSplashScreenStoryboard',
+    { paths: [expoRoot] }
+  );
+  const { withIosSplashScreenStoryboard } = require(storyboardPluginPath);
 
   return withIosSplashScreenStoryboard(config, (cfg) => {
     const xml = cfg.modResults;
