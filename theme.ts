@@ -31,6 +31,8 @@ export const colorsDark = {
   entryBody: 'rgba(255,255,255,0.9)',
   /** Caret / selection tint (cool lavender; not a separate CSS var in §2 table). */
   accent: 'rgba(160,170,255,0.88)',
+  /** Swipe-to-delete track — violet family, not alarm red. */
+  swipeDeleteBg: 'rgba(108, 116, 178, 0.48)',
 } as const;
 
 /** Light shell — same roles, calm editorial (not marketing chrome). */
@@ -49,6 +51,7 @@ export const colorsLight = {
   glow: 'rgba(90,108,156,0.1)',
   entryBody: 'rgba(28,28,34,0.92)',
   accent: 'rgba(90,100,200,0.88)',
+  swipeDeleteBg: 'rgba(100, 108, 175, 0.28)',
 } as const;
 
 export type ThemeColors = typeof colorsDark | typeof colorsLight;

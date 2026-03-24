@@ -10,8 +10,8 @@ import { formatEntryTime, groupEntriesByDate } from '../utils/groupEntriesByDate
  * Time-grouped stream — section labels (`.stream-section-title`), entry rows with
  * hairline separators like desktop `.entry-row` / `var(--border)`, plus inline time.
  *
- * Delete: **swipe left** past threshold (reveals delete track, commits on open) or **long press**
- * — no confirmation; local-first + tombstone queue (see `deleteEntry`).
+ * Delete: **swipe left** past threshold (reveals delete track, commits on open) — intentional gesture only;
+ * local-first + tombstone queue (see `deleteEntry`).
  */
 export type RecentListProps = {
   entries: Entry[];
@@ -21,15 +21,16 @@ export type RecentListProps = {
   onEntryDelete?: (entry: Entry) => void;
 };
 
-const ROW_PRESS_TINT = 'rgba(128, 138, 188, 0.05)';
 const DELETE_ACTION_WIDTH = 76;
 
-/** Muted destructive — readable on dark shell without loud chrome. */
-const DELETE_TRACK_BG = 'rgba(160, 72, 72, 0.92)';
+/** Pressed row: slightly above `accentSubtle` so it reads as a container, not text selection. */
+function entryPressedBackground(isDark: boolean): string {
+  return isDark ? 'rgba(128, 138, 188, 0.11)' : 'rgba(100, 110, 180, 0.1)';
+}
 
 function RecentListInner({ entries, visible, onEntryPress, onEntryDelete }: RecentListProps) {
   const t = useAppTheme();
-  const { colors, typography } = t;
+  const { colors, typography, isDark, radius: themeRadius } = t;
   const { body, meta } = typography;
 
   const groups = useMemo(() => groupEntriesByDate(entries), [entries]);
@@ -40,74 +41,88 @@ function RecentListInner({ entries, visible, onEntryPress, onEntryDelete }: Rece
 
   const renderRow = (item: Entry, isLastInSection: boolean) => {
     const rowContent = (
-      <Pressable
-        accessible={true}
-        accessibilityLabel={`${item.text}, ${formatEntryTime(item.createdAt)}`}
-        accessibilityHint={
-          [
-            onEntryPress != null ? 'Double tap to read full text' : null,
-            onEntryDelete != null ? 'Swipe left to delete, or long press to delete' : null,
-          ]
-            .filter(Boolean)
-            .join('. ') || undefined
-        }
-        accessibilityActions={onEntryDelete != null ? [{ name: 'delete', label: 'Delete' }] : undefined}
-        onAccessibilityAction={
-          onEntryDelete != null
-            ? ({ nativeEvent }) => {
-                if (nativeEvent.actionName === 'delete') {
-                  onEntryDelete(item);
-                }
-              }
-            : undefined
-        }
-        testID={`recent-entry-${item.id}`}
-        delayLongPress={onEntryDelete != null ? 380 : undefined}
-        onLongPress={onEntryDelete != null ? () => onEntryDelete(item) : undefined}
-        onPress={onEntryPress != null ? () => onEntryPress(item) : undefined}
-        style={({ pressed }) => [
-          styles.entry,
-          {
-            paddingVertical: t.spacing.sm,
-            borderBottomWidth: isLastInSection ? 0 : StyleSheet.hairlineWidth,
+      <View
+        style={[
+          styles.rowOuter,
+          !isLastInSection && {
+            borderBottomWidth: StyleSheet.hairlineWidth,
             borderBottomColor: colors.border,
-            backgroundColor: pressed ? ROW_PRESS_TINT : 'transparent',
           },
         ]}
       >
-        <View style={styles.entryRow}>
-          <Text
-            style={[
-              styles.line,
-              {
-                flex: 1,
-                color: colors.entryBody,
-                fontFamily: body.fontFamily,
-                fontSize: body.fontSize,
-                lineHeight: body.lineHeight,
-                letterSpacing: 0.16,
-                marginRight: t.spacing.sm,
-              },
-            ]}
-            numberOfLines={4}
-          >
-            {item.text}
-          </Text>
-          <Text
-            style={[
-              styles.time,
-              {
-                color: colors.metaFg,
-                fontFamily: meta.fontFamily,
-                fontSize: 12,
-                lineHeight: 16,
-              },
-            ]}
-          >
-            {formatEntryTime(item.createdAt)}
-          </Text>
-        </View>
-      </Pressable>
+        <Pressable
+          accessible={true}
+          accessibilityLabel={`${item.text}, ${formatEntryTime(item.createdAt)}`}
+          accessibilityHint={
+            [
+              onEntryPress != null ? 'Double tap to read full text' : null,
+              onEntryDelete != null ? 'Swipe left to delete' : null,
+            ]
+              .filter(Boolean)
+              .join('. ') || undefined
+          }
+          accessibilityActions={onEntryDelete != null ? [{ name: 'delete', label: 'Delete' }] : undefined}
+          onAccessibilityAction={
+            onEntryDelete != null
+              ? ({ nativeEvent }) => {
+                  if (nativeEvent.actionName === 'delete') {
+                    onEntryDelete(item);
+                  }
+                }
+              : undefined
+          }
+          testID={`recent-entry-${item.id}`}
+          onPress={onEntryPress != null ? () => onEntryPress(item) : undefined}
+          style={styles.pressableFill}
+        >
+          {({ pressed }) => (
+            <View
+              style={[
+                styles.entryBlock,
+                {
+                  borderRadius: themeRadius.sm,
+                  borderWidth: StyleSheet.hairlineWidth,
+                  borderColor: pressed ? colors.border : 'transparent',
+                  backgroundColor: pressed ? entryPressedBackground(isDark) : 'transparent',
+                },
+              ]}
+            >
+              <View style={styles.entryRow}>
+                <Text
+                  style={[
+                    styles.line,
+                    {
+                      flex: 1,
+                      color: colors.entryBody,
+                      fontFamily: body.fontFamily,
+                      fontSize: body.fontSize,
+                      lineHeight: body.lineHeight,
+                      letterSpacing: 0.16,
+                      marginRight: t.spacing.sm,
+                    },
+                  ]}
+                  numberOfLines={4}
+                >
+                  {item.text}
+                </Text>
+                <Text
+                  style={[
+                    styles.time,
+                    {
+                      color: colors.metaFg,
+                      fontFamily: meta.fontFamily,
+                      fontSize: 12,
+                      lineHeight: 16,
+                    },
+                  ]}
+                >
+                  {formatEntryTime(item.createdAt)}
+                </Text>
+              </View>
+            </View>
+          )}
+        </Pressable>
+      </View>
     );
 
     if (onEntryDelete == null) {
@@ -129,13 +144,22 @@ function RecentListInner({ entries, visible, onEntryPress, onEntryDelete }: Rece
               styles.deleteTrack,
               {
                 width: DELETE_ACTION_WIDTH,
-                backgroundColor: DELETE_TRACK_BG,
+                backgroundColor: colors.swipeDeleteBg,
+                borderLeftWidth: StyleSheet.hairlineWidth,
+                borderLeftColor: colors.borderFocus,
               },
             ]}
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
           >
-            <Text style={[styles.deleteLabel, { fontFamily: fonts.medium }]}>Delete</Text>
+            <Text
+              style={[
+                styles.deleteLabel,
+                { fontFamily: fonts.medium, color: colors.fg },
+              ]}
+            >
+              Delete
+            </Text>
           </View>
         )}
         onSwipeableOpen={() => onEntryDelete(item)}
@@ -165,7 +189,7 @@ function RecentListInner({ entries, visible, onEntryPress, onEntryDelete }: Rece
                 fontSize: meta.fontSize,
                 lineHeight: 18,
                 letterSpacing: 0.26,
-                marginBottom: t.spacing.sm,
+                marginBottom: t.spacing.xs,
               },
             ]}
           >
@@ -187,10 +211,28 @@ const styles = StyleSheet.create({
   list: {
     width: '100%',
   },
-  section: {},
+  section: {
+    width: '100%',
+  },
   sectionLabel: {},
-  entry: {},
+  rowOuter: {
+    width: '100%',
+  },
+  pressableFill: {
+    width: '100%',
+    alignSelf: 'stretch',
+  },
+  /**
+   * Full-width block; padding is always applied so press only changes fill/border (no layout jump).
+   * Vertical padding kept moderate for a tight stream.
+   */
+  entryBlock: {
+    width: '100%',
+    paddingVertical: 11,
+    paddingHorizontal: 15,
+  },
   entryRow: {
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
@@ -204,8 +246,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   deleteLabel: {
-    color: 'rgba(255,255,255,0.92)',
     fontSize: 13,
     letterSpacing: 0.2,
+    opacity: 0.92,
   },
 });
