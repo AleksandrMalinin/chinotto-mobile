@@ -194,10 +194,10 @@ describe('CaptureScreen sync auth restore', () => {
     jest.restoreAllMocks();
   });
 
-  it('shows Sync in header while auth is restoring (before first onAuthStateChanged)', async () => {
+  it('shows checking sync status in header while auth is restoring (before first onAuthStateChanged)', async () => {
     mockOnAuthStateChanged.mockImplementation(() => jest.fn());
 
-    const { getByTestId, findByTestId } = render(
+    const { getByTestId, findByTestId, getByText } = render(
       <SafeAreaProvider initialMetrics={safeAreaMetrics}>
         <CaptureScreen />
       </SafeAreaProvider>
@@ -205,16 +205,17 @@ describe('CaptureScreen sync auth restore', () => {
 
     await findByTestId('capture-input');
     expect(getByTestId('sync-header-cta')).toBeTruthy();
+    expect(getByText('Checking sync')).toBeTruthy();
   });
 
-  it('keeps Sync in header when onAuthStateChanged fires with a non-anonymous user', async () => {
+  it('shows Synced in header when onAuthStateChanged fires with a non-anonymous user', async () => {
     let listener: ((user: unknown) => void) | undefined;
     mockOnAuthStateChanged.mockImplementation((_auth, cb) => {
       listener = cb;
       return jest.fn();
     });
 
-    const { getByTestId, findByTestId } = render(
+    const { getByTestId, findByTestId, getByText } = render(
       <SafeAreaProvider initialMetrics={safeAreaMetrics}>
         <CaptureScreen />
       </SafeAreaProvider>
@@ -232,16 +233,17 @@ describe('CaptureScreen sync auth restore', () => {
     });
 
     expect(getByTestId('sync-header-cta')).toBeTruthy();
+    expect(getByText('Synced')).toBeTruthy();
   });
 
-  it('shows Sync in header after restore when user is anonymous only', async () => {
+  it('shows Enable sync in header after restore when user is anonymous only', async () => {
     let listener: ((user: unknown) => void) | undefined;
     mockOnAuthStateChanged.mockImplementation((_auth, cb) => {
       listener = cb;
       return jest.fn();
     });
 
-    const { getByTestId, findByTestId } = render(
+    const { getByTestId, findByTestId, getByText } = render(
       <SafeAreaProvider initialMetrics={safeAreaMetrics}>
         <CaptureScreen />
       </SafeAreaProvider>
@@ -258,16 +260,17 @@ describe('CaptureScreen sync auth restore', () => {
     });
 
     expect(getByTestId('sync-header-cta')).toBeTruthy();
+    expect(getByText('Enable sync')).toBeTruthy();
   });
 
-  it('shows Sync in header after restore completes with no signed-in user', async () => {
+  it('shows Enable sync in header after restore completes with no signed-in user', async () => {
     let listener: ((user: unknown) => void) | undefined;
     mockOnAuthStateChanged.mockImplementation((_auth, cb) => {
       listener = cb;
       return jest.fn();
     });
 
-    const { getByTestId, findByTestId } = render(
+    const { getByTestId, findByTestId, getByText } = render(
       <SafeAreaProvider initialMetrics={safeAreaMetrics}>
         <CaptureScreen />
       </SafeAreaProvider>
@@ -281,5 +284,6 @@ describe('CaptureScreen sync auth restore', () => {
     });
 
     expect(getByTestId('sync-header-cta')).toBeTruthy();
+    expect(getByText('Enable sync')).toBeTruthy();
   });
 });

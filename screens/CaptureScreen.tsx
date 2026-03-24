@@ -21,19 +21,20 @@ import { ChinottoLogo } from '../components/ChinottoLogo';
 import { EnableSyncModal } from '../components/EnableSyncModal';
 import { EntryReadSheet } from '../components/EntryReadSheet';
 import { RecentList } from '../components/RecentList';
+import { SyncHeaderStatus, type SyncHeaderAuthPhase } from '../components/SyncHeaderStatus';
 import type { Entry } from '../types/entry';
 import { showDevMenu } from '../dev/showDevMenu';
 import { deleteEntry, getRecentEntries, saveEntry } from '../storage/entryRepository';
 import { isFirebaseSyncConfigured } from '../sync/firebaseConfig';
 import { getOrInitAuth } from '../sync/firebaseAuth';
 import { flushSyncTombstoneOutbox } from '../sync/tombstoneFlush';
-import { fonts, screenContentGutter, useAppTheme } from '../theme';
+import { screenContentGutter, useAppTheme } from '../theme';
 
 const RECENT_LIMIT = 20;
 const SCROLL_REVEAL_OFFSET = 20;
 
 /** Firebase session restore vs signed-out; avoids showing Enable sync before persistence restores. */
-export type AuthRestorePhase = 'restoring' | 'signed_in' | 'signed_out';
+export type AuthRestorePhase = SyncHeaderAuthPhase;
 
 export type CaptureScreenProps = {
   /** `__DEV__` only: long-press header logo opens dev menu (e.g. reset welcome). */
@@ -216,39 +217,17 @@ export function CaptureScreen({
                   hitSlop={12}
                   onLongPress={() => showDevMenu({ onResetWelcome: onDevMenu })}
                 >
-                  <ChinottoLogo testID="header-logo" size={32} color={t.colors.fgDim} />
+                  <ChinottoLogo testID="header-logo" size={42} color={t.colors.fgDim} />
                 </Pressable>
               ) : (
-                <ChinottoLogo testID="header-logo" size={32} color={t.colors.fgDim} />
+                <ChinottoLogo testID="header-logo" size={42} color={t.colors.fgDim} />
               )}
               {isFirebaseSyncConfigured() && Platform.OS === 'ios' ? (
-                <Pressable
-                  testID="sync-header-cta"
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    authRestorePhase === 'signed_in'
-                      ? 'Sync, on'
-                      : authRestorePhase === 'restoring'
-                        ? 'Sync, checking sign-in'
-                        : 'Sync, set up with Apple'
-                  }
-                  hitSlop={10}
+                <SyncHeaderStatus
+                  phase={authRestorePhase}
                   onPress={() => setSyncModalVisible(true)}
-                  style={({ pressed }) => [
-                    styles.syncAfterLogo,
-                    { opacity: pressed ? 0.65 : 1 },
-                  ]}
-                >
-                  <Text
-                    style={{
-                      color: t.colors.muted,
-                      fontFamily: fonts.medium,
-                      fontSize: 15,
-                    }}
-                  >
-                    Sync
-                  </Text>
-                </Pressable>
+                  style={styles.syncAfterLogo}
+                />
               ) : null}
             </View>
           </View>
@@ -327,13 +306,13 @@ const styles = StyleSheet.create({
   headerBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 40,
+    minHeight: 48,
   },
   headerLogoSlot: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 40,
+    minHeight: 48,
   },
   /** When Sync is shown, keep the top-trailing corner clear for expo-dev-client’s floating menu. */
   headerReserveDevMenuTray: {
