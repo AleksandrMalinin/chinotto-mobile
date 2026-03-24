@@ -1,3 +1,4 @@
+import { signOut } from 'firebase/auth';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
@@ -11,6 +12,7 @@ import {
 
 import { AppleSyncIdentityError } from '../auth/appleFirebaseAuth';
 import { AppleUserCanceledError, enableAppleSyncWithFirebase } from '../auth/enableAppleSync';
+import { getOrInitAuth } from '../sync/firebaseAuth';
 import { fonts, radius, spacing } from '../theme';
 
 export type SyncModalAuthPhase = 'restoring' | 'signed_in' | 'signed_out';
@@ -71,6 +73,23 @@ export function EnableSyncModal({
       setBusy(false);
     }
   }, [onClose, onEnabled]);
+
+  const handleStopSyncing = useCallback(async () => {
+    setErrorMessage(null);
+    setBusy(true);
+    try {
+      await signOut(getOrInitAuth());
+      onClose();
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setErrorMessage(err.message);
+      } else {
+        setErrorMessage('Could not stop syncing. Try again.');
+      }
+    } finally {
+      setBusy(false);
+    }
+  }, [onClose]);
 
   if (Platform.OS !== 'ios') {
     return null;
@@ -149,6 +168,36 @@ export function EnableSyncModal({
                 <Text style={{ color: muted, fontFamily: fonts.regular }}>Not now</Text>
               </Pressable>
             </>
+          ) : authPhase === 'signed_in' ? (
+            <>
+              {errorMessage != null ? (
+                <Text
+                  style={[styles.error, { color: fgDim, fontFamily: fonts.regular }]}
+                  accessibilityLiveRegion="polite"
+                >
+                  {errorMessage}
+                </Text>
+              ) : null}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Done"
+                disabled={busy}
+                onPress={handleClose}
+                style={({ pressed }) => [styles.doneButton, { opacity: pressed ? 0.85 : 1 }]}
+              >
+                <Text style={{ color: fg, fontFamily: fonts.medium, fontSize: 16 }}>Done</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Stop syncing on this device"
+                accessibilityHint="Signs out of Apple sync. Your thoughts stay on this device."
+                disabled={busy}
+                onPress={() => void handleStopSyncing()}
+                style={styles.stopSync}
+              >
+                <Text style={{ color: muted, fontFamily: fonts.regular, fontSize: 15 }}>Stop syncing</Text>
+              </Pressable>
+            </>
           ) : (
             <Pressable
               accessibilityRole="button"
@@ -220,5 +269,11 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg,
+  },
+  stopSync: {
+    marginTop: spacing.md,
+    alignSelf: 'center',
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
   },
 });
