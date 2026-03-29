@@ -54,8 +54,8 @@ export const CaptureInput = forwardRef<TextInput, CaptureInputProps>(
             letterSpacing: capture.letterSpacing,
             lineHeight: capture.lineHeight,
             paddingHorizontal: 0,
-            paddingTop: 4,
-            paddingBottom: 6,
+            paddingTop: 6,
+            paddingBottom: 8,
           },
         ]}
         value={value}

@@ -5,7 +5,18 @@ import Svg, { Circle } from 'react-native-svg';
 /** Matches `chinotto-app/src/components/ChinottoLogo.tsx` + `index.css` `.chinotto-logo-animated` timings. */
 const VIEWBOX = 64;
 const OUTER_R = 22;
+/** Outer ring center in viewBox units — symmetric; ring left edge is `RING_CX - OUTER_R`. */
+const RING_CX = 32;
 const STROKE_LEN = 2 * Math.PI * OUTER_R;
+
+/**
+ * Horizontal distance from the component’s left edge to the **drawn** outer ring’s left edge
+ * (viewBox padding before the stroke). Use **`marginLeft: -chinottoLogoLeadingOutset(size)`** when
+ * the logo sits in a column aligned to body text so the ring lines up with the copy.
+ */
+export function chinottoLogoLeadingOutset(size: number): number {
+  return (size * (RING_CX - OUTER_R)) / VIEWBOX;
+}
 
 const STROKE_MS = 1700;
 const DOT_MS = 550;

@@ -26,7 +26,22 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 
 jest.mock('expo-font', () => ({
   useFonts: () => [true],
+  loadAsync: jest.fn(() => Promise.resolve()),
+  isLoaded: jest.fn(() => true),
 }));
+
+jest.mock('@expo/vector-icons', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    Ionicons: ({ name, size, color, ...rest }) =>
+      React.createElement(View, {
+        ...rest,
+        testID: `ionicon-${name}`,
+        style: [{ width: size, height: size }, rest.style],
+      }),
+  };
+});
 
 jest.mock('expo-splash-screen', () => ({
   preventAutoHideAsync: jest.fn(() => Promise.resolve()),
@@ -39,6 +54,19 @@ jest.mock('expo-linear-gradient', () => {
     LinearGradient: View,
   };
 });
+
+jest.mock('expo-haptics', () => ({
+  ImpactFeedbackStyle: {
+    Light: 0,
+    Medium: 1,
+    Heavy: 2,
+    Soft: 3,
+    Rigid: 4,
+  },
+  impactAsync: jest.fn(() => Promise.resolve()),
+  selectionAsync: jest.fn(() => Promise.resolve()),
+  notificationAsync: jest.fn(() => Promise.resolve()),
+}));
 
 jest.mock('expo-linking', () => ({
   addEventListener: jest.fn(() => ({ remove: jest.fn() })),

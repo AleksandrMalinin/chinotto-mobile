@@ -9,7 +9,7 @@
 | **Phase 1** | Shipped (v1) | Append-only create sync; mobile push; desktop ingest by `id` dedupe. No delete over the wire. |
 | **Phase 2** | Desktop **shipped**; mobile **shipped** (this repo) | Tombstone `deletedAt`, suppression bridge, tombstone outbox flush, dual `onSnapshot` (ingest + tombstones), swipe/long-press delete. Normative spec **§8**. **Handoff / alignment:** `chinotto-app/docs/sync-deletion-v2.md`. |
 
-**Cross-repo docs:** **`chinotto-app/docs/sync-deletion-v2.md`** — contract + **Desktop implementation (shipped)** + **Mobile implementation (handoff)**. **§8** below is the normative copy in this repo; keep the two aligned.
+**Cross-repo docs:** **`chinotto-app/docs/sync-deletion-v2.md`** — contract + **Desktop implementation (shipped)** + **Mobile implementation (handoff)**. **Desktop architecture, IPC, tests, troubleshooting:** **[Chinotto `docs/sync.md`](https://github.com/AleksandrMalinin/chinotto/blob/main/docs/sync.md)** (desktop repo — not this file). **§8** below is the normative **wire** copy in this repo; keep the two aligned.
 
 ---
 
@@ -155,7 +155,11 @@ service cloud.firestore {
 
 ## 5. Desktop (separate app)
 
-**Implementation handoff (copy into desktop repo / AI prompt):** [desktop-sync-implementation.md](./desktop-sync-implementation.md)
+**Desktop behavior (architecture, ops, IPC):** [Chinotto `docs/sync.md`](https://github.com/AleksandrMalinin/chinotto/blob/main/docs/sync.md). **This file (`chinotto-mobile/docs/sync.md`)** is the **wire contract** (payloads, Firestore layout, §8 tombstones, mobile module map).
+
+**Shipping / alignment:** [sync-release-checklist.md](./sync-release-checklist.md) — mirrored in `chinotto-app`; update **both** when rows change.
+
+**Implementing or auditing desktop ingest:** use [Chinotto `docs/sync.md`](https://github.com/AleksandrMalinin/chinotto/blob/main/docs/sync.md) plus **`chinotto-app/docs/sync-deletion-v2.md`** — no separate prompt doc in this repo.
 
 1. Same Firebase project; same Auth user (`uid`) as mobile for the same person.  
 2. Query `users/{uid}/entries` with `orderBy('createdAt', 'desc')` (or `asc` — be consistent).  
@@ -294,8 +298,18 @@ Both support append-only `Entry` and idempotent writes. **Firestore** was chosen
 
 ---
 
+## Changelog
+
+Record **implementation** and cross-repo **alignment** changes for **mobile** here (do not duplicate the full release matrix — use [sync-release-checklist.md](./sync-release-checklist.md) for ✅ / ☐ per ship).
+
+| Date | Change |
+|------|--------|
+| 2026-03-29 | Docs: unified release checklist with desktop; removed `desktop-alignment.md` and `desktop-sync-implementation.md`; desktop ingest/ops in Chinotto [`docs/sync.md`](https://github.com/AleksandrMalinin/chinotto/blob/main/docs/sync.md) + `sync-deletion-v2.md`; this file remains wire contract. |
+
+---
+
 ## Practical checklist
 
 1. **Console:** Rules (§3); **Authentication** → enable **Apple** (and optional Anonymous only for dev/legacy). **Phase 2:** extend rules for **`deletedAt`** tombstone updates (§8).  
 2. **Mobile:** `.env` from `.env.example`; `npx expo prebuild` / dev build after adding Apple plugin; restart Metro after env changes. **Phase 2:** tombstone queue + `updateDoc` flush per §8.  
-3. **Desktop:** Same project, same **`uid`**, listener + local merge by `id`. **Phase 2:** ingest tombstones + suppression bridge per §8; align with `chinotto-app/docs/sync-deletion-v2.md`.
+3. **Desktop:** Same project, same **`uid`**, listener + local merge by `id`. **Phase 2:** ingest tombstones + suppression bridge per §8; align with `chinotto-app/docs/sync-deletion-v2.md`. **Ops / IPC / tests:** [Chinotto `docs/sync.md`](https://github.com/AleksandrMalinin/chinotto/blob/main/docs/sync.md).

@@ -14,7 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 
 import type { Entry } from '../types/entry';
-import { fonts, screenContentGutter, useAppTheme } from '../theme';
+import { fonts, screenContentGutter, screenContentInnerPad, useAppTheme } from '../theme';
 import { replaceHttpUrlsWithCompactDisplay } from '../utils/extractHttpUrlsFromText';
 import { formatEntryTime, groupEntriesByDate } from '../utils/groupEntriesByDate';
 
@@ -40,8 +40,6 @@ export type RecentListProps = {
 };
 
 const DELETE_ACTION_WIDTH = 76;
-/** Extra inset past screen gutter so row text lines up with section titles / composer. */
-const STREAM_ROW_INNER_PAD_H = 15;
 
 /** Transient left-edge trace — quicker and lighter than the composer surface. */
 const HIGHLIGHT_FADE_IN_MS = 200;
@@ -167,7 +165,7 @@ function RecentStreamRow({
           <View
             style={[
               styles.entryRow,
-              { paddingHorizontal: streamGutter + STREAM_ROW_INNER_PAD_H },
+              { paddingHorizontal: streamGutter + screenContentInnerPad },
             ]}
           >
             <Text

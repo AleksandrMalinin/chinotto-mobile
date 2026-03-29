@@ -54,3 +54,5 @@ pnpm android
 
 - [Chinotto desktop](https://github.com/AleksandrMalinin/chinotto) — primary thinking surface
 - [Chinotto web](https://github.com/AleksandrMalinin/chinotto-web) — web companion / info site
+
+**Sync docs (this repo):** [docs/sync.md](docs/sync.md) — Firestore wire contract for mobile ↔ desktop. **Desktop app** (ingest, IPC, troubleshooting): [Chinotto `docs/sync.md`](https://github.com/AleksandrMalinin/chinotto/blob/main/docs/sync.md). **Release checklist:** [docs/sync-release-checklist.md](docs/sync-release-checklist.md) (keep in sync with the desktop copy).
