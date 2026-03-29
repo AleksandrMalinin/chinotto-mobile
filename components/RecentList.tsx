@@ -88,7 +88,7 @@ function RecentStreamRow({
   const [pressed, setPressed] = useState(false);
   const t = useAppTheme();
   const { colors, typography, isDark } = t;
-  const { body, meta } = typography;
+  const { body } = typography;
   const lineDisplay = replaceHttpUrlsWithCompactDisplay(item.text);
 
   const onPressIn = useCallback(() => {
@@ -192,10 +192,10 @@ function RecentStreamRow({
               style={[
                 styles.time,
                 {
-                  color: colors.metaFg,
-                  fontFamily: meta.fontFamily,
-                  fontSize: 12,
-                  lineHeight: 16,
+                  color: colors.muted,
+                  fontFamily: fonts.regular,
+                  fontSize: 11,
+                  lineHeight: 15,
                 },
               ]}
             >
