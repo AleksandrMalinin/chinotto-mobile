@@ -16,6 +16,10 @@ import { formatEntryTime, groupEntriesByDate } from '../utils/groupEntriesByDate
 export type RecentListProps = {
   entries: Entry[];
   visible: boolean;
+  /** Shown when `visible` and there are no rows (e.g. search had no hits). */
+  emptyHint?: string;
+  /** Muted line below the list (e.g. search capped at N results). */
+  listFooterHint?: string;
   /** Opens full-text read sheet (companion recall). */
   onEntryPress?: (entry: Entry) => void;
   onEntryDelete?: (entry: Entry) => void;
@@ -28,15 +32,47 @@ function entryPressedBackground(isDark: boolean): string {
   return isDark ? 'rgba(128, 138, 188, 0.11)' : 'rgba(100, 110, 180, 0.1)';
 }
 
-function RecentListInner({ entries, visible, onEntryPress, onEntryDelete }: RecentListProps) {
+function RecentListInner({
+  entries,
+  visible,
+  emptyHint,
+  listFooterHint,
+  onEntryPress,
+  onEntryDelete,
+}: RecentListProps) {
   const t = useAppTheme();
   const { colors, typography, isDark, radius: themeRadius } = t;
   const { body, meta } = typography;
 
   const groups = useMemo(() => groupEntriesByDate(entries), [entries]);
 
-  if (!visible || entries.length === 0) {
+  if (!visible) {
     return null;
+  }
+
+  if (entries.length === 0) {
+    if (emptyHint == null || emptyHint === '') {
+      return null;
+    }
+    return (
+      <View testID="recent-list" style={[styles.list, { paddingTop: t.spacing.lg }]}>
+        <Text
+          testID="recent-list-empty-hint"
+          accessibilityRole="text"
+          style={[
+            styles.emptyHint,
+            {
+              color: colors.muted,
+              fontFamily: meta.fontFamily,
+              fontSize: meta.fontSize,
+              lineHeight: 20,
+            },
+          ]}
+        >
+          {emptyHint}
+        </Text>
+      </View>
+    );
   }
 
   const renderRow = (item: Entry, isLastInSection: boolean) => {
@@ -201,6 +237,25 @@ function RecentListInner({ entries, visible, onEntryPress, onEntryDelete }: Rece
           })}
         </View>
       ))}
+      {listFooterHint != null && listFooterHint !== '' ? (
+        <Text
+          testID="recent-list-footer-hint"
+          accessibilityRole="text"
+          style={[
+            styles.footerHint,
+            {
+              color: colors.muted,
+              fontFamily: meta.fontFamily,
+              fontSize: 12,
+              lineHeight: 17,
+              letterSpacing: 0.15,
+              marginTop: t.spacing.md,
+            },
+          ]}
+        >
+          {listFooterHint}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -210,6 +265,12 @@ export const RecentList = memo(RecentListInner);
 const styles = StyleSheet.create({
   list: {
     width: '100%',
+  },
+  emptyHint: {
+    paddingVertical: 4,
+  },
+  footerHint: {
+    paddingVertical: 2,
   },
   section: {
     width: '100%',

@@ -35,4 +35,27 @@ describe('RecentList', () => {
     fireEvent.press(getByTestId(`recent-entry-${e.id}`));
     expect(onEntryPress).toHaveBeenCalledWith(e);
   });
+
+  it('shows emptyHint when visible and entries are empty', () => {
+    const { getByTestId, getByText } = render(
+      <RecentList entries={[]} visible emptyHint="No matches" />
+    );
+
+    expect(getByTestId('recent-list')).toBeTruthy();
+    expect(getByTestId('recent-list-empty-hint')).toBeTruthy();
+    expect(getByText('No matches')).toBeTruthy();
+  });
+
+  it('shows listFooterHint below rows when provided', () => {
+    const { getByTestId, getByText } = render(
+      <RecentList
+        entries={[entryToday('hello')]}
+        visible
+        listFooterHint="Showing first 300 matches"
+      />
+    );
+
+    expect(getByTestId('recent-list-footer-hint')).toBeTruthy();
+    expect(getByText('Showing first 300 matches')).toBeTruthy();
+  });
 });
