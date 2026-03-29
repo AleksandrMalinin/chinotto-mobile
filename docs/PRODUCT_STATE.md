@@ -22,7 +22,7 @@
 | **Read sheet** | Full text, copy, timestamp; dismiss tap outside. |
 | **List visibility** | Hidden while typing until user scrolls down ~20px (`revealByScroll`), or when input empty. |
 | **Persistence** | SQLite `entries` + serialized access (`runSerializedDb`). |
-| **Sync (optional)** | Env `EXPO_PUBLIC_FIREBASE_*`; queue on save; 15s background drain; Firestore `setDoc` push; ingest + tombstone listeners. |
+| **Sync (optional)** | Env `EXPO_PUBLIC_FIREBASE_*`; queue on save; 15s background drain; Firestore `setDoc` push; live ingest + tombstone listeners; **paginated `getDocs` backfill** after sign-in for older cloud rows; iOS header: Checking / Syncing… / Sync paused / Synced. |
 | **Sign in** | Sign in with Apple + Firebase — **iOS only** in UI (`EnableSyncModal` returns null on Android). |
 | **Share** | `expo-sharing` — text / URL / webpage → one entry per extracted string; “Saved” ack. |
 | **Widget** | iOS home widget (expo-widgets); gated by `EXPO_PUBLIC_EXPERIMENTAL_IOS_HOME_WIDGET` (on in `__DEV__`). |
@@ -75,8 +75,8 @@
 ## 5. Risks (implementation-grounded)
 
 - Pending sync queue while signed out — user may assume cloud backup exists.
-- `auth/credential-already-in-use` — documented as thin v1 handling.
-- Firestore listener limits (500 recent docs + 1000 tombstones) — edge cases at scale (see SYNC.md).
+- `auth/credential-already-in-use` — user-facing copy explains split cloud libraries; full merge is manual (see [SYNC_APPLE_QA.md](./SYNC_APPLE_QA.md)).
+- Firestore listener limits (500 recent live ingest + 1000 tombstones); older **active** rows also load via **paginated backfill** after sign-in (see SYNC.md). Extreme counts (20k+ creates) may still need tuning.
 
 ---
 
@@ -94,6 +94,7 @@
 
 - [SYNC.md](./SYNC.md) — normative sync phases, Firestore layout, tombstones.
 - [DESKTOP_SYNC_IMPLEMENTATION.md](./DESKTOP_SYNC_IMPLEMENTATION.md) — desktop handoff spec.
+- [SYNC_APPLE_QA.md](./SYNC_APPLE_QA.md) — Apple-only sync sanity checklist (devices + `credential-already-in-use`).
 - [AGENTS.md](../AGENTS.md) — agent/product constraints for this repo.
 
 ---
