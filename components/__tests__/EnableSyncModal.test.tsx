@@ -73,6 +73,25 @@ describe('EnableSyncModal', () => {
     });
   });
 
+  it('shows sync health note when signed in and syncHealthNote is set', () => {
+    const { getByText } = render(
+      <EnableSyncModal
+        visible
+        onClose={jest.fn()}
+        onEnabled={jest.fn()}
+        authPhase="signed_in"
+        syncHealthNote="Uploads are waiting—check your connection."
+        fg="#fff"
+        fgDim="#aaa"
+        muted="#888"
+        bgElevated="#111"
+        border="#333"
+      />
+    );
+
+    expect(getByText(/Uploads are waiting/)).toBeTruthy();
+  });
+
   it('drains sync queue and tombstone outbox after Apple sign-in succeeds', async () => {
     const onEnabled = jest.fn();
     const onClose = jest.fn();

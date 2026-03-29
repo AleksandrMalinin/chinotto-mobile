@@ -26,6 +26,8 @@ export type EnableSyncModalProps = {
   onEnabled: () => void;
   /** Drives copy: enable Apple vs status-only sheet */
   authPhase: SyncModalAuthPhase;
+  /** Shown under signed-in copy when upload queue looks stuck (e.g. offline). */
+  syncHealthNote?: string | null;
   /** Design tokens */
   fg: string;
   fgDim: string;
@@ -39,6 +41,7 @@ export function EnableSyncModal({
   onClose,
   onEnabled,
   authPhase,
+  syncHealthNote = null,
   fg,
   fgDim,
   muted,
@@ -121,9 +124,23 @@ export function EnableSyncModal({
           ) : null}
 
           {authPhase === 'signed_in' ? (
-            <Text style={[styles.body, { color: fgDim, fontFamily: fonts.regular }]}>
-              You're signed in with Apple. New thoughts sync in the background.
-            </Text>
+            <>
+              <Text style={[styles.body, { color: fgDim, fontFamily: fonts.regular }]}>
+                You're signed in with Apple. New thoughts sync in the background.
+              </Text>
+              <Text style={[styles.note, { color: muted, fontFamily: fonts.regular }]}>
+                Older thoughts from other devices load in the background; the stream shows recent items
+                first.
+              </Text>
+              {syncHealthNote != null && syncHealthNote !== '' ? (
+                <Text
+                  style={[styles.error, { color: fgDim, fontFamily: fonts.regular }]}
+                  accessibilityLiveRegion="polite"
+                >
+                  {syncHealthNote}
+                </Text>
+              ) : null}
+            </>
           ) : null}
 
           {showEnableFlow ? (
