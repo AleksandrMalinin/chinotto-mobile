@@ -46,6 +46,14 @@ describe('RecentList', () => {
     expect(getByText('No matches')).toBeTruthy();
   });
 
+  it('shows compact URL in row text while keeping full text in a11y label', () => {
+    const e = entryToday('see https://www.example.com/wiki/Tea');
+    const { getByLabelText, getByText } = render(<RecentList entries={[e]} visible />);
+
+    expect(getByText(/see example\.com\/wiki\/Tea/)).toBeTruthy();
+    expect(getByLabelText(/see https:\/\/www\.example\.com\/wiki\/Tea/)).toBeTruthy();
+  });
+
   it('shows listFooterHint below rows when provided', () => {
     const { getByTestId, getByText } = render(
       <RecentList
@@ -57,5 +65,15 @@ describe('RecentList', () => {
 
     expect(getByTestId('recent-list-footer-hint')).toBeTruthy();
     expect(getByText('Showing first 300 matches')).toBeTruthy();
+  });
+
+  it('accepts highlightEntryId without breaking row render', () => {
+    const e = entryToday('just landed');
+    const { getByTestId, getByText } = render(
+      <RecentList entries={[e]} visible highlightEntryId={e.id} />
+    );
+
+    expect(getByTestId('recent-list')).toBeTruthy();
+    expect(getByText('just landed')).toBeTruthy();
   });
 });
