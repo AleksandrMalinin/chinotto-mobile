@@ -7,20 +7,15 @@
 *Capture first.  
 Revisit later.*
 
-Chinotto Mobile is a minimal companion to Chinotto desktop — built for capturing thoughts the moment they appear, wherever you are.
+Chinotto Mobile is a minimal companion to Chinotto desktop — built for capturing thoughts the moment they appear.
 
-Thoughts don’t wait for the right place — they appear in passing, between moments, often when you’re away from your desk.  
-Capture them instantly — without projects, folders, or workspaces.
-
+Capture them instantly — without projects, folders, or workspaces.  
 Structure can come later — when you revisit on desktop.
 
 Local-first. Works fully offline.  
 Your entries stay on your device.
 
-Optional sync keeps your thoughts with you across devices.  
-It runs quietly in the background and is never required to capture.
-
-iPhone is the current focus.
+Optional sync (with Apple ID) keeps your thoughts with you across devices.
 
 ---
 
