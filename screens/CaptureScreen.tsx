@@ -65,6 +65,10 @@ export type CaptureScreenProps = {
   streamHighlightEntryId?: string | null;
   /** Schedule/clear handled in parent so manual capture and share share one timer. */
   onScheduleStreamHighlight?: (entryId: string) => void;
+  /** From App after {@link loadSubscriptionState}; defaults true for tests / isolation. */
+  subscriptionHydrated?: boolean;
+  /** Stub or real Plus purchase completed — refresh Firestore ingest when paywall is on. */
+  onSubscriptionUnlocked?: () => void;
 };
 
 export function CaptureScreen({
@@ -74,6 +78,8 @@ export function CaptureScreen({
   captureFocusNonce = 0,
   streamHighlightEntryId = null,
   onScheduleStreamHighlight,
+  subscriptionHydrated = true,
+  onSubscriptionUnlocked,
 }: CaptureScreenProps = {}) {
   const [text, setText] = useState('');
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -487,6 +493,8 @@ export function CaptureScreen({
             .catch(() => {});
         }}
         authPhase={authRestorePhase}
+        subscriptionHydrated={subscriptionHydrated}
+        onSubscriptionUnlocked={onSubscriptionUnlocked}
         syncHealthNote={
           authRestorePhase === 'signed_in' && uploadStuck
             ? 'Uploads are waiting—check your connection. Nothing is lost; thoughts stay on this device.'

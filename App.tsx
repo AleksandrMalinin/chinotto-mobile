@@ -11,6 +11,7 @@ import { BrandSplash } from './components/BrandSplash';
 import { STREAM_HIGHLIGHT_CLEAR_AFTER_MS } from './components/RecentList';
 import { CaptureScreen } from './screens/CaptureScreen';
 import { WelcomeOnboardingScreen } from './screens/WelcomeOnboardingScreen';
+import { loadSubscriptionState } from './monetization/subscriptionState';
 import { composeIncomingShareCaptureText } from './share/extractShareEntryTexts';
 import { startMobileFirestoreIngest } from './sync/firestoreIngest';
 import { resolvePushEntryForSync } from './sync/pushEntryForSync';
@@ -103,6 +104,8 @@ export default function App() {
     'OpenSauceOne-500': require('./assets/fonts/OpenSauceOne-Medium.ttf'),
   });
   const [dbReady, setDbReady] = useState(false);
+  const [subscriptionLoaded, setSubscriptionLoaded] = useState(false);
+  const [firestoreIngestEpoch, setFirestoreIngestEpoch] = useState(0);
   const [remoteIngestVersion, setRemoteIngestVersion] = useState(0);
   const [phase, setPhase] = useState<AppPhase>('boot');
   /** Snapshot after `hasCompletedWelcome()` — drives brand → welcome vs main. */
@@ -152,6 +155,10 @@ export default function App() {
 
   useEffect(() => {
     void initDatabase().finally(() => setDbReady(true));
+  }, []);
+
+  useEffect(() => {
+    void loadSubscriptionState().finally(() => setSubscriptionLoaded(true));
   }, []);
 
   useExperimentalIosHomeWidgetRegistration(dbReady);
@@ -233,7 +240,7 @@ export default function App() {
   }, [shareSavedAck]);
 
   useEffect(() => {
-    if (!dbReady) {
+    if (!dbReady || !subscriptionLoaded) {
       return;
     }
     let cancelled = false;
@@ -250,17 +257,17 @@ export default function App() {
       cancelled = true;
       stop?.();
     };
-  }, [dbReady]);
+  }, [dbReady, subscriptionLoaded]);
 
   useEffect(() => {
-    if (!dbReady) {
+    if (!dbReady || !subscriptionLoaded) {
       return;
     }
     const stopIngest = startMobileFirestoreIngest(() => {
       setRemoteIngestVersion((v) => v + 1);
     });
     return stopIngest;
-  }, [dbReady]);
+  }, [dbReady, subscriptionLoaded, firestoreIngestEpoch]);
 
   useEffect(() => {
     if (!fontsLoaded || !dbReady) {
@@ -310,6 +317,8 @@ export default function App() {
               captureFocusNonce={captureFocusNonce}
               streamHighlightEntryId={streamHighlightEntryId}
               onScheduleStreamHighlight={scheduleStreamHighlight}
+              subscriptionHydrated={subscriptionLoaded}
+              onSubscriptionUnlocked={() => setFirestoreIngestEpoch((n) => n + 1)}
               {...(__DEV__ ? { onDevMenu: onDevResetWelcome } : {})}
             />
           )}
