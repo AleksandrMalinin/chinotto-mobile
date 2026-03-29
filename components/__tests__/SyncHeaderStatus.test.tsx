@@ -30,6 +30,16 @@ describe('SyncHeaderStatus', () => {
     expect(getByTestId('sync-header-dot')).toBeTruthy();
   });
 
+  it('shows Sync paused when signed in with upload stuck (takes precedence over pending)', () => {
+    const { getByText, queryByText, getByTestId } = render(
+      <SyncHeaderStatus phase="signed_in" uploadPending uploadStuck onPress={jest.fn()} />
+    );
+
+    expect(getByText('Sync paused')).toBeTruthy();
+    expect(queryByText('Syncing…')).toBeNull();
+    expect(getByTestId('sync-header-dot')).toBeTruthy();
+  });
+
   it('shows Enable sync with no dot when signed out', () => {
     const { getByText, queryByTestId } = render(
       <SyncHeaderStatus phase="signed_out" onPress={jest.fn()} />

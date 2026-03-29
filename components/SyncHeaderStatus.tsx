@@ -19,6 +19,8 @@ export type SyncHeaderStatusProps = {
   phase: SyncHeaderAuthPhase;
   /** When signed in: true if upload queue still has pending rows. */
   uploadPending?: boolean;
+  /** When signed in: large pending queue for several polls (offline or repeated upload errors). */
+  uploadStuck?: boolean;
   onPress: () => void;
   style?: StyleProp<ViewStyle>;
 };
@@ -43,11 +45,18 @@ function syncDotShadowStyle(): ViewStyle {
   };
 }
 
-export function SyncHeaderStatus({ phase, uploadPending = false, onPress, style }: SyncHeaderStatusProps) {
+export function SyncHeaderStatus({
+  phase,
+  uploadPending = false,
+  uploadStuck = false,
+  onPress,
+  style,
+}: SyncHeaderStatusProps) {
   const t = useAppTheme();
   const pulse = useRef(new Animated.Value(0.45)).current;
 
-  const pulseForActivity = phase === 'restoring' || (phase === 'signed_in' && uploadPending);
+  const pulseForActivity =
+    phase === 'restoring' || (phase === 'signed_in' && uploadPending && !uploadStuck);
 
   useEffect(() => {
     if (!pulseForActivity) {
@@ -79,9 +88,11 @@ export function SyncHeaderStatus({ phase, uploadPending = false, onPress, style 
     phase === 'restoring'
       ? 'Checking sync'
       : phase === 'signed_in'
-        ? uploadPending
-          ? 'Syncing…'
-          : 'Synced'
+        ? uploadStuck
+          ? 'Sync paused'
+          : uploadPending
+            ? 'Syncing…'
+            : 'Synced'
         : 'Enable sync';
 
   /** Intentionally quiet — sync is optional; never compete with capture. */
@@ -89,16 +100,20 @@ export function SyncHeaderStatus({ phase, uploadPending = false, onPress, style 
     phase === 'signed_out'
       ? t.colors.sectionFg
       : phase === 'signed_in'
-        ? t.colors.muted
+        ? uploadStuck
+          ? t.colors.sectionFg
+          : t.colors.muted
         : t.colors.muted;
 
   const showDot = phase === 'restoring' || phase === 'signed_in';
 
   const accessibilityLabel =
     phase === 'signed_in'
-      ? uploadPending
-        ? 'Syncing to cloud'
-        : 'Synced'
+      ? uploadStuck
+        ? 'Sync paused, open for details'
+        : uploadPending
+          ? 'Syncing to cloud'
+          : 'Synced'
       : phase === 'restoring'
         ? 'Checking sync'
         : 'Enable sync with Apple';
