@@ -74,8 +74,13 @@ export function SyncHeaderStatus({ phase, onPress, style }: SyncHeaderStatusProp
   const label =
     phase === 'restoring' ? 'Checking sync' : phase === 'signed_in' ? 'Synced' : 'Enable sync';
 
-  /** Disconnected: text is the signal; slightly stronger than stream chrome (`muted`). */
-  const textColor = phase === 'signed_out' ? t.colors.fgDim : t.colors.muted;
+  /** Intentionally quiet — sync is optional; never compete with capture. */
+  const textColor =
+    phase === 'signed_out'
+      ? t.colors.sectionFg
+      : phase === 'signed_in'
+        ? t.colors.muted
+        : t.colors.muted;
 
   const showDot = phase === 'restoring' || phase === 'signed_in';
 
@@ -93,7 +98,7 @@ export function SyncHeaderStatus({ phase, onPress, style }: SyncHeaderStatusProp
       accessibilityLabel={accessibilityLabel}
       hitSlop={10}
       onPress={onPress}
-      style={({ pressed }) => [style, { opacity: pressed ? 0.65 : 1 }]}
+      style={({ pressed }) => [style, { opacity: pressed ? 0.55 : 0.88 }]}
     >
       <View style={styles.row}>
         {showDot ? (
@@ -118,14 +123,14 @@ export function SyncHeaderStatus({ phase, onPress, style }: SyncHeaderStatusProp
                 styles.dot,
                 {
                   backgroundColor: SYNC_DOT_FILL,
-                  opacity: 0.88,
+                  opacity: 0.52,
                   ...syncDotShadowStyle(),
                 },
               ]}
             />
           )
         ) : null}
-        <Text style={[styles.label, { color: textColor, fontFamily: fonts.medium }]}>{label}</Text>
+        <Text style={[styles.label, { color: textColor, fontFamily: fonts.regular }]}>{label}</Text>
       </View>
     </Pressable>
   );
@@ -143,7 +148,7 @@ const styles = StyleSheet.create({
     marginRight: DOT_LABEL_GAP,
   },
   label: {
-    fontSize: 15,
-    letterSpacing: 0.2,
+    fontSize: 13,
+    letterSpacing: 0.18,
   },
 });
