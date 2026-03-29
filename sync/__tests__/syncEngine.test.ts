@@ -1,6 +1,11 @@
 import type { Entry } from '../../types/entry';
+import { isSyncBlockedByPaywall } from '../../monetization/syncEntitlement';
 import { getPendingSyncItems, markSynced } from '../syncQueue';
 import { processSyncQueue, startBackgroundSync } from '../syncEngine';
+
+jest.mock('../../monetization/syncEntitlement', () => ({
+  isSyncBlockedByPaywall: jest.fn(() => false),
+}));
 
 jest.mock('../tombstoneFlush', () => ({
   flushSyncTombstoneOutbox: jest.fn().mockResolvedValue(undefined),
@@ -13,11 +18,13 @@ jest.mock('../syncQueue', () => ({
 
 const mockGetPending = jest.mocked(getPendingSyncItems);
 const mockMarkSynced = jest.mocked(markSynced);
+const mockSyncBlocked = jest.mocked(isSyncBlockedByPaywall);
 
 describe('syncEngine', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockMarkSynced.mockResolvedValue(undefined);
+    mockSyncBlocked.mockReturnValue(false);
   });
 
   describe('processSyncQueue', () => {
@@ -56,6 +63,20 @@ describe('syncEngine', () => {
 
       expect(mockMarkSynced).toHaveBeenCalledTimes(1);
       expect(mockMarkSynced).toHaveBeenCalledWith('q2');
+    });
+
+    it('skips queue drain when paywall blocks sync (items stay pending)', async () => {
+      mockSyncBlocked.mockReturnValue(true);
+      mockGetPending.mockResolvedValue([
+        { id: 'q1', payload: { id: 'e1', text: 'a', createdAt: '2025-01-01T00:00:00.000Z' }, status: 'pending' },
+      ]);
+
+      const push = jest.fn().mockResolvedValue(undefined);
+      await processSyncQueue(push);
+
+      expect(mockGetPending).not.toHaveBeenCalled();
+      expect(push).not.toHaveBeenCalled();
+      expect(mockMarkSynced).not.toHaveBeenCalled();
     });
   });
 

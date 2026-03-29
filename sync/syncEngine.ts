@@ -1,4 +1,5 @@
 import type { Entry } from '../types/entry';
+import { isSyncBlockedByPaywall } from '../monetization/syncEntitlement';
 import { getPendingSyncItems, markSynced } from './syncQueue';
 import { flushSyncTombstoneOutbox } from './tombstoneFlush';
 
@@ -17,6 +18,9 @@ let processLock = false;
  * Idempotency: remote ingest must dedupe by `Entry.id` (see docs/sync.md); retries may resend the same payload safely.
  */
 export async function processSyncQueue(pushEntry: PushEntryFn = mockPushEntryToRemote): Promise<void> {
+  if (isSyncBlockedByPaywall()) {
+    return;
+  }
   if (processLock) {
     return;
   }
