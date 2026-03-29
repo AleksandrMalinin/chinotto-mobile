@@ -1,4 +1,5 @@
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
+import * as Haptics from 'expo-haptics';
 import { TextInput } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -193,6 +194,75 @@ describe('CaptureScreen', () => {
     } finally {
       warn.mockRestore();
     }
+  });
+
+  it('shows search only after tapping the search toggle', async () => {
+    jest.mocked(Haptics.impactAsync).mockClear();
+    const { getByTestId, queryByTestId, findByTestId } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <CaptureScreen />
+      </SafeAreaProvider>
+    );
+
+    await findByTestId('capture-input');
+    expect(queryByTestId('stream-search-input')).toBeNull();
+    expect(getByTestId('stream-search-toggle')).toBeTruthy();
+
+    fireEvent.press(getByTestId('stream-search-toggle'));
+    expect(getByTestId('stream-search-input')).toBeTruthy();
+    expect(jest.mocked(Haptics.impactAsync)).toHaveBeenCalledWith(Haptics.ImpactFeedbackStyle.Light);
+  });
+
+  it('debounces searchEntriesForRecall when search is expanded', async () => {
+    jest.useFakeTimers();
+    try {
+      jest.mocked(entryRepository.searchEntriesForRecall).mockClear();
+      const { getByTestId, findByTestId } = render(
+        <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+          <CaptureScreen />
+        </SafeAreaProvider>
+      );
+
+      await findByTestId('capture-input');
+      fireEvent.press(getByTestId('stream-search-toggle'));
+      fireEvent.changeText(getByTestId('stream-search-input'), 'needle');
+
+      expect(jest.mocked(entryRepository.searchEntriesForRecall)).not.toHaveBeenCalled();
+
+      await act(async () => {
+        jest.advanceTimersByTime(250);
+      });
+
+      await waitFor(() => {
+        expect(jest.mocked(entryRepository.searchEntriesForRecall)).toHaveBeenCalledWith(
+          'needle',
+          expect.any(Number)
+        );
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('collapses search and clears query when close is pressed', async () => {
+    jest.mocked(Haptics.impactAsync).mockClear();
+    const { getByTestId, queryByTestId, findByTestId } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <CaptureScreen />
+      </SafeAreaProvider>
+    );
+
+    await findByTestId('capture-input');
+    fireEvent.press(getByTestId('stream-search-toggle'));
+    fireEvent.changeText(getByTestId('stream-search-input'), 'temp');
+    jest.mocked(Haptics.impactAsync).mockClear();
+
+    fireEvent.press(getByTestId('stream-search-collapse'));
+
+    expect(jest.mocked(Haptics.impactAsync)).toHaveBeenCalledWith(Haptics.ImpactFeedbackStyle.Light);
+    expect(queryByTestId('stream-search-input')).toBeNull();
+    fireEvent.press(getByTestId('stream-search-toggle'));
+    expect(getByTestId('stream-search-input').props.value).toBe('');
   });
 });
 
