@@ -4,6 +4,8 @@
 
 **Out of scope here:** The **desktop app** (`chinotto-app` or equivalent) — not in this repository. Desktop features are **not** verified from source in this doc. For sync contract details, see [SYNC.md](./SYNC.md).
 
+**Platform stance (product):** **Apple first on mobile** — iOS is the current shipping focus; **Android parity is planned for later**. On **desktop**, **Windows and Linux clients are planned for a later phase** (desktop implementation is outside this repo). This file states intent for alignment; it is not a release calendar.
+
 ---
 
 ## 1. Feature inventory (this repo)
@@ -51,10 +53,11 @@
 
 ---
 
-## 3. Platform role (inferred)
+## 3. Platform role & roadmap
 
-- **Mobile (this app):** Capture-first companion; minimal recall; optional cloud bridge to same Firestore namespace as desktop (same Firebase `uid`).
-- **Desktop:** Intended primary thinking surface per `AGENTS.md` — **not validated here**.
+- **Mobile — iOS (now):** Capture-first companion; minimal recall; optional cloud bridge to the same Firestore namespace as desktop (same Firebase `uid`). Sync affordances target **Sign in with Apple** on **iOS** as the supported path at this stage.
+- **Mobile — Android (later):** Builds may exist, but **Android is not a product priority yet** — parity (e.g. sync entry UI, auth) is **explicitly deferred** until Android is scheduled as a shipping target.
+- **Desktop:** Intended primary thinking surface per `AGENTS.md` — **not validated here**. **Windows and Linux** desktop apps are **planned for a later phase** (alongside or after whatever desktop platform ships first); they are **not** implemented in this repository.
 
 ---
 
@@ -64,7 +67,7 @@
 |-----|----------------|
 | No search / full history UI | “Revisit later via search or time” is weak on device for older entries. |
 | 20-item UI cap | Ingest may hold more in DB; user cannot browse it. |
-| Android + Firebase | No in-app enable path for sync (modal iOS-only). |
+| Android + Firebase | No in-app enable path for sync (modal iOS-only) — **acceptable until Android is prioritized**. |
 | Welcome screen | One-time `WelcomeOnboardingScreen`; `AGENTS.md` documents this as the only allowed pre-capture orientation. |
 
 ---
@@ -81,7 +84,7 @@
 
 1. Keep boot + one-time welcome minimal; steady state must remain capture-first per `AGENTS.md`.
 2. Add lightweight recall: search and/or scrollable history beyond 20.
-3. Android sync entry point if Firebase sync is production-real.
+3. When Android is prioritized: sync entry point + auth parity with iOS.
 4. Clearer non-blocking sync state when queue is pending / signed out.
 5. Stabilize and ship widget + clarify share capabilities.
 
