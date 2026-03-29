@@ -1,11 +1,14 @@
 import { onAuthStateChanged } from 'firebase/auth';
 import {
   collection,
+  getDocs,
   limit,
   onSnapshot,
   orderBy,
   query,
+  startAfter,
   where,
+  type CollectionReference,
   type DocumentData,
   type QueryDocumentSnapshot,
 } from 'firebase/firestore';
@@ -22,6 +25,8 @@ import { isFirestoreDocumentTombstoned } from './firestoreTombstone';
 import { flushSyncTombstoneOutbox } from './tombstoneFlush';
 
 const INGEST_PAGE_SIZE = 500;
+/** One-shot backfill pages beyond the live snapshot window (desktop → mobile history). */
+const BACKFILL_MAX_PAGES = 40;
 /** Tombstones are queried separately so deletes on older entries (outside the recent ingest window) still apply locally. */
 const TOMBSTONE_QUERY_LIMIT = 1000;
 
@@ -80,6 +85,82 @@ function tombstonedIdsFromDocs(docs: QueryDocumentSnapshot<DocumentData>[]): str
 }
 
 /**
+ * Paginates older Firestore docs (same ordering as the live listener) so history beyond the snapshot
+ * `limit` still reaches SQLite. Idempotent with `INSERT OR IGNORE`; safe to overlap the first page.
+ */
+export async function runFirestoreIngestBackfill(
+  coll: CollectionReference<DocumentData>,
+  onIngested: () => void,
+  shouldContinue: () => boolean
+): Promise<void> {
+  let lastDoc: QueryDocumentSnapshot<DocumentData> | undefined;
+
+  for (let page = 0; page < BACKFILL_MAX_PAGES; page++) {
+    if (!shouldContinue()) {
+      return;
+    }
+
+    const q = lastDoc
+      ? query(coll, orderBy('createdAt', 'desc'), startAfter(lastDoc), limit(INGEST_PAGE_SIZE))
+      : query(coll, orderBy('createdAt', 'desc'), limit(INGEST_PAGE_SIZE));
+
+    let snap;
+    try {
+      snap = await getDocs(q);
+    } catch (e) {
+      if (__DEV__) {
+        console.error('[ChinottoSync] backfill getDocs failed', e);
+      }
+      return;
+    }
+
+    if (snap.empty) {
+      break;
+    }
+
+    const { tombstonedIds, activeRows } = partitionFirestoreSnapshotDocs(snap.docs);
+    let changed = false;
+
+    if (tombstonedIds.length > 0) {
+      try {
+        const removed = await applyRemoteTombstoneDeletes(tombstonedIds);
+        if (removed > 0) {
+          changed = true;
+        }
+      } catch (e) {
+        if (__DEV__) {
+          console.error('[ChinottoSync] backfill tombstone apply failed', e);
+        }
+      }
+    }
+
+    if (activeRows.length > 0) {
+      try {
+        const inserted = await ingestRemoteFirestoreRows(activeRows);
+        if (inserted > 0) {
+          changed = true;
+        }
+      } catch (e) {
+        if (__DEV__) {
+          console.error('[ChinottoSync] backfill ingest failed', e);
+        }
+      }
+    }
+
+    if (changed) {
+      onIngested();
+    }
+
+    await flushSyncTombstoneOutbox();
+
+    lastDoc = snap.docs[snap.docs.length - 1];
+    if (snap.docs.length < INGEST_PAGE_SIZE) {
+      break;
+    }
+  }
+}
+
+/**
  * Subscribe to `users/{uid}/entries`: apply remote tombstones + ingest active docs (desktop → mobile).
  * No-op when Firebase sync is not configured.
  */
@@ -91,6 +172,7 @@ export function startMobileFirestoreIngest(onIngested: () => void): () => void {
   const auth = getOrInitAuth();
   let unsubIngest: (() => void) | undefined;
   let unsubTombstones: (() => void) | undefined;
+  let backfillGeneration = 0;
 
   const detachFirestoreListeners = () => {
     unsubIngest?.();
@@ -107,6 +189,13 @@ export function startMobileFirestoreIngest(onIngested: () => void): () => void {
     void flushSyncTombstoneOutbox();
     const db = getOrInitFirestore();
     const coll = collection(db, 'users', user.uid, 'entries');
+    const backfillGen = ++backfillGeneration;
+    const shouldContinueBackfill = () => {
+      const u = auth.currentUser;
+      return Boolean(u && !u.isAnonymous && u.uid === user.uid && backfillGen === backfillGeneration);
+    };
+
+    void runFirestoreIngestBackfill(coll, onIngested, shouldContinueBackfill);
 
     const qIngest = query(coll, orderBy('createdAt', 'desc'), limit(INGEST_PAGE_SIZE));
     unsubIngest = onSnapshot(
