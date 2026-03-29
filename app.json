@@ -1,6 +1,7 @@
 {
   "expo": {
     "name": "Chinotto",
+    "owner": "bogart91",
     "slug": "chinotto-mobile",
     "version": "1.0.0",
     "scheme": "chinotto",
@@ -15,7 +16,15 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.chinotto.mobile",
-      "usesAppleSignIn": true
+      "usesAppleSignIn": true,
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.chinotto.mobile"
+        ]
+      },
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -28,6 +37,11 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "75f836d7-4d98-401b-a733-0ac61429d31e"
+      }
     },
     "plugins": [
       "expo-apple-authentication",
@@ -42,7 +56,9 @@
               "name": "CaptureHomeWidget",
               "displayName": "Chinotto",
               "description": "Open capture to jot a thought.",
-              "supportedFamilies": ["systemSmall"]
+              "supportedFamilies": [
+                "systemSmall"
+              ]
             }
           ]
         }
@@ -60,8 +76,14 @@
           },
           "android": {
             "enabled": true,
-            "singleShareMimeTypes": ["text/plain", "text/*"],
-            "multipleShareMimeTypes": ["text/plain", "text/*"]
+            "singleShareMimeTypes": [
+              "text/plain",
+              "text/*"
+            ],
+            "multipleShareMimeTypes": [
+              "text/plain",
+              "text/*"
+            ]
           }
         }
       ],
