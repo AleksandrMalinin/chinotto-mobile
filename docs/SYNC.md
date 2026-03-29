@@ -119,7 +119,7 @@ service cloud.firestore {
 | `sync/tombstoneOutbox.ts` / `tombstoneFlush.ts` | Durable tombstone outbox (coalesced per `entry_id`); `flushSyncTombstoneOutbox` → Firestore `setDoc` + merge (`deletedAt`). |
 | `sync/ingestSuppression.ts` | `firestore_ingest_suppressed_ids` bridge (local delete until tombstone ack). |
 | `sync/firestoreTombstone.ts` | `isFirestoreDocumentTombstoned` for snapshot rows. |
-| `sync/firestoreIngest.ts` | `startMobileFirestoreIngest` — `onSnapshot` ingest + remote tombstones. |
+| `sync/firestoreIngest.ts` | `startMobileFirestoreIngest` — `onSnapshot` ingest + remote tombstones; **`runFirestoreIngestBackfill`** paginates `getDocs` after sign-in to load older rows beyond the live snapshot `limit`. |
 | `storage/entryRepository.ts` | `deleteEntry`, `applyRemoteTombstoneDeletes`, `ingestRemoteFirestoreRows`. |
 | `auth/appleFirebaseAuth.ts` | `applyAppleCredentialToFirebase` — anonymous → **`linkWithCredential`**, else **`signInWithCredential`**. |
 | `auth/enableAppleSync.ts` | Sign in with Apple (nonce + `OAuthProvider('apple.com')`) + Firebase. |
@@ -133,6 +133,8 @@ service cloud.firestore {
 
 **Caveats:** The **createdAt** listener only sees the latest **500** docs by `createdAt`; **tombstones** for older rows still apply via the separate query (up to **1000** newest tombstones). If you have more than 1000 tombstones, raise the limit or add backfill later. **`createdAt` type mixing** may require an extra composite index for the ingest query.
 
+**History backfill:** On each non-anonymous sign-in, **`runFirestoreIngestBackfill`** runs in the background: **`getDocs`** in pages of **500** (`orderBy('createdAt','desc')` + `startAfter`), up to **40** pages (~20k docs), idempotent with local **`INSERT OR IGNORE`**. Overlaps the first snapshot page safely. Stops if the user signs out or the session uid changes.
+
 **Rules:** Authenticated user must be allowed to **update** `deletedAt` on their entry docs (see §3 / §8).
 
 **Stable sync identity:** **Sign in with Apple** (Firebase Auth). Product copy: *Enable sync* / *Continue with Apple* — not “sign up”.
@@ -141,7 +143,7 @@ service cloud.firestore {
 
 **Push behavior:** `firebasePushEntry` requires a **non-anonymous** user. Anonymous-only sessions must complete **Enable sync** before uploads succeed (queue stays pending until then).
 
-**Edge case:** If Apple is **already linked to a different Firebase user**, `linkWithCredential` can fail with `auth/credential-already-in-use`. The app surfaces a calm error; resolving it may require account tooling later (out of v1 scope).
+**Edge case:** If Apple is **already linked to a different Firebase user**, `linkWithCredential` can fail with `auth/credential-already-in-use`. The app surfaces explanatory copy (same Apple ID vs one Firebase library per device); full account merge is out of v1 scope — see `docs/SYNC_APPLE_QA.md` for manual checks.
 
 **Env:** root `.env.example`. **Success:** Firestore write resolves → `markSynced`. **Failure:** leave pending.
 
