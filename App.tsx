@@ -8,6 +8,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BrandSplash } from './components/BrandSplash';
+import { STREAM_HIGHLIGHT_CLEAR_AFTER_MS } from './components/RecentList';
 import { CaptureScreen } from './screens/CaptureScreen';
 import { WelcomeOnboardingScreen } from './screens/WelcomeOnboardingScreen';
 import { composeIncomingShareCaptureText } from './share/extractShareEntryTexts';
@@ -29,6 +30,8 @@ void SplashScreen.preventAutoHideAsync();
  * `onLayout` calls `SplashScreen.hideAsync()` so the JS logo is already positioned underneath.
  */
 const NATIVE_SPLASH_BEAT_MS = 400;
+/** Wait for expo-sharing to finish resolving multi-part payloads before one save. */
+const SHARE_SAVE_DEBOUNCE_MS = 400;
 
 type AppPhase = 'boot' | 'brand' | 'welcome' | 'main';
 
@@ -62,23 +65,25 @@ const shareAckStyles = StyleSheet.create({
     right: 0,
     alignItems: 'center',
   },
+  /** Soft confirmation — readable on the stream, minimal glow, no hard edge. */
   pill: {
-    backgroundColor: colorsDark.bgElevated,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
+    /** Near-opaque elevated surface; +blue vs neutral charcoal for a whisper of brand. */
+    backgroundColor: 'rgba(23, 24, 36, 0.99)',
+    paddingHorizontal: 22,
+    paddingVertical: 13,
+    borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colorsDark.borderFocus,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     maxWidth: '88%',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.55,
-        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.22,
+        shadowRadius: 12,
       },
       android: {
-        elevation: 14,
+        elevation: 5,
       },
       default: {},
     }),
@@ -107,6 +112,8 @@ export default function App() {
   const [shareSavedAck, setShareSavedAck] = useState(false);
   const [externalEntriesEpoch, setExternalEntriesEpoch] = useState(0);
   const [captureFocusNonce, setCaptureFocusNonce] = useState(0);
+  const [streamHighlightEntryId, setStreamHighlightEntryId] = useState<string | null>(null);
+  const streamHighlightClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const {
     resolvedSharedPayloads,
     sharedPayloads,
@@ -132,6 +139,17 @@ export default function App() {
     })();
   }, []);
 
+  const scheduleStreamHighlight = useCallback((entryId: string) => {
+    if (streamHighlightClearRef.current != null) {
+      clearTimeout(streamHighlightClearRef.current);
+    }
+    setStreamHighlightEntryId(entryId);
+    streamHighlightClearRef.current = setTimeout(() => {
+      setStreamHighlightEntryId(null);
+      streamHighlightClearRef.current = null;
+    }, STREAM_HIGHLIGHT_CLEAR_AFTER_MS);
+  }, []);
+
   useEffect(() => {
     void initDatabase().finally(() => setDbReady(true));
   }, []);
@@ -148,44 +166,54 @@ export default function App() {
     if (!dbReady || isResolving) {
       return;
     }
-    const captureText = composeIncomingShareCaptureText(resolvedSharedPayloads, sharedPayloads);
-    if (captureText == null || captureText.trim() === '') {
-      return;
-    }
-    const session = ++shareSaveSessionRef.current;
-    void (async () => {
-      try {
-        await saveEntry(captureText);
-      } catch (err) {
-        if (__DEV__) {
-          console.warn('Incoming share save failed', err);
+    const resolved = resolvedSharedPayloads;
+    const raw = sharedPayloads;
+    const id = setTimeout(() => {
+      const captureText = composeIncomingShareCaptureText(resolved, raw);
+      if (captureText == null || captureText.trim() === '') {
+        return;
+      }
+      const session = ++shareSaveSessionRef.current;
+      void (async () => {
+        let savedEntryId: string | null = null;
+        try {
+          const entry = await saveEntry(captureText);
+          savedEntryId = entry.id;
+        } catch (err) {
+          if (__DEV__) {
+            console.warn('Incoming share save failed', err);
+          }
+          return;
         }
-        return;
-      }
-      if (session !== shareSaveSessionRef.current) {
-        return;
-      }
-      /**
-       * `expo-sharing` keeps an internal ref of the last payloads and skips refresh when the new
-       * batch is `sharePayloadsAreEqual` to it. After we clear native payloads, that ref must be
-       * synced to `[]` — otherwise sharing the *same* URL again looks "unchanged" and never
-       * re-resolves or updates React state (no second save, no toast).
-       */
-      clearSharedPayloads();
-      try {
-        await refreshSharePayloads();
-      } catch (refreshErr) {
-        if (__DEV__) {
-          console.warn('refreshSharePayloads after share failed', refreshErr);
+        if (session !== shareSaveSessionRef.current) {
+          return;
         }
-      }
-      if (session !== shareSaveSessionRef.current) {
-        return;
-      }
-      setExternalEntriesEpoch((n) => n + 1);
-      setShareSavedAck(true);
-      AccessibilityInfo.announceForAccessibility?.('Thought saved from share');
-    })();
+        /**
+         * `expo-sharing` keeps an internal ref of the last payloads and skips refresh when the new
+         * batch is `sharePayloadsAreEqual` to it. After we clear native payloads, that ref must be
+         * synced to `[]` — otherwise sharing the *same* URL again looks "unchanged" and never
+         * re-resolves or updates React state (no second save, no toast).
+         */
+        clearSharedPayloads();
+        try {
+          await refreshSharePayloads();
+        } catch (refreshErr) {
+          if (__DEV__) {
+            console.warn('refreshSharePayloads after share failed', refreshErr);
+          }
+        }
+        if (session !== shareSaveSessionRef.current) {
+          return;
+        }
+        setExternalEntriesEpoch((n) => n + 1);
+        if (savedEntryId != null) {
+          scheduleStreamHighlight(savedEntryId);
+        }
+        setShareSavedAck(true);
+        AccessibilityInfo.announceForAccessibility?.('Thought saved from share');
+      })();
+    }, SHARE_SAVE_DEBOUNCE_MS);
+    return () => clearTimeout(id);
   }, [
     dbReady,
     isResolving,
@@ -193,6 +221,7 @@ export default function App() {
     sharedPayloads,
     clearSharedPayloads,
     refreshSharePayloads,
+    scheduleStreamHighlight,
   ]);
 
   useEffect(() => {
@@ -279,6 +308,8 @@ export default function App() {
               remoteIngestVersion={remoteIngestVersion}
               externalEntriesEpoch={externalEntriesEpoch}
               captureFocusNonce={captureFocusNonce}
+              streamHighlightEntryId={streamHighlightEntryId}
+              onScheduleStreamHighlight={scheduleStreamHighlight}
               {...(__DEV__ ? { onDevMenu: onDevResetWelcome } : {})}
             />
           )}

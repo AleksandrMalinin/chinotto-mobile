@@ -55,6 +55,10 @@ export type CaptureScreenProps = {
   externalEntriesEpoch?: number;
   /** Increment when the app should move focus to capture (e.g. home screen widget open). */
   captureFocusNonce?: number;
+  /** Row id receiving the transient “just landed” tint (capture or share). */
+  streamHighlightEntryId?: string | null;
+  /** Schedule/clear handled in parent so manual capture and share share one timer. */
+  onScheduleStreamHighlight?: (entryId: string) => void;
 };
 
 export function CaptureScreen({
@@ -62,6 +66,8 @@ export function CaptureScreen({
   remoteIngestVersion = 0,
   externalEntriesEpoch = 0,
   captureFocusNonce = 0,
+  streamHighlightEntryId = null,
+  onScheduleStreamHighlight,
 }: CaptureScreenProps = {}) {
   const [text, setText] = useState('');
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -74,6 +80,7 @@ export function CaptureScreen({
   const [authRestorePhase, setAuthRestorePhase] = useState<AuthRestorePhase>(() =>
     isFirebaseSyncConfigured() && Platform.OS === 'ios' ? 'restoring' : 'signed_out'
   );
+  const [composerFocused, setComposerFocused] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const entriesRef = useRef<Entry[]>([]);
   const hasMoreRef = useRef(true);
@@ -263,6 +270,7 @@ export function CaptureScreen({
           inputRef.current?.focus();
         });
         setEntries((prev) => [entry, ...prev.filter((e) => e.id !== entry.id)]);
+        onScheduleStreamHighlight?.(entry.id);
         const sq = searchQueryRef.current.trim();
         if (sq) {
           void runSearch(sq);
@@ -273,11 +281,19 @@ export function CaptureScreen({
           console.warn('saveEntry failed', err);
         }
       });
-  }, [text, runSearch]);
+  }, [text, runSearch, onScheduleStreamHighlight]);
 
-  /** Compact 1–2 lines; sits close to the stream below. */
-  const composerMinHeight = 48;
-  const composerMaxHeight = 80;
+  /** Slightly taller composer so capture reads as the primary surface. */
+  const composerMinHeight = 56;
+  const composerMaxHeight = 92;
+  /** Writing surface: soft container, calmer than any stream “arrival” trace. */
+  const composerSurfaceBg = t.isDark
+    ? composerFocused
+      ? 'rgba(128, 138, 188, 0.076)'
+      : 'rgba(128, 138, 188, 0.042)'
+    : composerFocused
+      ? 'rgba(100, 110, 180, 0.068)'
+      : 'rgba(100, 110, 180, 0.036)';
 
   return (
     <View style={styles.shell}>
@@ -333,47 +349,64 @@ export function CaptureScreen({
               {
                 flexGrow: 1,
                 minHeight: windowHeight,
-                paddingHorizontal: gutter,
               },
             ]}
           >
-            <View>
-              <CaptureInput
-                ref={inputRef}
-                value={text}
-                onChangeText={setText}
-                onSubmit={handleSubmit}
-                minHeight={composerMinHeight}
-                maxHeight={composerMaxHeight}
-              />
-            </View>
-            <View style={{ marginTop: t.spacing.sm }}>
-              <TextInput
-                testID="stream-search-input"
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                placeholder="Search thoughts…"
-                placeholderTextColor={t.colors.muted}
-                accessibilityLabel="Search thoughts"
+            {/*
+              Gutter only on composer + search. Stream stays full width of the scroll view so
+              row press / trace aren’t clipped inside a padded content box (see RecentList).
+            */}
+            <View style={{ paddingHorizontal: gutter }}>
+              <View
                 style={{
-                  fontFamily: fonts.regular,
-                  fontSize: 16,
-                  lineHeight: 22,
-                  color: t.colors.fgDim,
-                  paddingVertical: 10,
-                  paddingHorizontal: 0,
-                  borderBottomWidth: StyleSheet.hairlineWidth,
-                  borderBottomColor: t.colors.border,
+                  borderRadius: t.radius.md,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  backgroundColor: composerSurfaceBg,
                 }}
-                keyboardAppearance={t.isDark ? 'dark' : 'light'}
-                returnKeyType="search"
-                {...(Platform.OS === 'ios' ? { clearButtonMode: 'while-editing' as const } : {})}
-              />
+              >
+                <CaptureInput
+                  ref={inputRef}
+                  value={text}
+                  onChangeText={setText}
+                  onSubmit={handleSubmit}
+                  minHeight={composerMinHeight}
+                  maxHeight={composerMaxHeight}
+                  placeholder="Write a thought…"
+                  placeholderTextColor={t.colors.metaFg}
+                  onFocus={() => setComposerFocused(true)}
+                  onBlur={() => setComposerFocused(false)}
+                />
+              </View>
+              <View style={{ marginTop: t.spacing.sm }}>
+                <TextInput
+                  testID="stream-search-input"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder="Search thoughts…"
+                  placeholderTextColor={t.colors.muted}
+                  accessibilityLabel="Search thoughts"
+                  style={{
+                    fontFamily: fonts.regular,
+                    fontSize: 16,
+                    lineHeight: 22,
+                    color: t.colors.fgDim,
+                    paddingVertical: 10,
+                    paddingHorizontal: 0,
+                    borderBottomWidth: StyleSheet.hairlineWidth,
+                    borderBottomColor: t.colors.border,
+                  }}
+                  keyboardAppearance={t.isDark ? 'dark' : 'light'}
+                  returnKeyType="search"
+                  {...(Platform.OS === 'ios' ? { clearButtonMode: 'while-editing' as const } : {})}
+                />
+              </View>
             </View>
             <View style={{ opacity: streamSecondary ? 0.64 : 1 }}>
               <RecentList
                 entries={searchTrimmed.length > 0 ? searchResults : entries}
                 visible
+                highlightEntryId={searchTrimmed.length > 0 ? null : streamHighlightEntryId}
                 emptyHint={
                   searchTrimmed.length > 0
                     ? 'Nothing matches that search.'
