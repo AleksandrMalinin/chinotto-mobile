@@ -42,6 +42,44 @@ export function extractHttpUrlsFromText(text: string): string[] {
   return out;
 }
 
+/**
+ * Replaces http(s) spans in stream preview text with host + trimmed path (no fetch).
+ * Full `text` stays in storage and read sheet; list rows use this for calmer scanning.
+ */
+export function replaceHttpUrlsWithCompactDisplay(text: string): string {
+  if (!text) {
+    return text;
+  }
+  return text.replace(HTTP_URL_IN_TEXT_RE, (raw) => compactHttpUrlForStream(raw));
+}
+
+function compactHttpUrlForStream(match: string): string {
+  const cleaned = stripLooseTrailingPunctuation(match.trim());
+  if (!isValidHttpUrl(cleaned)) {
+    return match;
+  }
+  try {
+    const u = new URL(cleaned);
+    let host = u.hostname;
+    if (host.toLowerCase().startsWith('www.')) {
+      host = host.slice(4);
+    }
+    if (u.port) {
+      host = `${host}:${u.port}`;
+    }
+    let tail = `${u.pathname}${u.search}${u.hash}`;
+    if (tail === '/' || tail === '') {
+      return host;
+    }
+    if (tail.length > 40) {
+      tail = `${tail.slice(0, 37)}…`;
+    }
+    return `${host}${tail}`;
+  } catch {
+    return match;
+  }
+}
+
 /** Host for subtle read-sheet metadata (e.g. `wikipedia.org`). */
 export function displayHostForUrl(urlString: string): string | null {
   try {
