@@ -1,7 +1,9 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
+  Animated,
+  Easing,
   Platform,
   Pressable,
   ScrollView,
@@ -16,6 +18,12 @@ import { StreamFlowPanel } from '../components/StreamFlowPanel';
 import { setWelcomeCompleted } from '../storage/welcomeFlag';
 import { useAppTheme } from '../theme';
 
+/** Calm fade + slight lift; very slow stagger — last step finishes ~2.1s after start. */
+const ENTRANCE_DURATION_MS = 1100;
+const ENTRANCE_STAGGER_MS = 320;
+const ENTRANCE_Y_OFFSET = 7;
+const ENTRANCE_EASING = Easing.out(Easing.cubic);
+
 type Props = {
   onComplete: () => void;
 };
@@ -23,15 +31,73 @@ type Props = {
 /**
  * First-launch welcome: `StreamFlowPanel` matches desktop motion spec
  * (`chinotto-app/docs/stream-flow-panel-animation.md`); copy is mobile-specific.
+ * Staged entrance (fade + slight lift) is disabled when reduce motion is on.
  */
 export function WelcomeOnboardingScreen({ onComplete }: Props) {
   const t = useAppTheme();
   const { colors, typography } = t;
   const [reduceMotion, setReduceMotion] = useState(false);
 
+  const entranceVisual = useRef(new Animated.Value(0)).current;
+  const entranceTitle = useRef(new Animated.Value(0)).current;
+  const entranceSupport = useRef(new Animated.Value(0)).current;
+  const entranceCta = useRef(new Animated.Value(0)).current;
+  const runningEntrance = useRef<Animated.CompositeAnimation | null>(null);
+
   useEffect(() => {
-    void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+    let cancelled = false;
+    void AccessibilityInfo.isReduceMotionEnabled().then((rm) => {
+      if (cancelled) {
+        return;
+      }
+      setReduceMotion(rm);
+      if (rm) {
+        entranceVisual.setValue(1);
+        entranceTitle.setValue(1);
+        entranceSupport.setValue(1);
+        entranceCta.setValue(1);
+        return;
+      }
+      const fadeUp = (v: Animated.Value) =>
+        Animated.timing(v, {
+          toValue: 1,
+          duration: ENTRANCE_DURATION_MS,
+          easing: ENTRANCE_EASING,
+          useNativeDriver: true,
+        });
+      runningEntrance.current = Animated.stagger(ENTRANCE_STAGGER_MS, [
+        fadeUp(entranceVisual),
+        fadeUp(entranceTitle),
+        fadeUp(entranceSupport),
+        fadeUp(entranceCta),
+      ]);
+      runningEntrance.current.start(({ finished }) => {
+        if (finished) {
+          runningEntrance.current = null;
+        }
+      });
+    });
+    return () => {
+      cancelled = true;
+      runningEntrance.current?.stop();
+      runningEntrance.current = null;
+    };
   }, []);
+
+  const entranceStyle = useCallback(
+    (v: Animated.Value) => ({
+      opacity: v,
+      transform: [
+        {
+          translateY: v.interpolate({
+            inputRange: [0, 1],
+            outputRange: [ENTRANCE_Y_OFFSET, 0],
+          }),
+        },
+      ],
+    }),
+    []
+  );
 
   const ctaSurface = useMemo(() => {
     if (t.isDark) {
@@ -72,64 +138,75 @@ export function WelcomeOnboardingScreen({ onComplete }: Props) {
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
         >
-          <View style={[styles.visual, { marginBottom: t.spacing.lg }]}>
+          <Animated.View
+            testID="welcome-entrance-visual"
+            style={[styles.visual, { marginBottom: t.spacing.lg }, entranceStyle(entranceVisual)]}
+          >
             <StreamFlowPanel calm={reduceMotion} deferMotion={false} typingAccent={false} />
-          </View>
+          </Animated.View>
 
           <View style={[styles.copyColumn, { paddingHorizontal: t.spacing.md }]}>
-            <Text
-              style={[
-                styles.title,
-                {
-                  color: colors.fg,
-                  fontFamily: typography.capture.fontFamily,
-                  fontSize: 22,
-                  lineHeight: 30,
-                  letterSpacing: 0.2,
-                },
-              ]}
-            >
-              Write it down. No structure.
-            </Text>
-            <Text
-              style={[
-                styles.lead,
-                {
-                  color: colors.fgDim,
-                  fontFamily: typography.body.fontFamily,
-                  fontSize: typography.body.fontSize,
-                  lineHeight: 26,
-                  marginTop: t.spacing.md,
-                },
-              ]}
-            >
-              Just capture the thought.{'\n'}
-              No folders, no tags.
-            </Text>
-            <Text
-              style={[
-                styles.meta,
-                {
-                  color: colors.metaFg,
-                  fontFamily: typography.body.fontFamily,
-                  fontSize: typography.body.fontSize,
-                  lineHeight: 26,
-                  marginTop: t.spacing.lg,
-                },
-              ]}
-            >
-              Your recent thoughts stay close.{'\n'}
-              Nothing to file or sort.
-            </Text>
+            <Animated.View testID="welcome-entrance-title" style={entranceStyle(entranceTitle)}>
+              <Text
+                style={[
+                  styles.title,
+                  {
+                    color: colors.fg,
+                    fontFamily: typography.capture.fontFamily,
+                    fontSize: 22,
+                    lineHeight: 30,
+                    letterSpacing: 0.2,
+                  },
+                ]}
+              >
+                Write it down. No structure.
+              </Text>
+            </Animated.View>
+            <Animated.View testID="welcome-entrance-support" style={entranceStyle(entranceSupport)}>
+              <Text
+                style={[
+                  styles.lead,
+                  {
+                    color: colors.fgDim,
+                    fontFamily: typography.body.fontFamily,
+                    fontSize: typography.body.fontSize,
+                    lineHeight: 26,
+                    marginTop: t.spacing.md,
+                  },
+                ]}
+              >
+                Just capture the thought.{'\n'}
+                No folders, no tags.
+              </Text>
+              <Text
+                style={[
+                  styles.meta,
+                  {
+                    color: colors.metaFg,
+                    fontFamily: typography.body.fontFamily,
+                    fontSize: typography.body.fontSize,
+                    lineHeight: 26,
+                    marginTop: t.spacing.lg,
+                  },
+                ]}
+              >
+                Your recent thoughts stay close.{'\n'}
+                Nothing to file or sort.
+              </Text>
+            </Animated.View>
           </View>
 
-          <View
-            style={{
-              paddingHorizontal: t.spacing.md,
-              marginTop: t.spacing.xl + t.spacing.lg,
-              marginBottom: t.spacing.xl + t.spacing.md,
-              alignItems: 'center',
-            }}
+          <Animated.View
+            testID="welcome-entrance-cta"
+            style={[
+              {
+                paddingHorizontal: t.spacing.md,
+                marginTop: t.spacing.xl + t.spacing.lg,
+                marginBottom: t.spacing.xl + t.spacing.md,
+                alignItems: 'center',
+              },
+              entranceStyle(entranceCta),
+            ]}
           >
             <Pressable
               testID="welcome-continue"
@@ -171,7 +248,7 @@ export function WelcomeOnboardingScreen({ onComplete }: Props) {
                 </LinearGradient>
               </View>
             </Pressable>
-          </View>
+          </Animated.View>
         </ScrollView>
       </SafeAreaView>
     </View>
