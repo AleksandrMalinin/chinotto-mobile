@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AccessibilityInfo,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,8 +21,8 @@ type Props = {
 };
 
 /**
- * First-launch welcome: same copy intent as desktop `EmptyStreamOnboarding` +
- * `StreamFlowPanel` (see `chinotto-app/docs/stream-flow-panel-animation.md`).
+ * First-launch welcome: `StreamFlowPanel` matches desktop motion spec
+ * (`chinotto-app/docs/stream-flow-panel-animation.md`); copy is mobile-specific.
  */
 export function WelcomeOnboardingScreen({ onComplete }: Props) {
   const t = useAppTheme();
@@ -30,6 +32,29 @@ export function WelcomeOnboardingScreen({ onComplete }: Props) {
   useEffect(() => {
     void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
   }, []);
+
+  const ctaSurface = useMemo(() => {
+    if (t.isDark) {
+      return {
+        gradient: [
+          'rgba(168, 180, 238, 0.2)',
+          'rgba(112, 126, 192, 0.12)',
+          'rgba(86, 100, 162, 0.09)',
+        ] as const,
+        shadowColor: '#9aa6e0',
+        textColor: colors.entryBody,
+      };
+    }
+    return {
+      gradient: [
+        'rgba(125, 138, 210, 0.18)',
+        'rgba(98, 112, 185, 0.13)',
+        'rgba(88, 102, 175, 0.1)',
+      ] as const,
+      shadowColor: '#8890c8',
+      textColor: colors.entryBody,
+    };
+  }, [t.isDark, colors.entryBody]);
 
   const handleContinue = useCallback(() => {
     void (async () => {
@@ -51,7 +76,7 @@ export function WelcomeOnboardingScreen({ onComplete }: Props) {
             <StreamFlowPanel calm={reduceMotion} deferMotion={false} typingAccent={false} />
           </View>
 
-          <View style={{ paddingHorizontal: t.spacing.md }}>
+          <View style={[styles.copyColumn, { paddingHorizontal: t.spacing.md }]}>
             <Text
               style={[
                 styles.title,
@@ -64,7 +89,7 @@ export function WelcomeOnboardingScreen({ onComplete }: Props) {
                 },
               ]}
             >
-              Just write. No structure.
+              Write it down. No structure.
             </Text>
             <Text
               style={[
@@ -73,12 +98,13 @@ export function WelcomeOnboardingScreen({ onComplete }: Props) {
                   color: colors.fgDim,
                   fontFamily: typography.body.fontFamily,
                   fontSize: typography.body.fontSize,
-                  lineHeight: typography.body.lineHeight,
-                  marginTop: t.spacing.sm,
+                  lineHeight: 26,
+                  marginTop: t.spacing.md,
                 },
               ]}
             >
-              Start with one line.
+              Just capture the thought.{'\n'}
+              No folders, no tags.
             </Text>
             <Text
               style={[
@@ -87,41 +113,63 @@ export function WelcomeOnboardingScreen({ onComplete }: Props) {
                   color: colors.metaFg,
                   fontFamily: typography.body.fontFamily,
                   fontSize: typography.body.fontSize,
-                  lineHeight: typography.body.lineHeight,
-                  marginTop: t.spacing.md,
+                  lineHeight: 26,
+                  marginTop: t.spacing.lg,
                 },
               ]}
             >
-              Your thoughts leave a trail.{'\n'}
-              You’ll see them again when it matters.
+              Your recent thoughts stay close.{'\n'}
+              Nothing to file or sort.
             </Text>
           </View>
 
-          <View style={{ paddingHorizontal: t.spacing.md, marginTop: t.spacing.xl }}>
+          <View
+            style={{
+              paddingHorizontal: t.spacing.md,
+              marginTop: t.spacing.xl + t.spacing.lg,
+              marginBottom: t.spacing.xl + t.spacing.md,
+              alignItems: 'center',
+            }}
+          >
             <Pressable
               testID="welcome-continue"
               accessibilityRole="button"
-              accessibilityLabel="Continue to capture"
+              accessibilityLabel="Capture it"
               onPress={handleContinue}
-              style={({ pressed }) => [
-                styles.cta,
-                {
-                  backgroundColor: 'rgba(128,138,188,0.14)',
-                  borderColor: colors.border,
-                  opacity: pressed ? 0.88 : 1,
-                },
-              ]}
+              style={({ pressed }) => [styles.ctaPressable, { opacity: pressed ? 0.9 : 1 }]}
             >
-              <Text
-                style={{
-                  color: colors.fg,
-                  fontFamily: typography.capture.fontFamily,
-                  fontSize: 17,
-                  letterSpacing: 0.15,
-                }}
+              <View
+                style={[
+                  styles.ctaShadow,
+                  Platform.OS === 'ios'
+                    ? {
+                        shadowColor: ctaSurface.shadowColor,
+                        shadowOffset: { width: 0, height: 5 },
+                        shadowOpacity: 0.16,
+                        shadowRadius: 22,
+                      }
+                    : { elevation: 4 },
+                ]}
               >
-                Continue
-              </Text>
+                <LinearGradient
+                  colors={[...ctaSurface.gradient]}
+                  locations={[0, 0.42, 1]}
+                  start={{ x: 0.5, y: 0 }}
+                  end={{ x: 0.5, y: 1 }}
+                  style={styles.ctaGradient}
+                >
+                  <Text
+                    style={{
+                      color: ctaSurface.textColor,
+                      fontFamily: typography.body.fontFamily,
+                      fontSize: 16,
+                      letterSpacing: 0.07,
+                    }}
+                  >
+                    Capture it
+                  </Text>
+                </LinearGradient>
+              </View>
             </Pressable>
           </View>
         </ScrollView>
@@ -141,22 +189,44 @@ const styles = StyleSheet.create({
   },
   scroll: {
     flexGrow: 1,
-    paddingBottom: 32,
+    paddingBottom: 40,
     justifyContent: 'center',
   },
   visual: {
     alignItems: 'center',
     marginTop: 8,
   },
-  title: {},
-  lead: {},
-  meta: {},
-  cta: {
+  /** Narrow column so centered lines read as one thought, not full-bleed UI copy. */
+  copyColumn: {
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 340,
+  },
+  title: {
+    textAlign: 'center',
+  },
+  lead: {
+    textAlign: 'center',
+  },
+  meta: {
+    textAlign: 'center',
+  },
+  /** Centered pill — not a full-bleed CTA bar. */
+  ctaPressable: {
+    alignSelf: 'center',
+    width: '72%',
+    maxWidth: 300,
+    minWidth: 200,
+  },
+  ctaShadow: {
+    width: '100%',
+    borderRadius: 999,
+  },
+  ctaGradient: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 28,
+    borderRadius: 999,
   },
 });
