@@ -10,10 +10,27 @@ export type CaptureInputProps = {
   minHeight: number;
   /** When omitted, caps growth for a large composer (~45% window, max 340). */
   maxHeight?: number;
+  placeholder?: string;
+  placeholderTextColor?: string;
+  onFocus?: () => void;
+  onBlur?: () => void;
 };
 
 export const CaptureInput = forwardRef<TextInput, CaptureInputProps>(
-  function CaptureInput({ value, onChangeText, onSubmit, minHeight, maxHeight: maxHeightProp }, ref) {
+  function CaptureInput(
+    {
+      value,
+      onChangeText,
+      onSubmit,
+      minHeight,
+      maxHeight: maxHeightProp,
+      placeholder,
+      placeholderTextColor,
+      onFocus,
+      onBlur,
+    },
+    ref
+  ) {
     const t = useAppTheme();
     const { height: windowHeight } = useWindowDimensions();
     const maxHeight =
@@ -37,12 +54,16 @@ export const CaptureInput = forwardRef<TextInput, CaptureInputProps>(
             letterSpacing: capture.letterSpacing,
             lineHeight: capture.lineHeight,
             paddingHorizontal: 0,
-            paddingTop: 6,
-            paddingBottom: 8,
+            paddingTop: 4,
+            paddingBottom: 6,
           },
         ]}
         value={value}
         onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={placeholderTextColor}
+        onFocus={onFocus}
+        onBlur={onBlur}
         multiline
         autoFocus
         autoCorrect
