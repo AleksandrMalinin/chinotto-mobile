@@ -17,7 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AmbientBackground } from '../components/AmbientBackground';
 import { CaptureInput } from '../components/CaptureInput';
-import { ChinottoLogo } from '../components/ChinottoLogo';
+import { ChinottoLogo, chinottoLogoLeadingOutset } from '../components/ChinottoLogo';
 import { EnableSyncModal } from '../components/EnableSyncModal';
 import { EntryReadSheet } from '../components/EntryReadSheet';
 import { RecentList } from '../components/RecentList';
@@ -35,7 +35,7 @@ import { isFirebaseSyncConfigured } from '../sync/firebaseConfig';
 import { getOrInitAuth } from '../sync/firebaseAuth';
 import { getPendingSyncCount } from '../sync/syncQueue';
 import { flushSyncTombstoneOutbox } from '../sync/tombstoneFlush';
-import { fonts, screenContentGutter, useAppTheme } from '../theme';
+import { fonts, screenContentGutter, screenContentInnerPad, useAppTheme } from '../theme';
 
 /** First page size; same step for “load more”. */
 const PAGE_SIZE = 20;
@@ -351,6 +351,9 @@ export function CaptureScreen({
   /** Slightly taller composer so capture reads as the primary surface. */
   const composerMinHeight = 56;
   const composerMaxHeight = 92;
+  const headerLogoSize = 42;
+  /** Ring geometry: align **outer ring** with search field (gutter only); composer is inset +`screenContentInnerPad`. */
+  const headerLogoAlignStyle = { marginLeft: -chinottoLogoLeadingOutset(headerLogoSize) };
 
   return (
     <View style={styles.shell}>
@@ -381,10 +384,20 @@ export function CaptureScreen({
                   hitSlop={12}
                   onLongPress={() => showDevMenu({ onResetWelcome: onDevMenu })}
                 >
-                  <ChinottoLogo testID="header-logo" size={42} color={t.colors.fgDim} />
+                  <ChinottoLogo
+                    testID="header-logo"
+                    size={headerLogoSize}
+                    color={t.colors.fgDim}
+                    style={headerLogoAlignStyle}
+                  />
                 </Pressable>
               ) : (
-                <ChinottoLogo testID="header-logo" size={42} color={t.colors.fgDim} />
+                <ChinottoLogo
+                  testID="header-logo"
+                  size={headerLogoSize}
+                  color={t.colors.fgDim}
+                  style={headerLogoAlignStyle}
+                />
               )}
               {isFirebaseSyncConfigured() && Platform.OS === 'ios' ? (
                 <SyncHeaderStatus
@@ -546,7 +559,7 @@ const styles = StyleSheet.create({
   bottomFill: {},
   /** No fill — only rhythm; capture reads against AmbientBackground. */
   composerBlock: {
-    paddingHorizontal: 12,
+    paddingHorizontal: screenContentInnerPad,
     paddingVertical: 8,
   },
 });

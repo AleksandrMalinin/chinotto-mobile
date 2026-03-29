@@ -76,6 +76,13 @@ export function screenContentGutter(_width: number): number {
   return 20;
 }
 
+/**
+ * Extra horizontal inset **inside** `screenContentGutter` for the capture composer only (search and
+ * section labels use the gutter line). Stream row text uses the same inset so entries line up with
+ * the composer.
+ */
+export const screenContentInnerPad = 12;
+
 /** From design-system.md “Radius scale” (search 12px, entry row 8px). */
 export const radius = {
   none: 0,
