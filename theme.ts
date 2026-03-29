@@ -5,8 +5,8 @@
  * - **Open Sauce One** weights **400** and **500** for almost all UI after shell load
  *   (body, capture, stream, search, buttons, settings — same as `index.css` on web).
  * - **Inter** weight **300** is used on desktop **only** for first-run intro copy
- *   (`.intro-screen-copy`). We do not load Inter on mobile until / unless an intro screen exists
- *   (product: no onboarding). Nunito / Outfit / Plus Jakarta in `index.html` are unused on web.
+ *   (`.intro-screen-copy`). Mobile uses **Open Sauce One** for the one-time welcome as well; Inter is not loaded on mobile.
+ *   Nunito / Outfit / Plus Jakarta in `index.html` are unused on web.
  *
  * Font files: `assets/fonts/OpenSauceOne-{Regular,Medium}.ttf` (SIL OFL; keys `OpenSauceOne-400` / `500`).
  */

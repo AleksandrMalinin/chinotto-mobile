@@ -2,7 +2,7 @@
 
 Expo (React Native) app. See `AGENTS.md` and `product-spec.md` for product rules.
 
-Typography matches desktop: **Open Sauce One** 400 / 500 (`.ttf` in `assets/fonts/`, loaded in `App.tsx`). **Inter 300** is desktop intro-only; not loaded on mobile unless we add an intro screen.
+Typography matches desktop: **Open Sauce One** 400 / 500 (`.ttf` in `assets/fonts/`, loaded in `App.tsx`). **Inter 300** is desktop intro-only; mobile welcome uses Open Sauce One (Inter not loaded on mobile).
 
 Background: `AmbientBackground` (stacked `expo-linear-gradient` orbs + atmosphere + bottom vignette; ~20s opacity pulse).
 
@@ -10,7 +10,7 @@ Brand (aligned with `chinotto-app`): **`ChinottoLogo`** (`react-native-svg`) use
 
 **Cold start (everyone):** after fonts + DB, native splash hands off to **`BrandSplash`** — animated **`ChinottoLogo`** + shell (`AmbientBackground`, **`IntroBlobField`**).
 
-**First launch (after that):** **`WelcomeOnboardingScreen`** with **`StreamFlowPanel`** (see `chinotto-app/docs/stream-flow-panel-animation.md`) and the same headline copy as desktop empty-stream onboarding. **Continue** sets `@chinotto/welcome_v1` and opens capture.
+**First launch (after that):** **`WelcomeOnboardingScreen`** with **`StreamFlowPanel`** (motion spec: `chinotto-app/docs/stream-flow-panel-animation.md`) and mobile-specific welcome copy. **Capture it** sets `@chinotto/welcome_v1` and opens capture.
 
 **Returning visits:** same **`BrandSplash`** loading beat, then capture (no welcome). Header: **32px** logo like the desktop app bar.
 

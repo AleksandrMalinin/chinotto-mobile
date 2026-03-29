@@ -7,10 +7,12 @@ Chinotto is a minimal thinking tool.
 This is NOT a notes app.
 
 Core principles:
-- Instant capture
+- **Instant capture** — On every return visit, the app opens directly into capture (input-first, as soon as boot allows). Nothing may re-introduce a “learning” or setup gate before typing.
 - No organization before thinking
 - No folders, tags, or categories
-- Zero friction UX
+- **Minimal friction** — No repeated teaching, no tip-of-the-day, no mandatory tours, and no extra decisions at the moment of capture.
+
+**First run (explicit exception):** A **short, one-time welcome** (`WelcomeOnboardingScreen`, persisted flag) is intentional. It orients the user once; after the user proceeds to capture from that screen, capture is the default forever (until reinstall or dev reset). This is **not** a violation of instant capture — instant capture applies to **steady state** after that first completion.
 
 Mobile app role:
 - Capture-first
@@ -19,6 +21,8 @@ Mobile app role:
 
 Golden rule:
 > If a feature slows down capturing a thought → do not implement it.
+
+Interpretation for agents: judge **recurring** friction (every open, every new thought). A one-time, non-blocking welcome before first capture is acceptable; anything that **persists** as friction after first use is not.
 
 ---
 
@@ -132,17 +136,22 @@ Avoid:
 
 ## UX Constraints
 
-STRICT RULES:
+**Onboarding (precise):**
 
-- No onboarding flows
-- No tutorials
-- No multi-step UX
-- No unnecessary buttons
+- **In bounds:** One-time welcome: single short surface, persisted “seen” flag, then never shown again in normal use. Must hand off to capture immediately after dismiss.
+- **Out of bounds:** Repeatable onboarding on launch, multi-screen product tours, version tip carousels, “complete setup” wizards before capture, or any pattern that **regularly** delays input after first-run welcome.
 
-Input must:
-- Be immediately focused on open
-- Have zero delay
-- Be the central element
+**Still avoid:**
+
+- Tutorial series, feature walkthroughs, or progressive disclosure that fires on every session
+- Multi-step UX for **routine** capture (not the one-time welcome)
+- Unnecessary buttons
+
+**Input (on capture screen, including after welcome):**
+
+- Immediately focused on open
+- No avoidable delay before typing
+- Central element
 
 ---
 
@@ -181,7 +190,7 @@ If you are about to implement:
 
 - Navigation stacks
 - Complex global state
-- Multiple screens for simple flows
+- Multiple screens for simple flows (beyond the **single** one-time welcome already shipped)
 - Heavy UI components
 
 → STOP and propose a simpler alternative
