@@ -1,5 +1,6 @@
 import * as Clipboard from 'expo-clipboard';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Linking } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { EntryReadSheet } from '../EntryReadSheet';
@@ -27,6 +28,11 @@ const sampleEntry = {
 describe('EntryReadSheet', () => {
   beforeEach(() => {
     jest.mocked(Clipboard.setStringAsync).mockClear();
+    jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined as never);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it('renders full entry text when visible', () => {
@@ -64,5 +70,57 @@ describe('EntryReadSheet', () => {
 
     fireEvent.press(getByLabelText('Dismiss'));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not show Open when text has no URL', () => {
+    const { queryByTestId } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <EntryReadSheet visible entry={sampleEntry} onClose={jest.fn()} />
+      </SafeAreaProvider>
+    );
+
+    expect(queryByTestId('entry-read-open-link')).toBeNull();
+  });
+
+  it('shows host and Open for a single URL; Open calls Linking.openURL', async () => {
+    const entry = {
+      id: 'e2',
+      text: 'Read https://example.com/article today.',
+      createdAt: '2025-06-15T14:30:00.000Z',
+    };
+    const { getByTestId } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <EntryReadSheet visible entry={entry} onClose={jest.fn()} />
+      </SafeAreaProvider>
+    );
+
+    expect(getByTestId('entry-read-link-host').props.children).toBe('example.com');
+    fireEvent.press(getByTestId('entry-read-open-link'));
+    await waitFor(() => {
+      expect(Linking.openURL).toHaveBeenCalledWith('https://example.com/article');
+    });
+  });
+
+  it('Open uses first URL when several are present', async () => {
+    const entry = {
+      id: 'e3',
+      text: 'https://a.com one https://b.com two',
+      createdAt: '2025-06-15T14:30:00.000Z',
+    };
+    const { getByTestId, getByText } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <EntryReadSheet visible entry={entry} onClose={jest.fn()} />
+      </SafeAreaProvider>
+    );
+
+    expect(getByTestId('entry-read-link-list')).toBeTruthy();
+    expect(getByText('Links')).toBeTruthy();
+    expect(getByText('1. https://a.com', { exact: false })).toBeTruthy();
+    expect(getByText('2. https://b.com', { exact: false })).toBeTruthy();
+    expect(getByText('Open uses link 1. Copy saves the full thought.')).toBeTruthy();
+    fireEvent.press(getByTestId('entry-read-open-link'));
+    await waitFor(() => {
+      expect(Linking.openURL).toHaveBeenCalledWith('https://a.com');
+    });
   });
 });

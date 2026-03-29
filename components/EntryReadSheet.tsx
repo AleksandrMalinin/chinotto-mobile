@@ -1,6 +1,7 @@
 import * as Clipboard from 'expo-clipboard';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -13,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { Entry } from '../types/entry';
 import { fonts, useAppTheme } from '../theme';
+import { displayHostForUrl, extractHttpUrlsFromText } from '../utils/extractHttpUrlsFromText';
 import { formatEntryTime } from '../utils/groupEntriesByDate';
 
 export type EntryReadSheetProps = {
@@ -29,11 +31,32 @@ export function EntryReadSheet({ visible, entry, onClose }: EntryReadSheetProps)
   const { body, meta } = typography;
   const [copied, setCopied] = useState(false);
 
+  const httpUrls = useMemo(
+    () => (entry != null ? extractHttpUrlsFromText(entry.text) : []),
+    [entry]
+  );
+  const firstHttpUrl = httpUrls[0] ?? null;
+  const linkHost = firstHttpUrl != null ? displayHostForUrl(firstHttpUrl) : null;
+  const linkCount = httpUrls.length;
+
   useEffect(() => {
     if (!visible) {
       setCopied(false);
     }
   }, [visible]);
+
+  const handleOpenLink = useCallback(async () => {
+    if (firstHttpUrl == null) {
+      return;
+    }
+    try {
+      await Linking.openURL(firstHttpUrl);
+    } catch (err) {
+      if (__DEV__) {
+        console.warn('EntryReadSheet openURL failed', err);
+      }
+    }
+  }, [firstHttpUrl]);
 
   const handleCopy = useCallback(async () => {
     if (entry == null) {
@@ -91,38 +114,143 @@ export function EntryReadSheet({ visible, entry, onClose }: EntryReadSheetProps)
           ]}
         >
           <View style={[styles.toolbar, { paddingHorizontal: spacing.lg, paddingTop: spacing.md }]}>
-            <Text
+            <View style={styles.toolbarMeta}>
+              <Text
+                style={[
+                  styles.metaTime,
+                  {
+                    color: colors.metaFg,
+                    fontFamily: meta.fontFamily,
+                    fontSize: meta.fontSize,
+                  },
+                ]}
+              >
+                {formatEntryTime(entry.createdAt)}
+              </Text>
+              {linkHost != null ? (
+                <Text
+                  testID="entry-read-link-host"
+                  accessibilityLabel={`Link from ${linkHost}`}
+                  style={[
+                    styles.metaHost,
+                    {
+                      color: colors.sectionFg,
+                      fontFamily: meta.fontFamily,
+                      fontSize: 12,
+                    },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {linkHost}
+                </Text>
+              ) : null}
+            </View>
+            <View style={styles.toolbarActions}>
+              {firstHttpUrl != null ? (
+                <Pressable
+                  testID="entry-read-open-link"
+                  onPress={() => void handleOpenLink()}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    linkCount > 1 ? 'Open first link in browser' : 'Open link in browser'
+                  }
+                  hitSlop={10}
+                  style={({ pressed }) => [styles.actionBtn, { opacity: pressed ? 0.65 : 1 }]}
+                >
+                  <Text
+                    style={{
+                      color: colors.fgDim,
+                      fontFamily: fonts.medium,
+                      fontSize: 15,
+                      letterSpacing: 0.2,
+                    }}
+                  >
+                    {linkCount > 1 ? 'Open first' : 'Open'}
+                  </Text>
+                </Pressable>
+              ) : null}
+              <Pressable
+                testID="entry-read-copy"
+                onPress={() => void handleCopy()}
+                accessibilityRole="button"
+                accessibilityLabel={copied ? 'Copied' : 'Copy text'}
+                hitSlop={10}
+                style={({ pressed }) => [styles.actionBtn, { opacity: pressed ? 0.65 : 1 }]}
+              >
+                <Text
+                  style={{
+                    color: copied ? colors.muted : colors.fgDim,
+                    fontFamily: fonts.medium,
+                    fontSize: 15,
+                    letterSpacing: 0.2,
+                  }}
+                >
+                  {copied ? 'Copied' : 'Copy'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+          {linkCount > 1 ? (
+            <View
+              testID="entry-read-link-list"
               style={[
-                styles.metaLine,
+                styles.linkList,
                 {
-                  color: colors.metaFg,
-                  fontFamily: meta.fontFamily,
-                  fontSize: meta.fontSize,
+                  paddingHorizontal: spacing.lg,
+                  paddingTop: spacing.xs,
+                  paddingBottom: spacing.sm,
+                  borderBottomColor: colors.border,
                 },
               ]}
             >
-              {formatEntryTime(entry.createdAt)}
-            </Text>
-            <Pressable
-              testID="entry-read-copy"
-              onPress={() => void handleCopy()}
-              accessibilityRole="button"
-              accessibilityLabel={copied ? 'Copied' : 'Copy text'}
-              hitSlop={10}
-              style={({ pressed }) => [styles.copyBtn, { opacity: pressed ? 0.65 : 1 }]}
-            >
               <Text
-                style={{
-                  color: copied ? colors.muted : colors.fgDim,
-                  fontFamily: fonts.medium,
-                  fontSize: 15,
-                  letterSpacing: 0.2,
-                }}
+                style={[
+                  styles.linkListTitle,
+                  {
+                    color: colors.sectionFg,
+                    fontFamily: meta.fontFamily,
+                    fontSize: meta.fontSize,
+                    letterSpacing: 0.2,
+                  },
+                ]}
               >
-                {copied ? 'Copied' : 'Copy'}
+                Links
               </Text>
-            </Pressable>
-          </View>
+              {httpUrls.map((url, i) => (
+                <Text
+                  key={`${i}-${url}`}
+                  selectable
+                  numberOfLines={4}
+                  style={[
+                    styles.linkListRow,
+                    {
+                      color: colors.metaFg,
+                      fontFamily: meta.fontFamily,
+                      fontSize: 13,
+                      lineHeight: 19,
+                      marginTop: spacing.xs,
+                    },
+                  ]}
+                >
+                  {i + 1}. {url}
+                </Text>
+              ))}
+              <Text
+                style={[
+                  styles.linkListHint,
+                  {
+                    color: colors.muted,
+                    fontFamily: meta.fontFamily,
+                    fontSize: 11,
+                    marginTop: spacing.sm,
+                    letterSpacing: 0.12,
+                  },
+                ]}
+              >
+                Open uses link 1. Copy saves the full thought.
+              </Text>
+            </View>
+          ) : null}
           <ScrollView
             style={[styles.scroll, { maxHeight: Math.min(windowHeight * 0.58, 520) }]}
             contentContainerStyle={{
@@ -169,14 +297,32 @@ const styles = StyleSheet.create({
   },
   toolbar: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
   },
-  metaLine: {
+  toolbarMeta: {
     flex: 1,
     marginRight: 12,
+    minWidth: 0,
   },
-  copyBtn: {
+  metaTime: {},
+  metaHost: {
+    marginTop: 4,
+    letterSpacing: 0.2,
+  },
+  linkList: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  linkListTitle: {},
+  linkListRow: {},
+  linkListHint: {},
+  toolbarActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 0,
+    gap: 8,
+  },
+  actionBtn: {
     paddingVertical: 6,
     paddingHorizontal: 4,
   },
