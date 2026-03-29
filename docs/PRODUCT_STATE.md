@@ -18,7 +18,8 @@
 | **First launch** | `WelcomeOnboardingScreen` — copy + `StreamFlowPanel` + **Capture it** → `welcomeFlag` persisted. |
 | **Capture** | Single screen; multiline `TextInput`, autoFocus; Done submits → `saveEntry`, clear, refocus. |
 | **Composer height** | ~48–80pt on `CaptureScreen` (tight; multiline scrolls inside field). |
-| **Recent stream** | Last **20** entries, grouped Today / Yesterday / older days; swipe-left delete; tap → read sheet. |
+| **Recent stream** | Last **20** entries (initial page), grouped Today / Yesterday / older days; swipe-left delete; tap → read sheet; infinite scroll loads older pages. |
+| **Stream search** | Substring recall on local DB (`searchEntriesForRecall`, cap 300 + truncation hint). |
 | **Read sheet** | Full text, copy, timestamp; dismiss tap outside. |
 | **List visibility** | Hidden while typing until user scrolls down ~20px (`revealByScroll`), or when input empty. |
 | **Persistence** | SQLite `entries` + serialized access (`runSerializedDb`). |
@@ -30,7 +31,7 @@
 
 ### Not implemented (mobile UI)
 
-- Search, calendar navigation, full history list (DB has `getAllEntries()` — **unused** in app code).
+- Calendar / jump-to-date, dedicated full-history browser (stream search + pagination exist; `getAllEntries()` remains for tests/tooling, not primary UI).
 - Edit saved entries (read + delete only).
 - Voice input.
 - Share: images / files / audio / video (by design in `extractShareEntryTexts`).
@@ -49,7 +50,7 @@
 4. Tap row → sheet; swipe → delete (local-first; tombstone queued if sync on).
 5. Optional: share into app → entries saved + list refresh.
 
-**Friction notes:** Boot + welcome add latency vs “instant open”; stream hidden while typing until scroll; only 20 rows visible.
+**Friction notes:** Boot + welcome add latency vs “instant open”; stream hidden while typing until scroll; first screen shows **20** rows (more via scroll).
 
 ---
 
@@ -65,7 +66,7 @@
 
 | Gap | Why it matters |
 |-----|----------------|
-| No search / full history UI | “Revisit later via search or time” is weak on device for older entries. |
+| No calendar / full-history browser | Search + scroll help recall; jumping to a date or browsing the whole DB in one list is still missing. |
 | 20-item UI cap | Ingest may hold more in DB; user cannot browse it. |
 | Android + Firebase | No in-app enable path for sync (modal iOS-only) — **acceptable until Android is prioritized**. |
 | Welcome screen | One-time `WelcomeOnboardingScreen`; `AGENTS.md` documents this as the only allowed pre-capture orientation. |
@@ -83,7 +84,7 @@
 ## 6. Suggested priorities (product, not code style)
 
 1. Keep boot + one-time welcome minimal; steady state must remain capture-first per `AGENTS.md`.
-2. Add lightweight recall: search and/or scrollable history beyond 20.
+2. Add calendar jump-to-date and/or a clearer “all local history” path beyond stream pagination + search.
 3. When Android is prioritized: sync entry point + auth parity with iOS.
 4. Clearer non-blocking sync state when queue is pending / signed out.
 5. Stabilize and ship widget + clarify share capabilities.

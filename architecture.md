@@ -25,7 +25,7 @@ Local Storage (source of truth)
 ↓
 Sync Engine (async, optional)
 ↓
-Remote / Desktop sync (future)
+Remote (optional Firestore — same contract as desktop)
 ```
 
 ---
@@ -103,7 +103,7 @@ type Entry = {
 - Render input
 - Handle submit
 - Trigger `saveEntry`
-- Optionally show recent entries
+- Recent stream (paged) + **stream search** (`searchEntriesForRecall` on local DB)
 
 ### Critical rule
 

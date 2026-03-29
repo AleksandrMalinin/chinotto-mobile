@@ -1,29 +1,70 @@
+<p align="center">
+  <img src="assets/icon.png" width="80" alt="Chinotto" />
+</p>
+
 # Chinotto Mobile
 
-Expo (React Native) app. See `AGENTS.md` and `product-spec.md` for product rules.
+*Capture first.  
+Revisit later.*
 
-Typography matches desktop: **Open Sauce One** 400 / 500 (`.ttf` in `assets/fonts/`, loaded in `App.tsx`). **Inter 300** is desktop intro-only; mobile welcome uses Open Sauce One (Inter not loaded on mobile).
+Chinotto Mobile is a **minimal capture companion** for the moment a thought appears — without folders, tags, or workspaces.
 
-Background: `AmbientBackground` (stacked `expo-linear-gradient` orbs + atmosphere + bottom vignette; ~20s opacity pulse).
+It pairs with the **Chinotto desktop** thinking surface (separate repo): you capture on the phone, reflect in depth on the machine. **Structure can wait** until you revisit.
 
-Brand (aligned with `chinotto-app`): **`ChinottoLogo`** (`react-native-svg`) uses the same geometry as desktop (`src/components/ChinottoLogo.tsx`). Optional **animated** intro replicates web stroke draw / dot stagger / breathe timings from `index.css`. **`IntroBlobField`** mirrors intro blob colors (violet / cyan / orange drift).
+**Local-first.** Entries live in **SQLite** on the device. The app works fully offline.
 
-**Cold start (everyone):** after fonts + DB, native splash hands off to **`BrandSplash`** — animated **`ChinottoLogo`** + shell (`AmbientBackground`, **`IntroBlobField`**).
+**Optional cloud sync.** When you enable **Sign in with Apple** and ship with Firebase configured (`EXPO_PUBLIC_FIREBASE_*`), thoughts can sync to the same Firestore space as desktop. Sync is a **background layer**, not a setup gate. Without those env vars, the app stays local-only.
 
-**First launch (after that):** **`WelcomeOnboardingScreen`** with **`StreamFlowPanel`** (motion spec: `chinotto-app/docs/stream-flow-panel-animation.md`) and mobile-specific welcome copy. **Capture it** sets `@chinotto/welcome_v1` and opens capture.
+**iOS-first today.** Ship-quality UX and sync entry points target **iPhone**; Android parity is planned later.
 
-**Returning visits:** same **`BrandSplash`** loading beat, then capture (no welcome). Header: **32px** logo like the desktop app bar.
+---
 
-In **`__DEV__`**, long-press the **header logo** → **Dev menu** → **Reset welcome onboarding** (clears the flag and runs **BrandSplash** again, then welcome). Production builds omit this.
+## Run locally
 
-## Setup
-
-This repository uses **pnpm** only.
+**Prerequisites:** Node.js, **pnpm**, Xcode (for iOS simulator / device).
 
 ```bash
 pnpm install
 pnpm start
 ```
+
+Then open in Expo Go or a dev client, or run `pnpm ios` / `pnpm android` after a native prebuild if you use `expo run:*`.
+
+**Icons / raster assets:** `pnpm run generate:icons` (see `scripts/generate-app-icons.mjs`).
+
+---
+
+## Stack
+
+- Expo (React Native)
+- TypeScript
+- SQLite (`expo-sqlite`)
+- Optional Firebase (Auth + Firestore) for sync
+
+---
+
+## Core behavior
+
+- **Capture** — one screen; save is immediate; input stays central.
+- **Stream** — recent thoughts, reverse chronological; load more as you scroll.
+- **Search** — lightweight full-text recall over local entries (same DB as the stream).
+- **Share in** — save text / links shared from other apps.
+- **First launch** — short welcome once, then capture is always the default (see `AGENTS.md`).
+- **Widget (iOS)** — optional home-screen capture shortcut (see `app.config.js` / `EXPO_PUBLIC_EXPERIMENTAL_IOS_HOME_WIDGET` for release builds).
+
+**Sync (when configured)** — queue + background upload; Firestore ingest + tombstones for cross-device deletes; honest header states on iOS (**Checking / Syncing / Sync paused / Synced**).
+
+---
+
+## Product rules & docs
+
+- **`AGENTS.md`** — engineering and product constraints for this repo (read before large changes).
+- **`product-spec.md`** — product guardrails.
+- **`docs/PRODUCT_STATE.md`** — what the current build actually does.
+- **`docs/SYNC.md`** — normative sync contract with desktop.
+- **`docs/SYNC_APPLE_QA.md`** — manual checks for Apple + Firebase.
+
+---
 
 ## Tests
 
@@ -31,3 +72,10 @@ pnpm start
 pnpm test
 pnpm test:watch
 ```
+
+---
+
+## Related
+
+- **Chinotto desktop** — primary thinking surface; same optional Firestore contract when sync is on.
+- Package manager for this repo is **pnpm only** (no npm / yarn lockfiles).

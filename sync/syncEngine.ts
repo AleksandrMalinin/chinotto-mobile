@@ -4,7 +4,7 @@ import { flushSyncTombstoneOutbox } from './tombstoneFlush';
 
 export type PushEntryFn = (entry: Entry) => Promise<void>;
 
-/** Placeholder “remote” push; replace with real networking later. */
+/** No-op push when Firebase sync is off; queue rows are marked synced on the next drain. */
 export async function mockPushEntryToRemote(_entry: Entry): Promise<void> {
   // No-op: sync layer is best-effort; storage already persisted the entry.
 }

@@ -30,7 +30,8 @@ export async function insertPendingSyncItem(db: SQLiteDatabase, entry: Entry): P
 }
 
 /**
- * Persists a queue row for background sync. Storage remains source of truth; sync is a side effect.
+ * Enqueue a pending sync row on its own DB pass.
+ * **Capture path:** `saveEntry` uses `insertPendingSyncItem` inside the same transaction as the entry insert — prefer that for new thoughts. This helper remains for tests and any non-save enqueue needs.
  */
 export async function enqueueForSync(entry: Entry): Promise<void> {
   await runSerializedDb(async () => {
