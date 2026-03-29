@@ -50,6 +50,9 @@ pnpm-debug.log*
 # Test / coverage
 coverage/
 
+# Internal planning / handoff (local only)
+INTERNAL_MOBILE_DESKTOP_STATE.md
+
 # Environment (secrets; never commit — use `.env.example` as the template)
 .env
 .env.local
