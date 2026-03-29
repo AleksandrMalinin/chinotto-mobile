@@ -137,6 +137,81 @@ describe('composeIncomingShareCaptureText', () => {
     expect(composeIncomingShareCaptureText([], raw)).toBe('a\n\nhttps://x.test');
   });
 
+  it('collapses markdown link with bogus www.*.html label to a single URL', () => {
+    const resolved: ResolvedSharePayload[] = [
+      {
+        shareType: 'url',
+        value: '[www.warp.dev.html](http://www.warp.dev.html)',
+        contentUri: null,
+        contentMimeType: 'text/html',
+        contentType: 'website',
+        originalName: null,
+        contentSize: null,
+      } as ResolvedSharePayload,
+    ];
+    expect(composeIncomingShareCaptureText(resolved, [])).toBe('http://www.warp.dev.html');
+  });
+
+  it('drops bare hostname when the same site URL is present', () => {
+    const resolved: ResolvedSharePayload[] = [
+      {
+        shareType: 'url',
+        value: 'warp.dev',
+        contentUri: 'https://warp.dev/learn',
+        contentMimeType: null,
+        contentType: 'website',
+        originalName: null,
+        contentSize: null,
+      } as ResolvedSharePayload,
+    ];
+    expect(composeIncomingShareCaptureText(resolved, [])).toBe('https://warp.dev/learn');
+  });
+
+  it('drops www.*.html when it appears as value (not only originalName)', () => {
+    const resolved: ResolvedSharePayload[] = [
+      {
+        shareType: 'url',
+        value: 'www.warp.dev.html',
+        contentUri: 'https://www.warp.dev/',
+        contentMimeType: 'text/html',
+        contentType: 'website',
+        originalName: null,
+        contentSize: null,
+      } as ResolvedSharePayload,
+    ];
+    expect(composeIncomingShareCaptureText(resolved, [])).toBe('https://www.warp.dev/');
+  });
+
+  it('drops domain.tld.html value (e.g. cmux.com.html)', () => {
+    const resolved: ResolvedSharePayload[] = [
+      {
+        shareType: 'url',
+        value: 'cmux.com.html',
+        contentUri: 'https://cmux.com/',
+        contentMimeType: 'text/html',
+        contentType: 'website',
+        originalName: null,
+        contentSize: null,
+      } as ResolvedSharePayload,
+    ];
+    expect(composeIncomingShareCaptureText(resolved, [])).toBe('https://cmux.com/');
+  });
+
+  it('skips www.*.html originalName and dedupes overlapping URL fields', () => {
+    const resolved: ResolvedSharePayload[] = [
+      {
+        shareType: 'url',
+        value: 'https://warp.dev/',
+        contentUri: 'https://warp.dev/',
+        contentMimeType: 'text/html',
+        contentType: 'website',
+        originalName: 'www.warp.dev.html',
+        contentSize: null,
+      } as ResolvedSharePayload,
+    ];
+    expect(composeIncomingShareCaptureText(resolved, [])).toBe('https://warp.dev/');
+  });
+
   it('returns null when nothing usable is shared', () => {
     expect(composeIncomingShareCaptureText([], [])).toBeNull();
     expect(

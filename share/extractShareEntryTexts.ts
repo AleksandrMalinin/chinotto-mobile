@@ -27,6 +27,41 @@ function isProbablyUrl(s: string): boolean {
   }
 }
 
+/**
+ * Safari / WebKit often puts suggested save names in `value` or `originalName`:
+ * `www.site.html`, `cmux.com.html`, etc. — never treat as thought text.
+ */
+function isShareFilenameArtifact(s: string): boolean {
+  const t = s.trim();
+  if (!t || /\s/.test(t) || /[()[\]]/.test(t) || isProbablyUrl(t)) {
+    return false;
+  }
+  if (!/\.html?$/i.test(t)) {
+    return false;
+  }
+  if (/^www\.[a-z0-9.-]+\.html?$/i.test(t)) {
+    return true;
+  }
+  /** `domain.tld.html` (e.g. cmux.com.html) — not a sentence, not a URL. */
+  if (/^([a-z0-9-]+\.)+[a-z]{2,}\.html?$/i.test(t)) {
+    return true;
+  }
+  return false;
+}
+
+/** Slug-like `page.html` with no spaces (technical filename, not a note). */
+function isBareHtmlFilenameArtifact(s: string): boolean {
+  const t = s.trim();
+  if (!/\.html?$/i.test(t) || /\s/.test(t) || /[()[\]]/.test(t)) {
+    return false;
+  }
+  return /^[a-z0-9._-]+\.html?$/i.test(t);
+}
+
+function isHtmlFilenameArtifact(s: string): boolean {
+  return isShareFilenameArtifact(s) || isBareHtmlFilenameArtifact(s);
+}
+
 function isRedundantOriginalName(name: string, urlString: string): boolean {
   try {
     const u = new URL(urlString);
@@ -75,10 +110,16 @@ function collectPartsFromResolvedPayload(p: ResolvedSharePayload): string[] {
   const hint = urlHintForPayload(p);
 
   const on = (p.originalName ?? '').trim();
-  if (on && mayIncludeOriginalName(p) && (!hint || !isRedundantOriginalName(on, hint))) {
+  if (
+    on &&
+    mayIncludeOriginalName(p) &&
+    !isShareFilenameArtifact(on) &&
+    !isBareHtmlFilenameArtifact(on) &&
+    (!hint || !isRedundantOriginalName(on, hint))
+  ) {
     parts.push(on);
   }
-  if (value) {
+  if (value && !isShareFilenameArtifact(value)) {
     parts.push(value);
   }
   if (uri && uri !== value) {
@@ -105,6 +146,80 @@ function dedupePreserveOrder(strings: string[]): string[] {
   return out;
 }
 
+/** Whole-string markdown link `[text](url)` → atomic pieces for deduping. */
+function atomicizePart(s: string): string[] {
+  const t = s.trim();
+  const m = /^\[([^\]]*)\]\((https?:[^)\s]+)\)\s*$/i.exec(t);
+  if (!m) {
+    return [t];
+  }
+  const linkText = m[1].trim();
+  const url = m[2].trim();
+  if (!url) {
+    return linkText ? [linkText] : [];
+  }
+  if (
+    !linkText ||
+    linkText.toLowerCase() === url.toLowerCase() ||
+    isHtmlFilenameArtifact(linkText)
+  ) {
+    return [url];
+  }
+  return [linkText, url];
+}
+
+function urlIdentityKey(u: string): string {
+  try {
+    const x = new URL(u.trim());
+    const host = x.hostname.replace(/^www\./i, '').toLowerCase();
+    const path = x.pathname.replace(/\/$/, '') || '';
+    return `${host}${path.toLowerCase()}`;
+  } catch {
+    return u.trim().toLowerCase();
+  }
+}
+
+function dedupeUrlsPreserveOrder(urls: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const u of urls) {
+    const t = u.trim();
+    if (!t) {
+      continue;
+    }
+    const k = urlIdentityKey(t);
+    if (seen.has(k)) {
+      continue;
+    }
+    seen.add(k);
+    out.push(t);
+  }
+  return out;
+}
+
+function hostWithoutWww(urlString: string): string | null {
+  try {
+    return new URL(urlString).hostname.replace(/^www\./i, '').toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+/** Drops `warp.dev` when we already have `https://warp.dev/...`. */
+function isBareHostDuplicateOfUrl(text: string, urls: string[]): boolean {
+  const st = text.trim().toLowerCase().replace(/^www\./, '');
+  if (!st || st.includes('/') || st.includes(' ')) {
+    return false;
+  }
+  for (const u of urls) {
+    const h = hostWithoutWww(u);
+    if (h && st === h) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** Body text first, then URLs — readable when a page shares title + link. */
 function orderPartsForCapture(parts: string[]): string[] {
   const nonUrls: string[] = [];
@@ -120,11 +235,35 @@ function orderPartsForCapture(parts: string[]): string[] {
 }
 
 function finalizeCaptureText(parts: string[]): string | null {
-  const deduped = dedupePreserveOrder(parts);
-  if (deduped.length === 0) {
+  const atomic: string[] = [];
+  for (const p of parts) {
+    for (const a of atomicizePart(p)) {
+      if (a.trim()) {
+        atomic.push(a.trim());
+      }
+    }
+  }
+
+  const pass1 = dedupePreserveOrder(atomic);
+  const urls = pass1.filter(isProbablyUrl);
+  const texts = pass1.filter((x) => !isProbablyUrl(x));
+
+  const uniqueUrls = dedupeUrlsPreserveOrder(urls);
+  const filteredTexts = texts.filter((t) => {
+    if (isShareFilenameArtifact(t)) {
+      return false;
+    }
+    if (uniqueUrls.length > 0 && isBareHostDuplicateOfUrl(t, uniqueUrls)) {
+      return false;
+    }
+    return true;
+  });
+
+  const merged = [...filteredTexts, ...uniqueUrls];
+  if (merged.length === 0) {
     return null;
   }
-  return orderPartsForCapture(deduped).join('\n\n');
+  return orderPartsForCapture(merged).join('\n\n');
 }
 
 function buildFromResolvedPayloads(payloads: ResolvedSharePayload[]): string | null {
