@@ -28,7 +28,7 @@ export function getOrInitFirestore(): Firestore {
 /**
  * Idempotent Firestore write: `users/{uid}/entries/{entry.id}` with `{ text, createdAt }`.
  * Requires a signed-in Firebase user (Sign in with Apple for stable sync). Queue stays pending until then.
- * Retries are safe if remote dedupes by document id (see docs/SYNC.md).
+ * Retries are safe if remote dedupes by document id (see docs/sync.md).
  */
 export async function firebasePushEntry(entry: Entry): Promise<void> {
   if (!isFirebaseSyncConfigured()) {

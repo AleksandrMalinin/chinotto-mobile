@@ -143,7 +143,7 @@ service cloud.firestore {
 
 **Push behavior:** `firebasePushEntry` requires a **non-anonymous** user. Anonymous-only sessions must complete **Enable sync** before uploads succeed (queue stays pending until then).
 
-**Edge case:** If Apple is **already linked to a different Firebase user**, `linkWithCredential` can fail with `auth/credential-already-in-use`. The app surfaces explanatory copy (same Apple ID vs one Firebase library per device); full account merge is out of v1 scope — see `docs/SYNC_APPLE_QA.md` for manual checks.
+**Edge case:** If Apple is **already linked to a different Firebase user**, `linkWithCredential` can fail with `auth/credential-already-in-use`. The app surfaces explanatory copy (same Apple ID vs one Firebase library per device); full account merge is out of v1 scope — see `docs/sync-apple-qa.md` for manual checks.
 
 **Env:** root `.env.example`. **Success:** Firestore write resolves → `markSynced`. **Failure:** leave pending.
 
@@ -155,7 +155,7 @@ service cloud.firestore {
 
 ## 5. Desktop (separate app)
 
-**Implementation handoff (copy into desktop repo / AI prompt):** [DESKTOP_SYNC_IMPLEMENTATION.md](./DESKTOP_SYNC_IMPLEMENTATION.md)
+**Implementation handoff (copy into desktop repo / AI prompt):** [desktop-sync-implementation.md](./desktop-sync-implementation.md)
 
 1. Same Firebase project; same Auth user (`uid`) as mobile for the same person.  
 2. Query `users/{uid}/entries` with `orderBy('createdAt', 'desc')` (or `asc` — be consistent).  

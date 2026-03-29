@@ -18,7 +18,7 @@
 
 1. Delete the app, reinstall, open capture.
 2. **Enable sync** again with the **same** Apple ID.
-3. Confirm prior cloud entries **ingest** over time (recent window via listener; older rows via **backfill** — see [SYNC.md](./SYNC.md)).
+3. Confirm prior cloud entries **ingest** over time (recent window via listener; older rows via **backfill** — see [sync.md](./sync.md)).
 
 **Expect:** Local DB starts empty; cloud data returns without losing the Apple → Firebase mapping if Apple sign-in completes.
 
@@ -50,5 +50,5 @@
 
 ## 5. Related docs
 
-- [SYNC.md](./SYNC.md) — Firestore layout, tombstones, backfill, limits.
+- [sync.md](./sync.md) — Firestore layout, tombstones, backfill, limits.
 - Optional local `docs/PRODUCT_STATE.md` (gitignored) — shipped-behavior snapshot if you keep one.
