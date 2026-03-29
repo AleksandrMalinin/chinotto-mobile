@@ -42,7 +42,6 @@ const PAGE_SIZE = 20;
 const SCROLL_END_THRESHOLD_PX = 160;
 const SEARCH_DEBOUNCE_MS = 250;
 const SEARCH_MAX_RESULTS = 300;
-
 /** Firebase session restore vs signed-out; avoids showing Enable sync before persistence restores. */
 export type AuthRestorePhase = SyncHeaderAuthPhase;
 
@@ -80,7 +79,6 @@ export function CaptureScreen({
   const [authRestorePhase, setAuthRestorePhase] = useState<AuthRestorePhase>(() =>
     isFirebaseSyncConfigured() && Platform.OS === 'ios' ? 'restoring' : 'signed_out'
   );
-  const [composerFocused, setComposerFocused] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const entriesRef = useRef<Entry[]>([]);
   const hasMoreRef = useRef(true);
@@ -286,14 +284,6 @@ export function CaptureScreen({
   /** Slightly taller composer so capture reads as the primary surface. */
   const composerMinHeight = 56;
   const composerMaxHeight = 92;
-  /** Writing surface: soft container, calmer than any stream “arrival” trace. */
-  const composerSurfaceBg = t.isDark
-    ? composerFocused
-      ? 'rgba(128, 138, 188, 0.076)'
-      : 'rgba(128, 138, 188, 0.042)'
-    : composerFocused
-      ? 'rgba(100, 110, 180, 0.068)'
-      : 'rgba(100, 110, 180, 0.036)';
 
   return (
     <View style={styles.shell}>
@@ -357,14 +347,7 @@ export function CaptureScreen({
               row press / trace aren’t clipped inside a padded content box (see RecentList).
             */}
             <View style={{ paddingHorizontal: gutter }}>
-              <View
-                style={{
-                  borderRadius: t.radius.md,
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  backgroundColor: composerSurfaceBg,
-                }}
-              >
+              <View style={styles.composerBlock}>
                 <CaptureInput
                   ref={inputRef}
                   value={text}
@@ -374,8 +357,6 @@ export function CaptureScreen({
                   maxHeight={composerMaxHeight}
                   placeholder="Write a thought…"
                   placeholderTextColor={t.colors.metaFg}
-                  onFocus={() => setComposerFocused(true)}
-                  onBlur={() => setComposerFocused(false)}
                 />
               </View>
               <View style={{ marginTop: t.spacing.sm }}>
@@ -484,4 +465,9 @@ const styles = StyleSheet.create({
     paddingRight: 4,
   },
   bottomFill: {},
+  /** No fill — only rhythm; capture reads against AmbientBackground. */
+  composerBlock: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
 });

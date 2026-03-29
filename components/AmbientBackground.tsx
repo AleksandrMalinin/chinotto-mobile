@@ -67,9 +67,9 @@ export function AmbientBackground() {
             'rgba(100, 118, 185, 0.008)',
             'transparent',
           ]}
-          locations={[0, 0.35, 0.62, 1]}
-          start={{ x: 0.05, y: 0 }}
-          end={{ x: 0.92, y: 0.88 }}
+          locations={[0, 0.38, 0.66, 1]}
+          start={{ x: 0.06, y: 0 }}
+          end={{ x: 0.9, y: 0.94 }}
           style={StyleSheet.absoluteFill}
         />
       </Animated.View>
@@ -90,11 +90,12 @@ export function AmbientBackground() {
         />
       </Animated.View>
 
+      {/* Top-center wash — pulled deeper so the lighter band reaches the capture composer (below header). */}
       <LinearGradient
-        colors={['rgba(58, 70, 105, 0.105)', 'rgba(58, 70, 105, 0.026)', 'transparent']}
-        locations={[0, 0.28, 1]}
+        colors={['rgba(58, 70, 105, 0.118)', 'rgba(58, 70, 105, 0.028)', 'transparent']}
+        locations={[0, 0.32, 1]}
         start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 0.52 }}
+        end={{ x: 0.5, y: 0.64 }}
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
