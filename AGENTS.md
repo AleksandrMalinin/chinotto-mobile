@@ -19,7 +19,7 @@ Mobile app role:
 - Input is the primary UI
 - Thinking happens on desktop
 
-**Platform priority (this repo):** **iOS first** — ship-quality UX and sync (Sign in with Apple) target iPhone; **Android parity is deferred**. **Windows and Linux** desktop apps are **planned later** (desktop lives outside this repo). See `docs/PRODUCT_STATE.md` for the fuller product-state summary.
+**Platform priority (this repo):** **iOS first** — ship-quality UX and sync (Sign in with Apple) target iPhone; **Android parity is deferred**. **Windows and Linux** desktop apps are **planned later** (desktop lives outside this repo). Optional local snapshot: `docs/PRODUCT_STATE.md` (gitignored) if you maintain a shipped-behavior checklist.
 
 Golden rule:
 > If a feature slows down capturing a thought → do not implement it.

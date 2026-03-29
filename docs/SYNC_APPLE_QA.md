@@ -51,4 +51,4 @@
 ## 5. Related docs
 
 - [SYNC.md](./SYNC.md) — Firestore layout, tombstones, backfill, limits.
-- [PRODUCT_STATE.md](./PRODUCT_STATE.md) — current mobile behavior summary.
+- Optional local `docs/PRODUCT_STATE.md` (gitignored) — shipped-behavior snapshot if you keep one.
