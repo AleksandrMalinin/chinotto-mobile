@@ -111,14 +111,36 @@ export async function ingestRemoteFirestoreRows(rows: Pick<Entry, 'id' | 'text' 
   });
 }
 
+export type EntryCursor = Pick<Entry, 'createdAt' | 'id'>;
+
 export async function getRecentEntries(limit: number): Promise<Entry[]> {
   return runSerializedDb(async () => {
     const db = await getDatabase();
     return db.getAllAsync<Entry>(
       `SELECT id, text, created_at AS createdAt
        FROM entries
-       ORDER BY created_at DESC
+       ORDER BY created_at DESC, id DESC
        LIMIT ?`,
+      limit
+    );
+  });
+}
+
+/**
+ * Next page in global newest-first order. Tie-break on `id` matches SYNC.md ordering.
+ */
+export async function getEntriesOlderThan(cursor: EntryCursor, limit: number): Promise<Entry[]> {
+  return runSerializedDb(async () => {
+    const db = await getDatabase();
+    return db.getAllAsync<Entry>(
+      `SELECT id, text, created_at AS createdAt
+       FROM entries
+       WHERE created_at < ? OR (created_at = ? AND id < ?)
+       ORDER BY created_at DESC, id DESC
+       LIMIT ?`,
+      cursor.createdAt,
+      cursor.createdAt,
+      cursor.id,
       limit
     );
   });
@@ -130,7 +152,53 @@ export async function getAllEntries(): Promise<Entry[]> {
     return db.getAllAsync<Entry>(
       `SELECT id, text, created_at AS createdAt
        FROM entries
-       ORDER BY created_at DESC`
+       ORDER BY created_at DESC, id DESC`
     );
   });
+}
+
+const SEARCH_DEFAULT_LIMIT = 300;
+
+export type SearchEntriesRecallResult = {
+  entries: Entry[];
+  /** True when more than `limit` rows matched; only the first `limit` are returned. */
+  truncated: boolean;
+};
+
+/**
+ * Search with optional limit transparency: requests `limit + 1` rows to detect truncation.
+ */
+export async function searchEntriesForRecall(
+  needle: string,
+  limit: number = SEARCH_DEFAULT_LIMIT
+): Promise<SearchEntriesRecallResult> {
+  const q = needle.trim();
+  if (!q) {
+    return { entries: [], truncated: false };
+  }
+  return runSerializedDb(async () => {
+    const db = await getDatabase();
+    const rows = await db.getAllAsync<Entry>(
+      `SELECT id, text, created_at AS createdAt
+       FROM entries
+       WHERE instr(lower(text), lower(?)) > 0
+       ORDER BY created_at DESC, id DESC
+       LIMIT ?`,
+      q,
+      limit + 1
+    );
+    if (rows.length > limit) {
+      return { entries: rows.slice(0, limit), truncated: true };
+    }
+    return { entries: rows, truncated: false };
+  });
+}
+
+/**
+ * Case-insensitive substring match on `text`. Uses `instr` so user input is literal (no LIKE wildcards).
+ * Fetches up to `limit` rows (internally uses `searchEntriesForRecall`).
+ */
+export async function searchEntriesByText(needle: string, limit: number = SEARCH_DEFAULT_LIMIT): Promise<Entry[]> {
+  const { entries } = await searchEntriesForRecall(needle, limit);
+  return entries;
 }

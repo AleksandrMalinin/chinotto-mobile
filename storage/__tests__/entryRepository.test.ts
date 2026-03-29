@@ -9,8 +9,11 @@ import {
   applyRemoteTombstoneDeletes,
   deleteEntry,
   getAllEntries,
+  getEntriesOlderThan,
   getRecentEntries,
   saveEntry,
+  searchEntriesByText,
+  searchEntriesForRecall,
 } from '../entryRepository';
 
 jest.mock('expo-crypto', () => ({
@@ -133,7 +136,7 @@ describe('entryRepository', () => {
   });
 
   describe('getRecentEntries', () => {
-    it('queries with limit and maps created_at to createdAt', async () => {
+    it('queries with limit, stable order (created_at desc, id desc)', async () => {
       getAllAsync.mockResolvedValueOnce([
         { id: 'a', text: 't', createdAt: '2025-01-01T00:00:00.000Z' },
       ]);
@@ -141,7 +144,7 @@ describe('entryRepository', () => {
       const rows = await getRecentEntries(10);
 
       expect(getAllAsync).toHaveBeenCalledWith(
-        expect.stringContaining('LIMIT ?'),
+        expect.stringMatching(/ORDER BY created_at DESC,\s*id DESC/s),
         10
       );
       expect(rows[0]).toEqual({
@@ -152,6 +155,74 @@ describe('entryRepository', () => {
     });
   });
 
+  describe('getEntriesOlderThan', () => {
+    it('pages after cursor with tie-break on id', async () => {
+      getAllAsync.mockResolvedValueOnce([]);
+
+      await getEntriesOlderThan(
+        { createdAt: '2025-01-02T12:00:00.000Z', id: 'cursor-id' },
+        15
+      );
+
+      expect(getAllAsync).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /WHERE created_at < \? OR \(created_at = \? AND id < \?\).*ORDER BY created_at DESC,\s*id DESC/s
+        ),
+        '2025-01-02T12:00:00.000Z',
+        '2025-01-02T12:00:00.000Z',
+        'cursor-id',
+        15
+      );
+    });
+  });
+
+  describe('searchEntriesByText', () => {
+    it('returns [] for empty or whitespace without querying', async () => {
+      await expect(searchEntriesByText('')).resolves.toEqual([]);
+      await expect(searchEntriesByText('   \t')).resolves.toEqual([]);
+      expect(getAllAsync).not.toHaveBeenCalled();
+    });
+
+    it('matches with instr(lower) and requests limit+1 for truncation detection', async () => {
+      getAllAsync.mockResolvedValueOnce([
+        { id: 'a', text: 'hello world', createdAt: '2025-01-01T00:00:00.000Z' },
+      ]);
+
+      const rows = await searchEntriesByText('World', 50);
+
+      expect(getAllAsync).toHaveBeenCalledWith(
+        expect.stringMatching(/instr\(lower\(text\),\s*lower\(\?\)\)/i),
+        'World',
+        51
+      );
+      expect(rows).toHaveLength(1);
+    });
+  });
+
+  describe('searchEntriesForRecall', () => {
+    it('sets truncated when more than limit rows exist', async () => {
+      getAllAsync.mockResolvedValueOnce([
+        { id: '1', text: 'a', createdAt: '2025-01-01T00:00:00.000Z' },
+        { id: '2', text: 'b', createdAt: '2025-01-02T00:00:00.000Z' },
+      ]);
+
+      const r = await searchEntriesForRecall('x', 1);
+
+      expect(r.entries).toHaveLength(1);
+      expect(r.entries[0].id).toBe('1');
+      expect(r.truncated).toBe(true);
+    });
+
+    it('truncated false when at or under limit', async () => {
+      getAllAsync.mockResolvedValueOnce([{ id: '1', text: 'a', createdAt: '2025-01-01T00:00:00.000Z' }]);
+
+      const r = await searchEntriesForRecall('x', 5);
+
+      expect(r.entries).toHaveLength(1);
+      expect(r.truncated).toBe(false);
+    });
+  });
+
   describe('getAllEntries', () => {
     it('returns ordered rows', async () => {
       getAllAsync.mockResolvedValueOnce([]);
@@ -159,7 +230,7 @@ describe('entryRepository', () => {
       await getAllEntries();
 
       expect(getAllAsync).toHaveBeenCalledWith(
-        expect.stringContaining('ORDER BY created_at DESC')
+        expect.stringMatching(/ORDER BY created_at DESC,\s*id DESC/)
       );
     });
   });
