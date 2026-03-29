@@ -49,20 +49,10 @@ Then open in Expo Go or a dev client, or run `pnpm ios` / `pnpm android` after a
 - **Stream** — recent thoughts, reverse chronological; load more as you scroll.
 - **Search** — lightweight full-text recall over local entries (same DB as the stream).
 - **Share in** — save text / links shared from other apps.
-- **First launch** — short welcome once, then capture is always the default (see `AGENTS.md`).
+- **First launch** — short welcome once, then capture stays the default.
 - **Widget (iOS)** — optional home-screen capture shortcut (see `app.config.js` / `EXPO_PUBLIC_EXPERIMENTAL_IOS_HOME_WIDGET` for release builds).
 
 **Sync (when configured)** — queue + background upload; Firestore ingest + tombstones for cross-device deletes; honest header states on iOS (**Checking / Syncing / Sync paused / Synced**).
-
----
-
-## Product rules & docs
-
-- **`AGENTS.md`** — engineering and product constraints for this repo (read before large changes).
-- **`product-spec.md`** — product guardrails.
-- **`docs/PRODUCT_STATE.md`** — what the current build actually does.
-- **`docs/SYNC.md`** — normative sync contract with desktop.
-- **`docs/SYNC_APPLE_QA.md`** — manual checks for Apple + Firebase.
 
 ---
 
