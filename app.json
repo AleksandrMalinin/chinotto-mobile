@@ -68,6 +68,7 @@
         {
           "ios": {
             "enabled": true,
+            "appGroups": ["group.com.chinotto.mobile"],
             "activationRule": {
               "supportsText": true,
               "supportsWebUrlWithMaxCount": 5,
