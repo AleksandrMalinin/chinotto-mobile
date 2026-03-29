@@ -72,6 +72,9 @@ type Entry = {
 
 - `saveEntry(text: string): Promise<Entry>`
 - `getRecentEntries(limit: number): Promise<Entry[]>`
+- `getEntriesOlderThan(cursor, limit): Promise<Entry[]>` — cursor pagination (newest-first)
+- `searchEntriesByText(needle, limit?): Promise<Entry[]>` — substring, case-insensitive (delegates to recall search)
+- `searchEntriesForRecall(needle, limit?)` — same query + `truncated` when more than `limit` rows exist
 - `getAllEntries(): Promise<Entry[]>`
 
 ### Behavior
