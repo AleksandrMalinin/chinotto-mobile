@@ -3,17 +3,14 @@ import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useIncomingShare } from 'expo-sharing';
-import { Text, View } from 'react-native';
+import { AccessibilityInfo, Platform, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BrandSplash } from './components/BrandSplash';
 import { CaptureScreen } from './screens/CaptureScreen';
 import { WelcomeOnboardingScreen } from './screens/WelcomeOnboardingScreen';
-import {
-  extractEntryTextsFromResolvedSharePayloads,
-  extractEntryTextsFromSharePayloads,
-} from './share/extractShareEntryTexts';
+import { composeIncomingShareCaptureText } from './share/extractShareEntryTexts';
 import { startMobileFirestoreIngest } from './sync/firestoreIngest';
 import { resolvePushEntryForSync } from './sync/pushEntryForSync';
 import { startBackgroundSync } from './sync/syncEngine';
@@ -22,6 +19,7 @@ import { saveEntry } from './storage/entryRepository';
 import { clearWelcomeFlag, hasCompletedWelcome } from './storage/welcomeFlag';
 import { useCaptureWidgetDeepLinkFocus } from './widgets/useCaptureWidgetDeepLinkFocus';
 import { useExperimentalIosHomeWidgetRegistration } from './widgets/useExperimentalIosHomeWidget';
+import { colorsDark } from './theme';
 
 /** Keep native splash visible until we call hide (fonts + DB + short beat). */
 void SplashScreen.preventAutoHideAsync();
@@ -42,27 +40,57 @@ function ShareSavedAck({ visible }: { visible: boolean }) {
   return (
     <View
       pointerEvents="none"
-      style={{
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        bottom: insets.bottom + 16,
-        alignItems: 'center',
-      }}
+      style={[
+        shareAckStyles.anchor,
+        {
+          bottom: insets.bottom + 20,
+          zIndex: 999,
+        },
+      ]}
     >
-      <View
-        style={{
-          backgroundColor: 'rgba(255,255,255,0.12)',
-          paddingHorizontal: 16,
-          paddingVertical: 10,
-          borderRadius: 10,
-        }}
-      >
-        <Text style={{ color: '#e8e8ec', fontSize: 15, fontFamily: 'OpenSauceOne-500' }}>Saved</Text>
+      <View style={shareAckStyles.pill}>
+        <Text style={shareAckStyles.label}>Saved from share</Text>
       </View>
     </View>
   );
 }
+
+const shareAckStyles = StyleSheet.create({
+  anchor: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  pill: {
+    backgroundColor: colorsDark.bgElevated,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colorsDark.borderFocus,
+    maxWidth: '88%',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.55,
+        shadowRadius: 16,
+      },
+      android: {
+        elevation: 14,
+      },
+      default: {},
+    }),
+  },
+  label: {
+    color: colorsDark.fg,
+    fontSize: 15,
+    fontFamily: 'OpenSauceOne-500',
+    textAlign: 'center',
+    letterSpacing: 0.15,
+  },
+});
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -74,6 +102,8 @@ export default function App() {
   const [phase, setPhase] = useState<AppPhase>('boot');
   /** Snapshot after `hasCompletedWelcome()` — drives brand → welcome vs main. */
   const welcomeDoneRef = useRef(true);
+  /** Bumps each time we start handling a non-empty share — avoids stale async after re-renders. */
+  const shareSaveSessionRef = useRef(0);
   const [shareSavedAck, setShareSavedAck] = useState(false);
   const [externalEntriesEpoch, setExternalEntriesEpoch] = useState(0);
   const [captureFocusNonce, setCaptureFocusNonce] = useState(0);
@@ -82,6 +112,7 @@ export default function App() {
     sharedPayloads,
     isResolving,
     clearSharedPayloads,
+    refreshSharePayloads,
   } = useIncomingShare();
 
   const onBrandFinished = useCallback(() => {
@@ -117,50 +148,58 @@ export default function App() {
     if (!dbReady || isResolving) {
       return;
     }
-    let texts = extractEntryTextsFromResolvedSharePayloads(resolvedSharedPayloads);
-    if (texts.length === 0) {
-      texts = extractEntryTextsFromSharePayloads(sharedPayloads);
-    }
-    if (texts.length === 0) {
+    const captureText = composeIncomingShareCaptureText(resolvedSharedPayloads, sharedPayloads);
+    if (captureText == null || captureText.trim() === '') {
       return;
     }
-    let cancelled = false;
+    const session = ++shareSaveSessionRef.current;
     void (async () => {
       try {
-        for (const t of texts) {
-          if (cancelled) {
-            return;
-          }
-          await saveEntry(t);
-        }
-        if (cancelled) {
-          return;
-        }
-        clearSharedPayloads();
-        setExternalEntriesEpoch((n) => n + 1);
-        setShareSavedAck(true);
+        await saveEntry(captureText);
       } catch (err) {
         if (__DEV__) {
           console.warn('Incoming share save failed', err);
         }
+        return;
       }
+      if (session !== shareSaveSessionRef.current) {
+        return;
+      }
+      /**
+       * `expo-sharing` keeps an internal ref of the last payloads and skips refresh when the new
+       * batch is `sharePayloadsAreEqual` to it. After we clear native payloads, that ref must be
+       * synced to `[]` — otherwise sharing the *same* URL again looks "unchanged" and never
+       * re-resolves or updates React state (no second save, no toast).
+       */
+      clearSharedPayloads();
+      try {
+        await refreshSharePayloads();
+      } catch (refreshErr) {
+        if (__DEV__) {
+          console.warn('refreshSharePayloads after share failed', refreshErr);
+        }
+      }
+      if (session !== shareSaveSessionRef.current) {
+        return;
+      }
+      setExternalEntriesEpoch((n) => n + 1);
+      setShareSavedAck(true);
+      AccessibilityInfo.announceForAccessibility?.('Thought saved from share');
     })();
-    return () => {
-      cancelled = true;
-    };
   }, [
     dbReady,
     isResolving,
     resolvedSharedPayloads,
     sharedPayloads,
     clearSharedPayloads,
+    refreshSharePayloads,
   ]);
 
   useEffect(() => {
     if (!shareSavedAck) {
       return;
     }
-    const id = setTimeout(() => setShareSavedAck(false), 1600);
+    const id = setTimeout(() => setShareSavedAck(false), 2200);
     return () => clearTimeout(id);
   }, [shareSavedAck]);
 
