@@ -1,71 +1,61 @@
 <p align="center">
-  <img src="assets/icon.png" width="80" alt="Chinotto" />
+  <img src="docs/logo.svg" width="80" alt="Chinotto" />
 </p>
 
-# Chinotto Mobile
+# Chinotto
 
 *Capture first.  
 Revisit later.*
 
-Chinotto Mobile is a **minimal capture companion** for the moment a thought appears — without folders, tags, or workspaces.
+Chinotto Mobile is a minimal companion to Chinotto desktop — built for capturing thoughts the moment they appear, wherever you are.
 
-It pairs with the **Chinotto desktop** thinking surface (separate repo): you capture on the phone, reflect in depth on the machine. **Structure can wait** until you revisit.
+Thoughts don’t wait for the right place — they appear in passing, between moments, often when you’re away from your desk.  
+Capture them instantly — without projects, folders, or workspaces.
 
-**Local-first.** Entries live in **SQLite** on the device. The app works fully offline.
+Structure can come later — when you revisit on desktop.
 
-**Optional cloud sync.** When you enable **Sign in with Apple** and ship with Firebase configured (`EXPO_PUBLIC_FIREBASE_*`), thoughts can sync to the same Firestore space as desktop. Sync is a **background layer**, not a setup gate. Without those env vars, the app stays local-only.
+Local-first. Works fully offline.  
+Your entries stay on your device.
 
-**iOS-first today.** Ship-quality UX and sync entry points target **iPhone**; Android parity is planned later.
+Optional sync keeps your thoughts with you across devices.  
+It runs quietly in the background and is never required to capture.
+
+iPhone is the current focus.
 
 ---
 
 ## Run locally
 
-**Prerequisites:** Node.js, **pnpm**, Xcode (for iOS simulator / device).
+Prerequisites: Node.js, pnpm, Xcode (for iOS simulator or device).
 
 ```bash
 pnpm install
 pnpm start
 ```
 
-Then open in Expo Go or a dev client, or run `pnpm ios` / `pnpm android` after a native prebuild if you use `expo run:*`.
+Open in Expo Go or a dev client, or run:
 
-**Icons / raster assets:** `pnpm run generate:icons` (see `scripts/generate-app-icons.mjs`).
-
----
+```bash
+pnpm ios
+pnpm android
+```
 
 ## Stack
 
 - Expo (React Native)
 - TypeScript
 - SQLite (`expo-sqlite`)
-- Optional Firebase (Auth + Firestore) for sync
-
----
+- Firebase (optional, for sync)
 
 ## Core behavior
 
-- **Capture** — one screen; save is immediate; input stays central.
-- **Stream** — recent thoughts, reverse chronological; load more as you scroll.
-- **Search** — lightweight full-text recall over local entries (same DB as the stream).
-- **Share in** — save text / links shared from other apps.
-- **First launch** — short welcome once, then capture stays the default.
-- **Widget (iOS)** — optional home-screen capture shortcut (see `app.config.js` / `EXPO_PUBLIC_EXPERIMENTAL_IOS_HOME_WIDGET` for release builds).
-
-**Sync (when configured)** — queue + background upload; Firestore ingest + tombstones for cross-device deletes; honest header states on iOS (**Checking / Syncing / Sync paused / Synced**).
-
----
-
-## Tests
-
-```bash
-pnpm test
-pnpm test:watch
-```
-
----
+- **Capture** — open and start typing
+- **Stream** — recent thoughts in reverse chronological order
+- **Search** — find thoughts by text
+- **Share in** — capture from other apps
+- **Sync** (optional) — keep thoughts in sync across devices
 
 ## Related
 
-- **Chinotto desktop** — primary thinking surface; same optional Firestore contract when sync is on.
-- Package manager for this repo is **pnpm only** (no npm / yarn lockfiles).
+- [Chinotto desktop](https://github.com/AleksandrMalinin/chinotto) — primary thinking surface
+- [Chinotto web](https://github.com/AleksandrMalinin/chinotto-web) — web companion / info site
