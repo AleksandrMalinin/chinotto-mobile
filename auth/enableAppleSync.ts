@@ -73,7 +73,7 @@ export async function enableAppleSyncWithFirebase(): Promise<void> {
     if (code === 'auth/credential-already-in-use') {
       throw new AppleSyncIdentityError(
         'credential_in_use',
-        'This Apple ID is already used with another sign-in. Cloud data from this device may use a different space.'
+        'This Apple ID already has cloud data under another Firebase sign-in. This device keeps working locally. For one library everywhere, use the same Sign in with Apple on each device; otherwise cloud data can stay split between accounts.'
       );
     }
     throw e;
