@@ -44,6 +44,8 @@ jest.mock('../../storage/entryRepository', () => ({
     })
   ),
   getRecentEntries: jest.fn(() => Promise.resolve([])),
+  getEntriesOlderThan: jest.fn(() => Promise.resolve([])),
+  searchEntriesForRecall: jest.fn(() => Promise.resolve({ entries: [], truncated: false })),
   deleteEntry: jest.fn(() => Promise.resolve()),
 }));
 

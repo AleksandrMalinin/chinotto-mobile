@@ -24,14 +24,24 @@ import { RecentList } from '../components/RecentList';
 import { SyncHeaderStatus, type SyncHeaderAuthPhase } from '../components/SyncHeaderStatus';
 import type { Entry } from '../types/entry';
 import { showDevMenu } from '../dev/showDevMenu';
-import { deleteEntry, getRecentEntries, saveEntry } from '../storage/entryRepository';
+import {
+  deleteEntry,
+  getEntriesOlderThan,
+  getRecentEntries,
+  saveEntry,
+  searchEntriesForRecall,
+} from '../storage/entryRepository';
 import { isFirebaseSyncConfigured } from '../sync/firebaseConfig';
 import { getOrInitAuth } from '../sync/firebaseAuth';
 import { flushSyncTombstoneOutbox } from '../sync/tombstoneFlush';
-import { screenContentGutter, useAppTheme } from '../theme';
+import { fonts, screenContentGutter, useAppTheme } from '../theme';
 
-const RECENT_LIMIT = 20;
-const SCROLL_REVEAL_OFFSET = 20;
+/** First page size; same step for “load more”. */
+const PAGE_SIZE = 20;
+/** Near bottom of scroll content → fetch next page. */
+const SCROLL_END_THRESHOLD_PX = 160;
+const SEARCH_DEBOUNCE_MS = 250;
+const SEARCH_MAX_RESULTS = 300;
 
 /** Firebase session restore vs signed-out; avoids showing Enable sync before persistence restores. */
 export type AuthRestorePhase = SyncHeaderAuthPhase;
@@ -55,28 +65,75 @@ export function CaptureScreen({
 }: CaptureScreenProps = {}) {
   const [text, setText] = useState('');
   const [entries, setEntries] = useState<Entry[]>([]);
-  const [revealByScroll, setRevealByScroll] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [syncModalVisible, setSyncModalVisible] = useState(false);
   const [readEntry, setReadEntry] = useState<Entry | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Entry[]>([]);
+  const [searchTruncated, setSearchTruncated] = useState(false);
   const [authRestorePhase, setAuthRestorePhase] = useState<AuthRestorePhase>(() =>
     isFirebaseSyncConfigured() && Platform.OS === 'ios' ? 'restoring' : 'signed_out'
   );
   const inputRef = useRef<TextInput>(null);
+  const entriesRef = useRef<Entry[]>([]);
+  const hasMoreRef = useRef(true);
+  const loadingMoreRef = useRef(false);
+  const searchQueryRef = useRef('');
+  const searchActiveRef = useRef(false);
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const t = useAppTheme();
   const gutter = screenContentGutter(windowWidth);
 
-  const isInputEmpty = text.trim().length === 0;
-  const showRecent = isInputEmpty || revealByScroll;
-  const needsScrollSpacer = !isInputEmpty && !revealByScroll;
+  entriesRef.current = entries;
+  hasMoreRef.current = hasMore;
+  searchQueryRef.current = searchQuery;
+  const searchTrimmed = searchQuery.trim();
+  searchActiveRef.current = searchTrimmed.length > 0;
+  /** Slightly dim the stream while composing so capture reads primary; list stays visible. */
+  const streamSecondary = text.trim().length > 0;
+
+  const runSearch = useCallback(async (q: string) => {
+    try {
+      const { entries: rows, truncated } = await searchEntriesForRecall(q, SEARCH_MAX_RESULTS);
+      setSearchResults(rows);
+      setSearchTruncated(truncated);
+    } catch (err) {
+      if (__DEV__) {
+        console.warn('searchEntriesForRecall failed', err);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (!trimmed) {
+      setSearchResults([]);
+      setSearchTruncated(false);
+      return;
+    }
+    const id = setTimeout(() => {
+      void runSearch(trimmed);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(id);
+  }, [searchQuery, runSearch]);
+
+  useEffect(() => {
+    const q = searchQueryRef.current.trim();
+    if (!q) {
+      return;
+    }
+    void runSearch(q);
+  }, [remoteIngestVersion, externalEntriesEpoch, runSearch]);
 
   const refreshEntries = useCallback(async () => {
     try {
-      const next = await getRecentEntries(RECENT_LIMIT);
-      setEntries(next);
+      const targetCount = Math.max(PAGE_SIZE, entriesRef.current.length);
+      const batch = await getRecentEntries(targetCount + 1);
+      setHasMore(batch.length > targetCount);
+      setEntries(batch.slice(0, targetCount));
     } catch (err) {
       if (__DEV__) {
-        console.warn('getRecentEntries failed', err);
+        console.warn('refreshEntries failed', err);
       }
     }
   }, []);
@@ -99,6 +156,7 @@ export function CaptureScreen({
   const handleEntryDelete = useCallback((entry: Entry) => {
     setReadEntry((current) => (current?.id === entry.id ? null : current));
     setEntries((prev) => prev.filter((e) => e.id !== entry.id));
+    setSearchResults((prev) => prev.filter((e) => e.id !== entry.id));
     void deleteEntry(entry.id)
       .then(() => {
         void flushSyncTombstoneOutbox();
@@ -110,12 +168,6 @@ export function CaptureScreen({
         void refreshEntries();
       });
   }, [refreshEntries]);
-
-  useEffect(() => {
-    if (!isInputEmpty) {
-      setRevealByScroll(false);
-    }
-  }, [isInputEmpty]);
 
   useEffect(() => {
     if (!isFirebaseSyncConfigured() || Platform.OS !== 'ios') {
@@ -158,9 +210,44 @@ export function CaptureScreen({
   }, []);
 
   const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (e.nativeEvent.contentOffset.y > SCROLL_REVEAL_OFFSET) {
-      setRevealByScroll(true);
+    const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;
+
+    if (searchActiveRef.current) {
+      return;
     }
+    if (!hasMoreRef.current || loadingMoreRef.current) {
+      return;
+    }
+    if (layoutMeasurement.height + contentOffset.y < contentSize.height - SCROLL_END_THRESHOLD_PX) {
+      return;
+    }
+
+    const list = entriesRef.current;
+    if (list.length === 0) {
+      return;
+    }
+
+    loadingMoreRef.current = true;
+    const last = list[list.length - 1];
+    void (async () => {
+      try {
+        const batch = await getEntriesOlderThan(last, PAGE_SIZE + 1);
+        const more = batch.length > PAGE_SIZE;
+        const page = batch.slice(0, PAGE_SIZE);
+        setEntries((prev) => {
+          const ids = new Set(prev.map((x) => x.id));
+          const merged = page.filter((row) => !ids.has(row.id));
+          return [...prev, ...merged];
+        });
+        setHasMore(more);
+      } catch (err) {
+        if (__DEV__) {
+          console.warn('getEntriesOlderThan failed', err);
+        }
+      } finally {
+        loadingMoreRef.current = false;
+      }
+    })();
   }, []);
 
   const handleSubmit = useCallback(() => {
@@ -170,19 +257,23 @@ export function CaptureScreen({
     }
 
     void saveEntry(trimmed)
-      .then(() => {
+      .then((entry) => {
         setText('');
         requestAnimationFrame(() => {
           inputRef.current?.focus();
         });
-        void refreshEntries();
+        setEntries((prev) => [entry, ...prev.filter((e) => e.id !== entry.id)]);
+        const sq = searchQueryRef.current.trim();
+        if (sq) {
+          void runSearch(sq);
+        }
       })
       .catch((err) => {
         if (__DEV__) {
           console.warn('saveEntry failed', err);
         }
       });
-  }, [text, refreshEntries]);
+  }, [text, runSearch]);
 
   /** Compact 1–2 lines; sits close to the stream below. */
   const composerMinHeight = 48;
@@ -244,7 +335,6 @@ export function CaptureScreen({
                 minHeight: windowHeight,
                 paddingHorizontal: gutter,
               },
-              needsScrollSpacer && { minHeight: windowHeight + 160 },
             ]}
           >
             <View>
@@ -257,12 +347,49 @@ export function CaptureScreen({
                 maxHeight={composerMaxHeight}
               />
             </View>
-            <RecentList
-              entries={entries}
-              visible={showRecent}
-              onEntryPress={setReadEntry}
-              onEntryDelete={handleEntryDelete}
-            />
+            <View style={{ marginTop: t.spacing.sm }}>
+              <TextInput
+                testID="stream-search-input"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Search thoughts…"
+                placeholderTextColor={t.colors.muted}
+                accessibilityLabel="Search thoughts"
+                style={{
+                  fontFamily: fonts.regular,
+                  fontSize: 16,
+                  lineHeight: 22,
+                  color: t.colors.fgDim,
+                  paddingVertical: 10,
+                  paddingHorizontal: 0,
+                  borderBottomWidth: StyleSheet.hairlineWidth,
+                  borderBottomColor: t.colors.border,
+                }}
+                keyboardAppearance={t.isDark ? 'dark' : 'light'}
+                returnKeyType="search"
+                {...(Platform.OS === 'ios' ? { clearButtonMode: 'while-editing' as const } : {})}
+              />
+            </View>
+            <View style={{ opacity: streamSecondary ? 0.64 : 1 }}>
+              <RecentList
+                entries={searchTrimmed.length > 0 ? searchResults : entries}
+                visible
+                emptyHint={
+                  searchTrimmed.length > 0
+                    ? 'Nothing matches that search.'
+                    : entries.length === 0
+                      ? 'Nothing here yet.'
+                      : undefined
+                }
+                listFooterHint={
+                  searchTrimmed.length > 0 && searchTruncated
+                    ? `Showing first ${SEARCH_MAX_RESULTS} matches`
+                    : undefined
+                }
+                onEntryPress={setReadEntry}
+                onEntryDelete={handleEntryDelete}
+              />
+            </View>
             <View style={[styles.bottomFill, { flexGrow: 1, minHeight: 1 }]} />
           </ScrollView>
         </KeyboardAvoidingView>
