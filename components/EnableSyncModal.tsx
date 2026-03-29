@@ -13,6 +13,9 @@ import {
 import { AppleSyncIdentityError } from '../auth/appleFirebaseAuth';
 import { AppleUserCanceledError, enableAppleSyncWithFirebase } from '../auth/enableAppleSync';
 import { getOrInitAuth } from '../sync/firebaseAuth';
+import { resolvePushEntryForSync } from '../sync/pushEntryForSync';
+import { processSyncQueue } from '../sync/syncEngine';
+import { flushSyncTombstoneOutbox } from '../sync/tombstoneFlush';
 import { fonts, radius, spacing } from '../theme';
 
 export type SyncModalAuthPhase = 'restoring' | 'signed_in' | 'signed_out';
@@ -57,6 +60,8 @@ export function EnableSyncModal({
     setBusy(true);
     try {
       await enableAppleSyncWithFirebase();
+      await processSyncQueue(resolvePushEntryForSync());
+      await flushSyncTombstoneOutbox();
       onEnabled();
       onClose();
     } catch (err: unknown) {
