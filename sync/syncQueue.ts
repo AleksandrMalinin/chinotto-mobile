@@ -50,6 +50,17 @@ export async function getPendingSyncItems(limit: number): Promise<SyncItem[]> {
   });
 }
 
+/** Pending create-sync rows (upload not yet marked synced). */
+export async function getPendingSyncCount(): Promise<number> {
+  return runSerializedDb(async () => {
+    const db = await getDatabase();
+    const row = await db.getFirstAsync<{ c: number }>(
+      `SELECT COUNT(*) AS c FROM sync_queue WHERE status = 'pending'`
+    );
+    return row?.c ?? 0;
+  });
+}
+
 export async function markSynced(queueItemId: string): Promise<void> {
   await runSerializedDb(async () => {
     const db = await getDatabase();

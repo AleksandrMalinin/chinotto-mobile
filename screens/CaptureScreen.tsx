@@ -33,6 +33,7 @@ import {
 } from '../storage/entryRepository';
 import { isFirebaseSyncConfigured } from '../sync/firebaseConfig';
 import { getOrInitAuth } from '../sync/firebaseAuth';
+import { getPendingSyncCount } from '../sync/syncQueue';
 import { flushSyncTombstoneOutbox } from '../sync/tombstoneFlush';
 import { fonts, screenContentGutter, useAppTheme } from '../theme';
 
@@ -42,6 +43,8 @@ const PAGE_SIZE = 20;
 const SCROLL_END_THRESHOLD_PX = 160;
 const SEARCH_DEBOUNCE_MS = 250;
 const SEARCH_MAX_RESULTS = 300;
+/** How often to refresh upload-queue state for the sync header while signed in. */
+const SYNC_UPLOAD_POLL_MS = 2500;
 /** Firebase session restore vs signed-out; avoids showing Enable sync before persistence restores. */
 export type AuthRestorePhase = SyncHeaderAuthPhase;
 
@@ -79,6 +82,7 @@ export function CaptureScreen({
   const [authRestorePhase, setAuthRestorePhase] = useState<AuthRestorePhase>(() =>
     isFirebaseSyncConfigured() && Platform.OS === 'ios' ? 'restoring' : 'signed_out'
   );
+  const [uploadPending, setUploadPending] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const entriesRef = useRef<Entry[]>([]);
   const hasMoreRef = useRef(true);
@@ -157,23 +161,6 @@ export function CaptureScreen({
     return () => cancelAnimationFrame(id);
   }, [captureFocusNonce]);
 
-  /** Optimistic UI: row disappears immediately; SQLite + tombstone outbox stay non-blocking. */
-  const handleEntryDelete = useCallback((entry: Entry) => {
-    setReadEntry((current) => (current?.id === entry.id ? null : current));
-    setEntries((prev) => prev.filter((e) => e.id !== entry.id));
-    setSearchResults((prev) => prev.filter((e) => e.id !== entry.id));
-    void deleteEntry(entry.id)
-      .then(() => {
-        void flushSyncTombstoneOutbox();
-      })
-      .catch((err) => {
-        if (__DEV__) {
-          console.warn('deleteEntry failed', err);
-        }
-        void refreshEntries();
-      });
-  }, [refreshEntries]);
-
   useEffect(() => {
     if (!isFirebaseSyncConfigured() || Platform.OS !== 'ios') {
       return;
@@ -213,6 +200,63 @@ export function CaptureScreen({
       setAuthRestorePhase(nextPhase);
     });
   }, []);
+
+  const refreshUploadPending = useCallback(async () => {
+    if (!isFirebaseSyncConfigured() || Platform.OS !== 'ios' || authRestorePhase !== 'signed_in') {
+      return;
+    }
+    try {
+      const n = await getPendingSyncCount();
+      setUploadPending(n > 0);
+    } catch {
+      /* ignore */
+    }
+  }, [authRestorePhase]);
+
+  useEffect(() => {
+    if (!isFirebaseSyncConfigured() || Platform.OS !== 'ios') {
+      return;
+    }
+    if (authRestorePhase !== 'signed_in') {
+      setUploadPending(false);
+      return;
+    }
+    let cancelled = false;
+    const tick = () => {
+      void getPendingSyncCount()
+        .then((n) => {
+          if (!cancelled) {
+            setUploadPending(n > 0);
+          }
+        })
+        .catch(() => {});
+    };
+    tick();
+    const id = setInterval(tick, SYNC_UPLOAD_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+      setUploadPending(false);
+    };
+  }, [authRestorePhase]);
+
+  /** Optimistic UI: row disappears immediately; SQLite + tombstone outbox stay non-blocking. */
+  const handleEntryDelete = useCallback((entry: Entry) => {
+    setReadEntry((current) => (current?.id === entry.id ? null : current));
+    setEntries((prev) => prev.filter((e) => e.id !== entry.id));
+    setSearchResults((prev) => prev.filter((e) => e.id !== entry.id));
+    void deleteEntry(entry.id)
+      .then(() => {
+        void flushSyncTombstoneOutbox();
+        void refreshUploadPending();
+      })
+      .catch((err) => {
+        if (__DEV__) {
+          console.warn('deleteEntry failed', err);
+        }
+        void refreshEntries();
+      });
+  }, [refreshEntries, refreshUploadPending]);
 
   const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;
@@ -273,13 +317,14 @@ export function CaptureScreen({
         if (sq) {
           void runSearch(sq);
         }
+        void refreshUploadPending();
       })
       .catch((err) => {
         if (__DEV__) {
           console.warn('saveEntry failed', err);
         }
       });
-  }, [text, runSearch, onScheduleStreamHighlight]);
+  }, [text, runSearch, onScheduleStreamHighlight, refreshUploadPending]);
 
   /** Slightly taller composer so capture reads as the primary surface. */
   const composerMinHeight = 56;
@@ -322,6 +367,7 @@ export function CaptureScreen({
               {isFirebaseSyncConfigured() && Platform.OS === 'ios' ? (
                 <SyncHeaderStatus
                   phase={authRestorePhase}
+                  uploadPending={authRestorePhase === 'signed_in' && uploadPending}
                   onPress={() => setSyncModalVisible(true)}
                   style={styles.syncAfterLogo}
                 />
@@ -411,7 +457,12 @@ export function CaptureScreen({
       <EnableSyncModal
         visible={syncModalVisible}
         onClose={() => setSyncModalVisible(false)}
-        onEnabled={() => setAuthRestorePhase('signed_in')}
+        onEnabled={() => {
+          setAuthRestorePhase('signed_in');
+          void getPendingSyncCount()
+            .then((n) => setUploadPending(n > 0))
+            .catch(() => {});
+        }}
         authPhase={authRestorePhase}
         fg={t.colors.fg}
         fgDim={t.colors.fgDim}

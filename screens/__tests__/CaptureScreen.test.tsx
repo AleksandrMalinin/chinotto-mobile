@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as entryRepository from '../../storage/entryRepository';
 import * as firebaseAuthModule from '../../sync/firebaseAuth';
 import * as firebaseConfig from '../../sync/firebaseConfig';
+import * as syncQueueModule from '../../sync/syncQueue';
 
 const mockOnAuthStateChanged = jest.fn();
 
@@ -22,6 +23,18 @@ jest.mock('../../sync/firebaseConfig', () => ({
 
 jest.mock('../../sync/tombstoneFlush', () => ({
   flushSyncTombstoneOutbox: jest.fn(() => Promise.resolve()),
+}));
+
+jest.mock('../../sync/syncQueue', () => ({
+  getPendingSyncCount: jest.fn(() => Promise.resolve(0)),
+}));
+
+jest.mock('../../sync/pushEntryForSync', () => ({
+  resolvePushEntryForSync: jest.fn(() => jest.fn()),
+}));
+
+jest.mock('../../sync/syncEngine', () => ({
+  processSyncQueue: jest.fn(() => Promise.resolve()),
 }));
 
 jest.mock('expo-clipboard', () => ({
@@ -188,6 +201,7 @@ describe('CaptureScreen sync auth restore', () => {
     jest.spyOn(console, 'log').mockImplementation(() => {});
     jest.mocked(firebaseConfig.isFirebaseSyncConfigured).mockReturnValue(true);
     jest.mocked(firebaseAuthModule.getOrInitAuth).mockReturnValue({ currentUser: null } as never);
+    jest.mocked(syncQueueModule.getPendingSyncCount).mockResolvedValue(0);
     mockOnAuthStateChanged.mockReset();
     mockOnAuthStateChanged.mockImplementation(() => jest.fn());
   });
@@ -236,6 +250,36 @@ describe('CaptureScreen sync auth restore', () => {
 
     expect(getByTestId('sync-header-cta')).toBeTruthy();
     expect(getByText('Synced')).toBeTruthy();
+  });
+
+  it('shows Syncing… when signed in and upload queue has pending rows', async () => {
+    jest.mocked(syncQueueModule.getPendingSyncCount).mockResolvedValue(2);
+    let listener: ((user: unknown) => void) | undefined;
+    mockOnAuthStateChanged.mockImplementation((_auth, cb) => {
+      listener = cb;
+      return jest.fn();
+    });
+
+    const { getByTestId, findByTestId, getByText } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <CaptureScreen />
+      </SafeAreaProvider>
+    );
+
+    await findByTestId('capture-input');
+
+    await act(async () => {
+      listener?.({
+        uid: 'firebase-uid-1',
+        isAnonymous: false,
+        providerData: [{ providerId: 'apple.com' }],
+      });
+    });
+
+    await waitFor(() => {
+      expect(getByText('Syncing…')).toBeTruthy();
+    });
+    expect(getByTestId('sync-header-cta')).toBeTruthy();
   });
 
   it('shows Enable sync in header after restore when user is anonymous only', async () => {

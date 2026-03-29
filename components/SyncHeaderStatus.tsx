@@ -17,6 +17,8 @@ export type SyncHeaderAuthPhase = 'restoring' | 'signed_in' | 'signed_out';
 
 export type SyncHeaderStatusProps = {
   phase: SyncHeaderAuthPhase;
+  /** When signed in: true if upload queue still has pending rows. */
+  uploadPending?: boolean;
   onPress: () => void;
   style?: StyleProp<ViewStyle>;
 };
@@ -41,12 +43,14 @@ function syncDotShadowStyle(): ViewStyle {
   };
 }
 
-export function SyncHeaderStatus({ phase, onPress, style }: SyncHeaderStatusProps) {
+export function SyncHeaderStatus({ phase, uploadPending = false, onPress, style }: SyncHeaderStatusProps) {
   const t = useAppTheme();
   const pulse = useRef(new Animated.Value(0.45)).current;
 
+  const pulseForActivity = phase === 'restoring' || (phase === 'signed_in' && uploadPending);
+
   useEffect(() => {
-    if (phase !== 'restoring') {
+    if (!pulseForActivity) {
       pulse.stopAnimation();
       pulse.setValue(1);
       return;
@@ -69,10 +73,16 @@ export function SyncHeaderStatus({ phase, onPress, style }: SyncHeaderStatusProp
     );
     loop.start();
     return () => loop.stop();
-  }, [phase, pulse]);
+  }, [pulseForActivity, pulse]);
 
   const label =
-    phase === 'restoring' ? 'Checking sync' : phase === 'signed_in' ? 'Synced' : 'Enable sync';
+    phase === 'restoring'
+      ? 'Checking sync'
+      : phase === 'signed_in'
+        ? uploadPending
+          ? 'Syncing…'
+          : 'Synced'
+        : 'Enable sync';
 
   /** Intentionally quiet — sync is optional; never compete with capture. */
   const textColor =
@@ -86,7 +96,9 @@ export function SyncHeaderStatus({ phase, onPress, style }: SyncHeaderStatusProp
 
   const accessibilityLabel =
     phase === 'signed_in'
-      ? 'Synced'
+      ? uploadPending
+        ? 'Syncing to cloud'
+        : 'Synced'
       : phase === 'restoring'
         ? 'Checking sync'
         : 'Enable sync with Apple';
@@ -102,7 +114,7 @@ export function SyncHeaderStatus({ phase, onPress, style }: SyncHeaderStatusProp
     >
       <View style={styles.row}>
         {showDot ? (
-          phase === 'restoring' ? (
+          pulseForActivity ? (
             <Animated.View
               testID="sync-header-dot"
               importantForAccessibility="no"

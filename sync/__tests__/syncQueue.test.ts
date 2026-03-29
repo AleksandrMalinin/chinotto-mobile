@@ -3,6 +3,7 @@ import { randomUUID } from 'expo-crypto';
 import { getDatabase } from '../../storage/db';
 import {
   enqueueForSync,
+  getPendingSyncCount,
   getPendingSyncItems,
   insertPendingSyncItem,
   markSynced,
@@ -23,6 +24,7 @@ const mockRandomUUID = jest.mocked(randomUUID);
 describe('syncQueue', () => {
   const runAsync = jest.fn();
   const getAllAsync = jest.fn();
+  const getFirstAsync = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -30,6 +32,7 @@ describe('syncQueue', () => {
     mockGetDatabase.mockResolvedValue({
       runAsync,
       getAllAsync,
+      getFirstAsync,
     } as never);
     runAsync.mockResolvedValue({ changes: 1, lastInsertRowId: 0 });
   });
@@ -70,6 +73,27 @@ describe('syncQueue', () => {
         JSON.stringify(entry),
         'pending'
       );
+    });
+  });
+
+  describe('getPendingSyncCount', () => {
+    it('returns count of pending rows', async () => {
+      getFirstAsync.mockResolvedValueOnce({ c: 4 });
+
+      const n = await getPendingSyncCount();
+
+      expect(n).toBe(4);
+      expect(getFirstAsync).toHaveBeenCalledWith(
+        expect.stringContaining("COUNT(*) AS c FROM sync_queue WHERE status = 'pending'")
+      );
+    });
+
+    it('returns 0 when no row', async () => {
+      getFirstAsync.mockResolvedValueOnce(null);
+
+      const n = await getPendingSyncCount();
+
+      expect(n).toBe(0);
     });
   });
 
