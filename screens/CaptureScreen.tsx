@@ -45,6 +45,10 @@ const SEARCH_DEBOUNCE_MS = 250;
 const SEARCH_MAX_RESULTS = 300;
 /** How often to refresh upload-queue state for the sync header while signed in. */
 const SYNC_UPLOAD_POLL_MS = 2500;
+/** Pending rows at or above this count can contribute to a “stuck” header after consecutive polls. */
+const SYNC_STUCK_PENDING_MIN = 5;
+/** Consecutive polls (see interval) with high pending count before showing Sync paused. */
+const SYNC_STUCK_CONSECUTIVE_POLLS = 3;
 /** Firebase session restore vs signed-out; avoids showing Enable sync before persistence restores. */
 export type AuthRestorePhase = SyncHeaderAuthPhase;
 
@@ -83,6 +87,8 @@ export function CaptureScreen({
     isFirebaseSyncConfigured() && Platform.OS === 'ios' ? 'restoring' : 'signed_out'
   );
   const [uploadPending, setUploadPending] = useState(false);
+  const [uploadStuck, setUploadStuck] = useState(false);
+  const stuckPollsRef = useRef(0);
   const inputRef = useRef<TextInput>(null);
   const entriesRef = useRef<Entry[]>([]);
   const hasMoreRef = useRef(true);
@@ -219,24 +225,40 @@ export function CaptureScreen({
     }
     if (authRestorePhase !== 'signed_in') {
       setUploadPending(false);
+      setUploadStuck(false);
+      stuckPollsRef.current = 0;
       return;
     }
     let cancelled = false;
     const tick = () => {
       void getPendingSyncCount()
         .then((n) => {
-          if (!cancelled) {
-            setUploadPending(n > 0);
+          if (cancelled) {
+            return;
+          }
+          setUploadPending(n > 0);
+          if (n >= SYNC_STUCK_PENDING_MIN) {
+            stuckPollsRef.current += 1;
+            if (stuckPollsRef.current >= SYNC_STUCK_CONSECUTIVE_POLLS) {
+              setUploadStuck(true);
+            }
+          } else {
+            stuckPollsRef.current = 0;
+            setUploadStuck(false);
           }
         })
         .catch(() => {});
     };
+    stuckPollsRef.current = 0;
+    setUploadStuck(false);
     tick();
     const id = setInterval(tick, SYNC_UPLOAD_POLL_MS);
     return () => {
       cancelled = true;
       clearInterval(id);
       setUploadPending(false);
+      setUploadStuck(false);
+      stuckPollsRef.current = 0;
     };
   }, [authRestorePhase]);
 
@@ -368,6 +390,7 @@ export function CaptureScreen({
                 <SyncHeaderStatus
                   phase={authRestorePhase}
                   uploadPending={authRestorePhase === 'signed_in' && uploadPending}
+                  uploadStuck={authRestorePhase === 'signed_in' && uploadStuck}
                   onPress={() => setSyncModalVisible(true)}
                   style={styles.syncAfterLogo}
                 />
@@ -464,6 +487,11 @@ export function CaptureScreen({
             .catch(() => {});
         }}
         authPhase={authRestorePhase}
+        syncHealthNote={
+          authRestorePhase === 'signed_in' && uploadStuck
+            ? 'Uploads are waiting—check your connection. Nothing is lost; thoughts stay on this device.'
+            : null
+        }
         fg={t.colors.fg}
         fgDim={t.colors.fgDim}
         muted={t.colors.muted}

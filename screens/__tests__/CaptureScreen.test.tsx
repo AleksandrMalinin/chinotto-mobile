@@ -282,6 +282,54 @@ describe('CaptureScreen sync auth restore', () => {
     expect(getByTestId('sync-header-cta')).toBeTruthy();
   });
 
+  it('shows Sync paused after repeated polls with a large pending queue', async () => {
+    jest.useFakeTimers();
+    try {
+      jest.mocked(syncQueueModule.getPendingSyncCount).mockResolvedValue(6);
+      let listener: ((user: unknown) => void) | undefined;
+      mockOnAuthStateChanged.mockImplementation((_auth, cb) => {
+        listener = cb;
+        return jest.fn();
+      });
+
+      const { findByTestId, getByText } = render(
+        <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+          <CaptureScreen />
+        </SafeAreaProvider>
+      );
+
+      await findByTestId('capture-input');
+
+      await act(async () => {
+        listener?.({
+          uid: 'firebase-uid-1',
+          isAnonymous: false,
+          providerData: [{ providerId: 'apple.com' }],
+        });
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      await act(async () => {
+        jest.advanceTimersByTime(2500);
+        await Promise.resolve();
+      });
+
+      await act(async () => {
+        jest.advanceTimersByTime(2500);
+        await Promise.resolve();
+      });
+
+      await waitFor(() => {
+        expect(getByText('Sync paused')).toBeTruthy();
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('shows Enable sync in header after restore when user is anonymous only', async () => {
     let listener: ((user: unknown) => void) | undefined;
     mockOnAuthStateChanged.mockImplementation((_auth, cb) => {
