@@ -12,6 +12,7 @@ import { STREAM_HIGHLIGHT_CLEAR_AFTER_MS } from './components/RecentList';
 import { CaptureScreen } from './screens/CaptureScreen';
 import { WelcomeOnboardingScreen } from './screens/WelcomeOnboardingScreen';
 import { loadSubscriptionState } from './monetization/subscriptionState';
+import { bootstrapRevenueCat } from './src/services/purchases/initRevenueCat';
 import { composeIncomingShareCaptureText } from './share/extractShareEntryTexts';
 import { startMobileFirestoreIngest } from './sync/firestoreIngest';
 import { resolvePushEntryForSync } from './sync/pushEntryForSync';
@@ -158,7 +159,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    void loadSubscriptionState().finally(() => setSubscriptionLoaded(true));
+    void (async () => {
+      await bootstrapRevenueCat();
+      await loadSubscriptionState();
+      setSubscriptionLoaded(true);
+    })();
   }, []);
 
   useExperimentalIosHomeWidgetRegistration(dbReady);
