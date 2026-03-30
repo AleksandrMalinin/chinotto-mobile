@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore';
 
 import type { Entry } from '../types/entry';
-import { isSyncBlockedByPaywall } from '../monetization/syncEntitlement';
+import { isSyncAccessBlocked } from '../monetization/syncAccessPolicy';
 import {
   applyRemoteTombstoneDeletes,
   ingestRemoteFirestoreRows,
@@ -169,7 +169,7 @@ export function startMobileFirestoreIngest(onIngested: () => void): () => void {
   if (!isFirebaseSyncConfigured()) {
     return () => {};
   }
-  if (isSyncBlockedByPaywall()) {
+  if (isSyncAccessBlocked()) {
     return () => {};
   }
 

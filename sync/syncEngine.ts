@@ -1,5 +1,5 @@
 import type { Entry } from '../types/entry';
-import { isSyncBlockedByPaywall } from '../monetization/syncEntitlement';
+import { isSyncAccessBlocked } from '../monetization/syncAccessPolicy';
 import { getPendingSyncItems, markSynced } from './syncQueue';
 import { flushSyncTombstoneOutbox } from './tombstoneFlush';
 
@@ -15,10 +15,10 @@ let processLock = false;
 /**
  * Drains pending queue items best-effort. Failed items stay pending for a later run (retry).
  *
- * Idempotency: remote ingest must dedupe by `Entry.id` (see docs/sync.md); retries may resend the same payload safely.
+ * Idempotency: remote ingest must dedupe by `Entry.id` (see docs/sync/sync.md); retries may resend the same payload safely.
  */
 export async function processSyncQueue(pushEntry: PushEntryFn = mockPushEntryToRemote): Promise<void> {
-  if (isSyncBlockedByPaywall()) {
+  if (isSyncAccessBlocked()) {
     return;
   }
   if (processLock) {

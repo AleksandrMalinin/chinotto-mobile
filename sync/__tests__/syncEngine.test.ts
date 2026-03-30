@@ -1,10 +1,10 @@
 import type { Entry } from '../../types/entry';
-import { isSyncBlockedByPaywall } from '../../monetization/syncEntitlement';
+import { isSyncAccessBlocked } from '../../monetization/syncAccessPolicy';
 import { getPendingSyncItems, markSynced } from '../syncQueue';
 import { processSyncQueue, startBackgroundSync } from '../syncEngine';
 
-jest.mock('../../monetization/syncEntitlement', () => ({
-  isSyncBlockedByPaywall: jest.fn(() => false),
+jest.mock('../../monetization/syncAccessPolicy', () => ({
+  isSyncAccessBlocked: jest.fn(() => false),
 }));
 
 jest.mock('../tombstoneFlush', () => ({
@@ -18,7 +18,7 @@ jest.mock('../syncQueue', () => ({
 
 const mockGetPending = jest.mocked(getPendingSyncItems);
 const mockMarkSynced = jest.mocked(markSynced);
-const mockSyncBlocked = jest.mocked(isSyncBlockedByPaywall);
+const mockSyncBlocked = jest.mocked(isSyncAccessBlocked);
 
 describe('syncEngine', () => {
   beforeEach(() => {

@@ -1,4 +1,4 @@
-import { isSyncBlockedByPaywall } from '../monetization/syncEntitlement';
+import { isSyncAccessBlocked } from '../monetization/syncAccessPolicy';
 import { getOrInitAuth } from './firebaseAuth';
 import { firebaseApplyTombstoneEntry } from './firebaseSync';
 import { isFirebaseSyncConfigured } from './firebaseConfig';
@@ -9,7 +9,7 @@ import { listSyncTombstoneOutbox, removeSyncTombstoneOutbox } from './tombstoneO
  * Flush durable tombstone outbox to Firestore (Phase 2). Best-effort; failures leave rows pending.
  */
 export async function flushSyncTombstoneOutbox(): Promise<void> {
-  if (isSyncBlockedByPaywall()) {
+  if (isSyncAccessBlocked()) {
     return;
   }
   if (!isFirebaseSyncConfigured()) {
