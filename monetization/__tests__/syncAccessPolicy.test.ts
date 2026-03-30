@@ -7,7 +7,7 @@ import {
   resetSubscriptionStateForTests,
   stubCompleteChinottoPlusPurchase,
 } from '../subscriptionState';
-import { isPremiumUser, isSyncBlockedByPaywall } from '../syncEntitlement';
+import { hasSyncAccess, isSyncAccessBlocked } from '../syncAccessPolicy';
 
 jest.mock('../paywallConfig', () => ({
   isPaywallEnabled: jest.fn(() => false),
@@ -15,7 +15,7 @@ jest.mock('../paywallConfig', () => ({
 
 const mockPaywall = jest.mocked(isPaywallEnabled);
 
-describe('syncEntitlement', () => {
+describe('syncAccessPolicy', () => {
   beforeEach(async () => {
     mockPaywall.mockReturnValue(false);
     resetSubscriptionStateForTests();
@@ -26,30 +26,30 @@ describe('syncEntitlement', () => {
     await loadSubscriptionState();
   });
 
-  it('treats everyone as premium when paywall feature is off', () => {
-    expect(isPremiumUser()).toBe(true);
-    expect(isSyncBlockedByPaywall()).toBe(false);
+  it('treats everyone as having sync access when paywall is off', () => {
+    expect(hasSyncAccess()).toBe(true);
+    expect(isSyncAccessBlocked()).toBe(false);
   });
 
-  it('blocks sync when paywall is on and user is not subscribed after hydration', async () => {
+  it('blocks sync when paywall is on and user is not entitled after hydration', async () => {
     mockPaywall.mockReturnValue(true);
     await loadSubscriptionState();
-    expect(isPremiumUser()).toBe(false);
-    expect(isSyncBlockedByPaywall()).toBe(true);
+    expect(hasSyncAccess()).toBe(false);
+    expect(isSyncAccessBlocked()).toBe(true);
   });
 
   it('allows sync when paywall is on and user is subscribed', async () => {
     mockPaywall.mockReturnValue(true);
     await persistSubscribed(true);
-    expect(isPremiumUser()).toBe(true);
-    expect(isSyncBlockedByPaywall()).toBe(false);
+    expect(hasSyncAccess()).toBe(true);
+    expect(isSyncAccessBlocked()).toBe(false);
   });
 
   it('allows sync when paywall is on and user has active trial (stub)', async () => {
     mockPaywall.mockReturnValue(true);
     resetSubscriptionStateForTests();
     await stubCompleteChinottoPlusPurchase();
-    expect(isPremiumUser()).toBe(true);
-    expect(isSyncBlockedByPaywall()).toBe(false);
+    expect(hasSyncAccess()).toBe(true);
+    expect(isSyncAccessBlocked()).toBe(false);
   });
 });
