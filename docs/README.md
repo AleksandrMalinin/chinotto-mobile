@@ -10,6 +10,7 @@ Use this index to find the right doc quickly.
 
 ## Sync
 
+- `docs/sync/desktop-handoff-monetization-deeplinks.md` - desktop: monetization alignment + `/sync` QR contract
 - `docs/sync/sync.md` - wire contract and sync architecture
 - `docs/sync/sync-apple-qa.md` - Apple/Firebase manual QA
 - `docs/sync/sync-release-checklist.md` - release verification checklist

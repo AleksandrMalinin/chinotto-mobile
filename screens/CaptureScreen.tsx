@@ -105,6 +105,11 @@ export type CaptureScreenProps = {
   subscriptionHydrated?: boolean;
   /** Stub or real Plus purchase completed — refresh Firestore ingest when paywall is on. */
   onSubscriptionUnlocked?: () => void;
+  /**
+   * Increment (from universal link / custom scheme) to open the same sync sheet as the header CTA,
+   * without recording a header “tap” for shimmer prefs.
+   */
+  syncEntryRequestNonce?: number;
 };
 
 export function CaptureScreen({
@@ -116,6 +121,7 @@ export function CaptureScreen({
   onScheduleStreamHighlight,
   subscriptionHydrated = true,
   onSubscriptionUnlocked,
+  syncEntryRequestNonce = 0,
 }: CaptureScreenProps = {}) {
   const [text, setText] = useState('');
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -137,6 +143,7 @@ export function CaptureScreen({
   /** __DEV__: incremented from dev menu to re-show “Sync enabled” / desktop link sheet. */
   const [devPostSyncPreviewNonce, setDevPostSyncPreviewNonce] = useState(0);
   const stuckPollsRef = useRef(0);
+  const lastSyncEntryNonceRef = useRef(0);
   const authPhaseRef = useRef(authRestorePhase);
   const enableSyncShimmerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<TextInput>(null);
@@ -445,6 +452,19 @@ export function CaptureScreen({
     setEnableSyncLabelShimmer(false);
     setSyncModalVisible(true);
   }, []);
+
+  useEffect(() => {
+    if (syncEntryRequestNonce <= lastSyncEntryNonceRef.current) {
+      return;
+    }
+    lastSyncEntryNonceRef.current = syncEntryRequestNonce;
+    if (enableSyncShimmerTimerRef.current) {
+      clearTimeout(enableSyncShimmerTimerRef.current);
+      enableSyncShimmerTimerRef.current = null;
+    }
+    setEnableSyncLabelShimmer(false);
+    setSyncModalVisible(true);
+  }, [syncEntryRequestNonce]);
 
   const onEnableSyncLabelShimmerComplete = useCallback(() => {
     setEnableSyncLabelShimmer(false);

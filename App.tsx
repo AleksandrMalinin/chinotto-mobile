@@ -17,9 +17,11 @@ import { composeIncomingShareCaptureText } from './share/extractShareEntryTexts'
 import { startMobileFirestoreIngest } from './sync/firestoreIngest';
 import { resolvePushEntryForSync } from './sync/pushEntryForSync';
 import { startBackgroundSync } from './sync/syncEngine';
+import { useSyncDeepLink } from './linking/useSyncDeepLink';
 import { initDatabase } from './storage/db';
 import { saveEntry } from './storage/entryRepository';
 import { clearWelcomeFlag, hasCompletedWelcome } from './storage/welcomeFlag';
+import { isFirebaseSyncConfigured } from './sync/firebaseConfig';
 import { useCaptureWidgetDeepLinkFocus } from './widgets/useCaptureWidgetDeepLinkFocus';
 import { useExperimentalIosHomeWidgetRegistration } from './widgets/useExperimentalIosHomeWidget';
 import { colorsDark } from './theme';
@@ -118,6 +120,7 @@ export default function App() {
   const [captureFocusNonce, setCaptureFocusNonce] = useState(0);
   const [streamHighlightEntryId, setStreamHighlightEntryId] = useState<string | null>(null);
   const streamHighlightClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [syncEntryRequestNonce, setSyncEntryRequestNonce] = useState(0);
   const {
     resolvedSharedPayloads,
     sharedPayloads,
@@ -173,6 +176,18 @@ export default function App() {
       setCaptureFocusNonce((n) => n + 1);
     }, [])
   );
+
+  const bumpSyncEntryFromDeepLink = useCallback(() => {
+    setSyncEntryRequestNonce((n) => n + 1);
+  }, []);
+
+  useSyncDeepLink({
+    enabled: Platform.OS === 'ios' && isFirebaseSyncConfigured(),
+    phase,
+    dbReady,
+    subscriptionLoaded,
+    onSyncDeepLink: bumpSyncEntryFromDeepLink,
+  });
 
   useEffect(() => {
     if (!dbReady || isResolving) {
@@ -320,6 +335,7 @@ export default function App() {
               remoteIngestVersion={remoteIngestVersion}
               externalEntriesEpoch={externalEntriesEpoch}
               captureFocusNonce={captureFocusNonce}
+              syncEntryRequestNonce={syncEntryRequestNonce}
               streamHighlightEntryId={streamHighlightEntryId}
               onScheduleStreamHighlight={scheduleStreamHighlight}
               subscriptionHydrated={subscriptionLoaded}
