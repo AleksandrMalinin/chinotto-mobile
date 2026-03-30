@@ -54,7 +54,7 @@ coverage/
 INTERNAL_MOBILE_DESKTOP_STATE.md
 
 # Shipped-behavior snapshot (local only; not published — may contain product positioning detail)
-/docs/PRODUCT_STATE.md
+/docs/product/PRODUCT_STATE.md
 
 # Environment (secrets; never commit — use `.env.example` as the template)
 .env
@@ -78,4 +78,4 @@ GoogleService-Info.plist
 # ---
 # What we commit: source, assets, app.json, pnpm-lock.yaml, docs (except PRODUCT_STATE), scripts.
 # What stays local: node_modules, .expo, ios/android prebuild output, env files, logs, coverage,
-# INTERNAL_*, docs/PRODUCT_STATE.md (optional local snapshot).
+# INTERNAL_*, docs/product/PRODUCT_STATE.md (optional local snapshot).

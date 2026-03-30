@@ -19,9 +19,9 @@ Mobile app role:
 - Input is the primary UI
 - Thinking happens on desktop
 
-**Platform priority (this repo):** **iOS first** — ship-quality UX and sync (Sign in with Apple) target iPhone; **Android parity is deferred**. **Windows and Linux** desktop apps are **planned later** (desktop lives outside this repo). Optional local snapshot: `docs/PRODUCT_STATE.md` (gitignored) if you maintain a shipped-behavior checklist.
+**Platform priority (this repo):** **iOS first** — ship-quality UX and sync (Sign in with Apple) target iPhone; **Android parity is deferred**. **Windows and Linux** desktop apps are **planned later** (desktop lives outside this repo). Optional local snapshot: `docs/product/PRODUCT_STATE.md` (gitignored) if you maintain a shipped-behavior checklist.
 
-**Sync documentation:** **Wire contract** — `docs/sync.md` (this repo). **Desktop** implementation and ops — Chinotto repo `docs/sync.md` (https://github.com/AleksandrMalinin/chinotto/blob/main/docs/sync.md). **Ship alignment** — `docs/sync-release-checklist.md`, mirrored in `chinotto-app` (update both when criteria change). Log mobile implementation tweaks in `docs/sync.md` § Changelog.
+**Sync documentation:** **Wire contract** — `docs/sync/sync.md` (this repo). **Desktop** implementation and ops — Chinotto repo `docs/sync.md` (https://github.com/AleksandrMalinin/chinotto/blob/main/docs/sync.md). **Ship alignment** — `docs/sync/sync-release-checklist.md`, mirrored in `chinotto-app` (update both when criteria change). Log mobile implementation tweaks in `docs/sync/sync.md` § Changelog.
 
 Golden rule:
 > If a feature slows down capturing a thought → do not implement it.

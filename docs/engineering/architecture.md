@@ -125,7 +125,7 @@ type Entry = {
 
 - `enqueueForSync(entry: Entry)`
 - `processSyncQueue()`
-- Optional **Firebase (Firestore)** push when `EXPO_PUBLIC_FIREBASE_*` is set — see [`docs/sync.md`](./sync.md)
+- Optional **Firebase (Firestore)** push when `EXPO_PUBLIC_FIREBASE_*` is set — see [`docs/sync/sync.md`](../sync/sync.md)
 
 ### Behavior
 
@@ -166,7 +166,7 @@ type SyncItem = {
 
 ## Networking
 
-**v1 (optional):** Firestore `setDoc` from the sync queue ([`docs/sync.md`](./sync.md)). Capture stays local-first; network is background-only.
+**v1 (optional):** Firestore `setDoc` from the sync queue ([`docs/sync/sync.md`](../sync/sync.md)). Capture stays local-first; network is background-only.
 
 **Future:** pull, other transports — eventually consistent model, retry logic (SQLite queue already retries push).
 

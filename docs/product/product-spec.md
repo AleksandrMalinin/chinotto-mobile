@@ -44,7 +44,7 @@ Chinotto is a single system with two surfaces:
 - Sync with desktop (eventually consistent)
 - Single-user
 - No collaboration
-- **Auth:** optional **Sign in with Apple** + Firebase for cloud sync only — not required for capture (see [`../AGENTS.md`](../AGENTS.md) / [`docs/sync.md`](./sync.md)).
+- **Auth:** optional **Sign in with Apple** + Firebase for cloud sync only — not required for capture (see [`../../AGENTS.md`](../../AGENTS.md) / [`docs/sync/sync.md`](../sync/sync.md)).
 - No cloud dependency required for **core** capture UX (sync is optional).
 
 ---
