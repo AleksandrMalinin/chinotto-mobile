@@ -29,6 +29,7 @@ import { EntryReadSheet } from '../components/EntryReadSheet';
 import { RecentList } from '../components/RecentList';
 import { SyncHeaderStatus, type SyncHeaderAuthPhase } from '../components/SyncHeaderStatus';
 import type { Entry } from '../types/entry';
+import { resetPaywallForPurchaseTesting } from '../dev/resetPaywallForPurchaseTesting';
 import { showDevMenu } from '../dev/showDevMenu';
 import {
   deleteEntry,
@@ -37,6 +38,16 @@ import {
   saveEntry,
   searchEntriesForRecall,
 } from '../storage/entryRepository';
+import { clearLocalSyncPaywallFlags } from '../monetization/subscriptionState';
+import { devRevenueCatLogOutAndRefreshEntitlementCache } from '../src/services/purchases/revenueCat';
+import {
+  hasEnableSyncShimmerCompleted,
+  hasFirstSavedThought,
+  hasSyncHeaderCtaBeenTapped,
+  markEnableSyncShimmerCompleted,
+  recordFirstSavedThought,
+  recordSyncHeaderCtaTapped,
+} from '../storage/syncHeaderShimmerPrefs';
 import { isFirebaseSyncConfigured } from '../sync/firebaseConfig';
 import { getOrInitAuth } from '../sync/firebaseAuth';
 import { getPendingSyncCount } from '../sync/syncQueue';
@@ -122,7 +133,12 @@ export function CaptureScreen({
   );
   const [uploadPending, setUploadPending] = useState(false);
   const [uploadStuck, setUploadStuck] = useState(false);
+  const [enableSyncLabelShimmer, setEnableSyncLabelShimmer] = useState(false);
+  /** __DEV__: incremented from dev menu to re-show “Sync enabled” / desktop link sheet. */
+  const [devPostSyncPreviewNonce, setDevPostSyncPreviewNonce] = useState(0);
   const stuckPollsRef = useRef(0);
+  const authPhaseRef = useRef(authRestorePhase);
+  const enableSyncShimmerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<TextInput>(null);
   const searchInputRef = useRef<TextInput>(null);
   const searchBlurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -134,6 +150,8 @@ export function CaptureScreen({
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const t = useAppTheme();
   const gutter = screenContentGutter(windowWidth);
+
+  authPhaseRef.current = authRestorePhase;
 
   entriesRef.current = entries;
   hasMoreRef.current = hasMore;
@@ -246,6 +264,16 @@ export function CaptureScreen({
     });
     return () => cancelAnimationFrame(id);
   }, [captureFocusNonce]);
+
+  useEffect(
+    () => () => {
+      if (enableSyncShimmerTimerRef.current) {
+        clearTimeout(enableSyncShimmerTimerRef.current);
+        enableSyncShimmerTimerRef.current = null;
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     if (!isFirebaseSyncConfigured() || Platform.OS !== 'ios') {
@@ -360,6 +388,69 @@ export function CaptureScreen({
       });
   }, [refreshEntries, refreshUploadPending]);
 
+  /**
+   * One delayed shimmer after the first successful save (AsyncStorage), if the user never opened
+   * the sync CTA and the animation has not run before. If auth is still “restoring” when the timer
+   * fires, the sweep is skipped (calm; rare edge — user may already be ineligible on next save).
+   */
+  const scheduleEnableSyncLabelShimmerAfterFirstSave = useCallback(() => {
+    void (async () => {
+      if (!isFirebaseSyncConfigured() || Platform.OS !== 'ios') {
+        return;
+      }
+      if (enableSyncShimmerTimerRef.current !== null) {
+        return;
+      }
+      if (await hasSyncHeaderCtaBeenTapped()) {
+        return;
+      }
+      if (await hasEnableSyncShimmerCompleted()) {
+        return;
+      }
+      if (await hasFirstSavedThought()) {
+        return;
+      }
+      await recordFirstSavedThought();
+      if (enableSyncShimmerTimerRef.current !== null) {
+        return;
+      }
+      if (await hasSyncHeaderCtaBeenTapped()) {
+        return;
+      }
+      const delayMs = 1000 + Math.random() * 1000;
+      enableSyncShimmerTimerRef.current = setTimeout(() => {
+        enableSyncShimmerTimerRef.current = null;
+        void (async () => {
+          if (await hasSyncHeaderCtaBeenTapped()) {
+            return;
+          }
+          if (await hasEnableSyncShimmerCompleted()) {
+            return;
+          }
+          if (authPhaseRef.current !== 'signed_out') {
+            return;
+          }
+          setEnableSyncLabelShimmer(true);
+        })();
+      }, delayMs);
+    })();
+  }, []);
+
+  const openSyncModalFromHeader = useCallback(() => {
+    void recordSyncHeaderCtaTapped();
+    if (enableSyncShimmerTimerRef.current) {
+      clearTimeout(enableSyncShimmerTimerRef.current);
+      enableSyncShimmerTimerRef.current = null;
+    }
+    setEnableSyncLabelShimmer(false);
+    setSyncModalVisible(true);
+  }, []);
+
+  const onEnableSyncLabelShimmerComplete = useCallback(() => {
+    setEnableSyncLabelShimmer(false);
+    void markEnableSyncShimmerCompleted();
+  }, []);
+
   const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;
 
@@ -420,13 +511,20 @@ export function CaptureScreen({
           void runSearch(sq);
         }
         void refreshUploadPending();
+        scheduleEnableSyncLabelShimmerAfterFirstSave();
       })
       .catch((err) => {
         if (__DEV__) {
           console.warn('saveEntry failed', err);
         }
       });
-  }, [text, runSearch, onScheduleStreamHighlight, refreshUploadPending]);
+  }, [
+    text,
+    runSearch,
+    onScheduleStreamHighlight,
+    refreshUploadPending,
+    scheduleEnableSyncLabelShimmerAfterFirstSave,
+  ]);
 
   /** Taller composer so capture reads clearly as the primary surface on device. */
   const composerMinHeight = 76;
@@ -464,7 +562,22 @@ export function CaptureScreen({
                   accessibilityHint="Long press opens developer menu"
                   delayLongPress={450}
                   hitSlop={12}
-                  onLongPress={() => showDevMenu({ onResetWelcome: onDevMenu })}
+                  onLongPress={() =>
+                    showDevMenu({
+                      onResetWelcome: onDevMenu,
+                      ...(__DEV__ && Platform.OS === 'ios'
+                        ? {
+                            onClearLocalSyncPaywallFlags: () => void clearLocalSyncPaywallFlags(),
+                            onRevenueCatLogOut: () => void devRevenueCatLogOutAndRefreshEntitlementCache(),
+                            onResetPaywallForPurchaseTesting: () => void resetPaywallForPurchaseTesting(),
+                            onPreviewSyncEnabledSheet: () => {
+                              setDevPostSyncPreviewNonce((n) => n + 1);
+                              setSyncModalVisible(true);
+                            },
+                          }
+                        : {}),
+                    })
+                  }
                 >
                   <ChinottoLogo
                     testID="header-logo"
@@ -486,7 +599,9 @@ export function CaptureScreen({
                   phase={authRestorePhase}
                   uploadPending={authRestorePhase === 'signed_in' && uploadPending}
                   uploadStuck={authRestorePhase === 'signed_in' && uploadStuck}
-                  onPress={() => setSyncModalVisible(true)}
+                  onPress={openSyncModalFromHeader}
+                  enableSyncLabelShimmer={enableSyncLabelShimmer}
+                  onEnableSyncLabelShimmerComplete={onEnableSyncLabelShimmerComplete}
                   style={styles.syncAfterLogo}
                 />
               ) : null}
@@ -639,6 +754,7 @@ export function CaptureScreen({
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+      {/* Enable sync sheet: opened only from the header CTA. Paid step uses monetization/syncPurchaseFlow when EXPO_PUBLIC_ENABLE_PAYWALL=true. */}
       <EnableSyncModal
         visible={syncModalVisible}
         onClose={() => setSyncModalVisible(false)}
@@ -651,6 +767,9 @@ export function CaptureScreen({
         authPhase={authRestorePhase}
         subscriptionHydrated={subscriptionHydrated}
         onSubscriptionUnlocked={onSubscriptionUnlocked}
+        devPostSyncPreviewNonce={
+          __DEV__ && devPostSyncPreviewNonce > 0 ? devPostSyncPreviewNonce : undefined
+        }
         syncHealthNote={
           authRestorePhase === 'signed_in' && uploadStuck
             ? 'Uploads are waiting—check your connection. Nothing is lost; thoughts stay on this device.'

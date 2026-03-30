@@ -4,6 +4,7 @@ import { TextInput } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import * as entryRepository from '../../storage/entryRepository';
+import * as syncHeaderShimmerPrefs from '../../storage/syncHeaderShimmerPrefs';
 import * as firebaseAuthModule from '../../sync/firebaseAuth';
 import * as firebaseConfig from '../../sync/firebaseConfig';
 import * as syncQueueModule from '../../sync/syncQueue';
@@ -49,6 +50,15 @@ jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
   default: () => ({ width: 390, height: 844, scale: 2, fontScale: 1 }),
 }));
 
+jest.mock('../../storage/syncHeaderShimmerPrefs', () => ({
+  hasEnableSyncShimmerCompleted: jest.fn(() => Promise.resolve(false)),
+  hasFirstSavedThought: jest.fn(() => Promise.resolve(true)),
+  hasSyncHeaderCtaBeenTapped: jest.fn(() => Promise.resolve(false)),
+  markEnableSyncShimmerCompleted: jest.fn(() => Promise.resolve()),
+  recordFirstSavedThought: jest.fn(() => Promise.resolve()),
+  recordSyncHeaderCtaTapped: jest.fn(() => Promise.resolve()),
+}));
+
 jest.mock('../../storage/entryRepository', () => ({
   saveEntry: jest.fn(() =>
     Promise.resolve({
@@ -80,6 +90,7 @@ describe('CaptureScreen', () => {
     mockOnAuthStateChanged.mockReset();
     mockOnAuthStateChanged.mockImplementation(() => jest.fn());
     jest.mocked(firebaseConfig.isFirebaseSyncConfigured).mockReturnValue(false);
+    jest.mocked(syncHeaderShimmerPrefs.hasFirstSavedThought).mockResolvedValue(true);
   });
 
   it('calls saveEntry with trimmed text on submit and clears the field after save succeeds', async () => {
@@ -266,6 +277,120 @@ describe('CaptureScreen', () => {
   });
 });
 
+describe('CaptureScreen enable sync label shimmer', () => {
+  beforeEach(() => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.mocked(firebaseConfig.isFirebaseSyncConfigured).mockReturnValue(true);
+    jest.mocked(firebaseAuthModule.getOrInitAuth).mockReturnValue({ currentUser: null } as never);
+    mockOnAuthStateChanged.mockReset();
+    jest.mocked(syncHeaderShimmerPrefs.hasFirstSavedThought).mockResolvedValue(false);
+    jest.mocked(syncHeaderShimmerPrefs.hasEnableSyncShimmerCompleted).mockResolvedValue(false);
+    jest.mocked(syncHeaderShimmerPrefs.hasSyncHeaderCtaBeenTapped).mockResolvedValue(false);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('schedules one-shot shimmer after first save and 1–2s delay when Enable sync is visible', async () => {
+    jest.useFakeTimers();
+    try {
+      let listener: ((user: unknown) => void) | undefined;
+      mockOnAuthStateChanged.mockImplementation((_auth, cb) => {
+        listener = cb;
+        return jest.fn();
+      });
+
+      const { findByTestId, getByTestId, queryByTestId } = render(
+        <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+          <CaptureScreen />
+        </SafeAreaProvider>
+      );
+
+      await findByTestId('capture-input');
+      await act(async () => {
+        listener?.({
+          uid: 'anon',
+          isAnonymous: true,
+          providerData: [],
+        });
+      });
+
+      fireEvent.changeText(getByTestId('capture-input'), 'first thought');
+      fireEvent(getByTestId('capture-input'), 'submitEditing');
+
+      await waitFor(() => {
+        expect(jest.mocked(entryRepository.saveEntry)).toHaveBeenCalled();
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(queryByTestId('enable-sync-label-shimmer')).toBeNull();
+
+      await act(async () => {
+        jest.advanceTimersByTime(2100);
+      });
+
+      await waitFor(() => {
+        expect(getByTestId('enable-sync-label-shimmer')).toBeTruthy();
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('does not show shimmer if sync header was tapped before the delay elapses', async () => {
+    jest.useFakeTimers();
+    try {
+      let listener: ((user: unknown) => void) | undefined;
+      mockOnAuthStateChanged.mockImplementation((_auth, cb) => {
+        listener = cb;
+        return jest.fn();
+      });
+
+      const { findByTestId, getByTestId, queryByTestId } = render(
+        <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+          <CaptureScreen />
+        </SafeAreaProvider>
+      );
+
+      await findByTestId('capture-input');
+      await act(async () => {
+        listener?.({
+          uid: 'anon',
+          isAnonymous: true,
+          providerData: [],
+        });
+      });
+
+      fireEvent.changeText(getByTestId('capture-input'), 'only');
+      fireEvent(getByTestId('capture-input'), 'submitEditing');
+
+      await waitFor(() => {
+        expect(jest.mocked(entryRepository.saveEntry)).toHaveBeenCalled();
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      fireEvent.press(getByTestId('sync-header-cta'));
+      jest.mocked(syncHeaderShimmerPrefs.hasSyncHeaderCtaBeenTapped).mockResolvedValue(true);
+
+      await act(async () => {
+        jest.advanceTimersByTime(2100);
+      });
+
+      expect(queryByTestId('enable-sync-label-shimmer')).toBeNull();
+      expect(jest.mocked(syncHeaderShimmerPrefs.recordSyncHeaderCtaTapped)).toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});
+
 describe('CaptureScreen sync auth restore', () => {
   beforeEach(() => {
     jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -274,6 +399,7 @@ describe('CaptureScreen sync auth restore', () => {
     jest.mocked(syncQueueModule.getPendingSyncCount).mockResolvedValue(0);
     mockOnAuthStateChanged.mockReset();
     mockOnAuthStateChanged.mockImplementation(() => jest.fn());
+    jest.mocked(syncHeaderShimmerPrefs.hasFirstSavedThought).mockResolvedValue(true);
   });
 
   afterEach(() => {

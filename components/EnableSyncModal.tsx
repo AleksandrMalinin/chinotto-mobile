@@ -1,5 +1,4 @@
-import { signOut } from 'firebase/auth';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -10,15 +9,16 @@ import {
   View,
 } from 'react-native';
 
-import { AppleSyncIdentityError } from '../auth/appleFirebaseAuth';
-import { AppleUserCanceledError, enableAppleSyncWithFirebase } from '../auth/enableAppleSync';
-import { isPaywallEnabled } from '../monetization/paywallConfig';
-import { getCachedIsSubscribed, stubCompleteChinottoPlusPurchase } from '../monetization/subscriptionState';
-import { getOrInitAuth } from '../sync/firebaseAuth';
-import { resolvePushEntryForSync } from '../sync/pushEntryForSync';
-import { processSyncQueue } from '../sync/syncEngine';
-import { flushSyncTombstoneOutbox } from '../sync/tombstoneFlush';
+import { getPaywallDebugInfo, isPaywallEnabled } from '../monetization/paywallConfig';
+import { getCachedHasSyncEntitlement, getSyncEntitlementSourcesDebug } from '../monetization/subscriptionState';
+import {
+  CHINOTTO_PACKAGE_KIND_ORDER,
+} from '../src/services/purchases/constants';
 import { fonts, radius, spacing } from '../theme';
+import { useEnableSyncController } from './useEnableSyncController';
+
+/** Web app URL for “continue on desktop” (replace when a dedicated download page exists). */
+export const CHINOTTO_DESKTOP_WEB_URL = 'https://getchinotto.app/';
 
 export type SyncModalAuthPhase = 'restoring' | 'signed_in' | 'signed_out';
 
@@ -32,8 +32,13 @@ export type EnableSyncModalProps = {
   syncHealthNote?: string | null;
   /** False until persisted subscription state has been loaded (avoid flashing the wrong enable step). */
   subscriptionHydrated: boolean;
-  /** After stub or real purchase: restart Firestore ingest if the paywall feature is on. */
+  /** After RevenueCat purchase or entitlement refresh: parent can restart Firestore ingest when paywall is on. */
   onSubscriptionUnlocked?: () => void;
+  /**
+   * `__DEV__` only: increment to force the post-sync success UI (desktop link) for repeated QA.
+   * Parent should bump when opening the sheet from the dev menu.
+   */
+  devPostSyncPreviewNonce?: number;
   /** Design tokens */
   fg: string;
   fgDim: string;
@@ -50,79 +55,80 @@ export function EnableSyncModal({
   syncHealthNote = null,
   subscriptionHydrated,
   onSubscriptionUnlocked,
+  devPostSyncPreviewNonce,
   fg,
   fgDim,
   muted,
   bgElevated,
   border,
 }: EnableSyncModalProps) {
-  const [busy, setBusy] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const {
+    busy,
+    errorMessage,
+    selectedPackageKind,
+    setSelectedPackageKind,
+    paywallPlans,
+    paywallPlansLoading,
+    postSyncSuccess,
+    desktopLinkCopied,
+    handleCopyDesktopLink,
+    handlePlusContinue,
+    handleRestorePurchases,
+    handleApple,
+    handleStopSyncing,
+  } = useEnableSyncController({
+    visible,
+    authPhase,
+    subscriptionHydrated,
+    onEnabled,
+    onClose,
+    onSubscriptionUnlocked,
+    devPostSyncPreviewNonce,
+    desktopWebUrl: CHINOTTO_DESKTOP_WEB_URL,
+  });
+
+  useEffect(() => {
+    if (!__DEV__ || !visible) {
+      return;
+    }
+    const selectedPlan = paywallPlans.find((p) => p.kind === selectedPackageKind);
+    const showEnableFlow = authPhase === 'signed_out';
+    const showSubscriptionWait =
+      showEnableFlow && isPaywallEnabled() && !subscriptionHydrated;
+    const showPlusPaywall =
+      showEnableFlow && isPaywallEnabled() && subscriptionHydrated && !getCachedHasSyncEntitlement();
+    console.log('[EnableSyncModal][paywall-gate]', {
+      ...getPaywallDebugInfo(),
+      authPhase,
+      subscriptionHydrated,
+      hasSyncEntitlement: getCachedHasSyncEntitlement(),
+      /** If any is true, paywall is skipped. Clear AsyncStorage keys or reinstall to reset local flags. */
+      syncEntitlementSources: getSyncEntitlementSourcesDebug(),
+      showEnableFlow,
+      showSubscriptionWait,
+      showPlusPaywall,
+      selectedPackageKind,
+      selectedPlanMeta:
+        selectedPlan == null
+          ? null
+          : {
+              kind: selectedPlan.kind,
+              storeProductId: selectedPlan.storeProductId,
+              priceString: selectedPlan.priceString,
+              introPriceString: selectedPlan.introPriceString,
+              introCycles: selectedPlan.introCycles,
+              introPeriodUnit: selectedPlan.introPeriodUnit,
+              introIsFreeTrial: selectedPlan.introIsFreeTrial,
+              introTrialEligibleUndisclosed: selectedPlan.introTrialEligibleUndisclosed,
+            },
+    });
+  }, [visible, authPhase, subscriptionHydrated, paywallPlans, selectedPackageKind]);
 
   const handleClose = useCallback(() => {
     if (!busy) {
-      setErrorMessage(null);
       onClose();
     }
   }, [busy, onClose]);
-
-  const handlePlusContinue = useCallback(async () => {
-    setErrorMessage(null);
-    setBusy(true);
-    try {
-      await stubCompleteChinottoPlusPurchase();
-      onSubscriptionUnlocked?.();
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        setErrorMessage(err.message);
-      } else {
-        setErrorMessage('Something went wrong. Try again.');
-      }
-    } finally {
-      setBusy(false);
-    }
-  }, [onSubscriptionUnlocked]);
-
-  const handleApple = useCallback(async () => {
-    setErrorMessage(null);
-    setBusy(true);
-    try {
-      await enableAppleSyncWithFirebase();
-      await processSyncQueue(resolvePushEntryForSync());
-      await flushSyncTombstoneOutbox();
-      onEnabled();
-      onClose();
-    } catch (err: unknown) {
-      if (err instanceof AppleUserCanceledError) {
-        // Calm: no error banner for cancel
-      } else if (err instanceof AppleSyncIdentityError) {
-        setErrorMessage(err.message);
-      } else if (err instanceof Error) {
-        setErrorMessage(err.message);
-      } else {
-        setErrorMessage('Something went wrong. Try again.');
-      }
-    } finally {
-      setBusy(false);
-    }
-  }, [onClose, onEnabled]);
-
-  const handleStopSyncing = useCallback(async () => {
-    setErrorMessage(null);
-    setBusy(true);
-    try {
-      await signOut(getOrInitAuth());
-      onClose();
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        setErrorMessage(err.message);
-      } else {
-        setErrorMessage('Could not stop syncing. Try again.');
-      }
-    } finally {
-      setBusy(false);
-    }
-  }, [onClose]);
 
   if (Platform.OS !== 'ios') {
     return null;
@@ -132,22 +138,106 @@ export function EnableSyncModal({
   const showSubscriptionWait =
     showEnableFlow && isPaywallEnabled() && !subscriptionHydrated;
   const showPlusPaywall =
-    showEnableFlow && isPaywallEnabled() && subscriptionHydrated && !getCachedIsSubscribed();
+    showEnableFlow && isPaywallEnabled() && subscriptionHydrated && !getCachedHasSyncEntitlement();
+  const selectedPlan = paywallPlans.find((p) => p.kind === selectedPackageKind);
+  const trialMessage = useMemo(() => {
+    if (selectedPlan == null) {
+      return null;
+    }
+    if (selectedPlan.introTrialEligibleUndisclosed === true) {
+      return 'Includes a free trial. Apple shows the exact terms before you confirm.';
+    }
+    const hasTrial = selectedPlan.introIsFreeTrial === true && selectedPlan.introCycles != null;
+    if (!hasTrial) {
+      return null;
+    }
+    const cycles = selectedPlan.introCycles ?? 0;
+    const rawUnit = (selectedPlan.introPeriodUnit ?? '').toLowerCase();
+    const unit = rawUnit.endsWith('s') ? rawUnit.slice(0, -1) : rawUnit;
+    if (cycles <= 0 || unit === '') {
+      return null;
+    }
+    const days = unit === 'day' ? cycles : null;
+    const weeks = unit === 'week' ? cycles : null;
+    if (days != null) {
+      return `Try it free for ${days} day${days === 1 ? '' : 's'}.`;
+    }
+    if (weeks != null) {
+      return `Try it free for ${weeks} week${weeks === 1 ? '' : 's'}.`;
+    }
+    return `Try it free for ${cycles} ${unit}${cycles === 1 ? '' : 's'}.`;
+  }, [selectedPlan]);
+  const renewalMessage = useMemo(() => {
+    if (selectedPlan?.priceString == null) {
+      return null;
+    }
+    if (selectedPlan.kind === 'monthly') {
+      return `Then ${selectedPlan.priceString}/month.`;
+    }
+    return null;
+  }, [selectedPlan]);
   const showSyncTitle =
-    authPhase !== 'signed_out' || (!showPlusPaywall && !showSubscriptionWait);
+    !postSyncSuccess &&
+    (authPhase !== 'signed_out' || (!showPlusPaywall && !showSubscriptionWait));
 
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={handleClose}>
-      <Pressable style={styles.backdrop} onPress={handleClose} disabled={busy}>
+      <Pressable
+        testID="enable-sync-modal-backdrop"
+        accessibilityLabel="Dismiss"
+        accessibilityRole="button"
+        style={[styles.backdrop, showPlusPaywall && styles.backdropSoft]}
+        onPress={handleClose}
+        disabled={busy}
+      >
         <Pressable
           style={[styles.sheet, { backgroundColor: bgElevated, borderColor: border }]}
           onPress={(ev) => ev.stopPropagation()}
         >
-          {showSyncTitle ? (
+          {postSyncSuccess ? (
+            <>
+              <Text
+                style={[styles.successTitle, { color: fg, fontFamily: fonts.medium }]}
+                accessibilityRole="header"
+              >
+                Sync enabled
+              </Text>
+              <Text style={[styles.body, { color: fgDim, fontFamily: fonts.regular }]}>
+                Your thoughts will stay with you across devices.
+              </Text>
+              <Pressable
+                accessibilityRole="link"
+                accessibilityLabel="Continue on desktop, copies link to clipboard"
+                accessibilityHint={`Copies ${CHINOTTO_DESKTOP_WEB_URL}`}
+                disabled={busy}
+                onPress={() => void handleCopyDesktopLink()}
+                style={({ pressed }) => [styles.desktopLinkWrap, { opacity: pressed ? 0.72 : 1 }]}
+              >
+                <Text
+                  style={[
+                    styles.desktopLinkText,
+                    { color: fg, fontFamily: fonts.regular, textDecorationColor: fg },
+                  ]}
+                >
+                  Continue on desktop.
+                </Text>
+              </Pressable>
+              {desktopLinkCopied ? (
+                <Text
+                  style={[styles.copiedHint, { color: muted, fontFamily: fonts.regular }]}
+                  accessibilityLiveRegion="polite"
+                >
+                  Copied
+                </Text>
+              ) : null}
+            </>
+          ) : null}
+
+          {!postSyncSuccess && showSyncTitle ? (
             <Text style={[styles.title, { color: fg, fontFamily: fonts.medium }]}>Sync</Text>
           ) : null}
 
-          {authPhase === 'restoring' ? (
+          {!postSyncSuccess && authPhase === 'restoring' ? (
             <>
               <Text style={[styles.body, { color: fgDim, fontFamily: fonts.regular }]}>
                 Checking sign-in…
@@ -156,7 +246,7 @@ export function EnableSyncModal({
             </>
           ) : null}
 
-          {authPhase === 'signed_in' ? (
+          {!postSyncSuccess && authPhase === 'signed_in' ? (
             <>
               <Text style={[styles.body, { color: fgDim, fontFamily: fonts.regular }]}>
                 You're signed in with Apple. New thoughts sync in the background.
@@ -176,14 +266,14 @@ export function EnableSyncModal({
             </>
           ) : null}
 
-          {showEnableFlow && showSubscriptionWait ? (
+          {!postSyncSuccess && showEnableFlow && showSubscriptionWait ? (
             <>
               <Text style={[styles.body, { color: fgDim, fontFamily: fonts.regular }]}>
                 One moment…
               </Text>
               <ActivityIndicator style={styles.spinner} color={fg} />
             </>
-          ) : showEnableFlow && showPlusPaywall ? (
+          ) : !postSyncSuccess && showEnableFlow && showPlusPaywall ? (
             <>
               <View style={styles.paywallHeaderRow}>
                 <Text
@@ -204,14 +294,62 @@ export function EnableSyncModal({
                 </Pressable>
               </View>
               <Text style={[styles.body, { color: fgDim, fontFamily: fonts.regular }]}>
-                Everything stays local by default.
+                Everything stays local by default. Sync is optional.
               </Text>
-              <Text style={[styles.body, { color: fgDim, fontFamily: fonts.regular }]}>
-                Sync is optional.
-              </Text>
+              {paywallPlansLoading ? (
+                <ActivityIndicator style={styles.paywallPlansSpinner} color={fg} />
+              ) : null}
+              <View style={styles.planRow} accessibilityRole="radiogroup" accessibilityLabel="Sync plan">
+                {CHINOTTO_PACKAGE_KIND_ORDER.map((kind) => {
+                  const selected = selectedPackageKind === kind;
+                  const label =
+                    kind === 'monthly' ? 'Monthly' : kind === 'yearly' ? 'Yearly' : 'Lifetime';
+                  const price = paywallPlans.find((p) => p.kind === kind)?.priceString;
+                  const a11yLabel = price != null ? `${label}, ${price}` : `${label} plan`;
+                  return (
+                    <Pressable
+                      key={kind}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={a11yLabel}
+                      disabled={busy}
+                      onPress={() => setSelectedPackageKind(kind)}
+                      style={({ pressed }) => [
+                        styles.planChip,
+                        {
+                          borderColor: selected ? fg : border,
+                          opacity: pressed ? 0.85 : 1,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.planChipLabel,
+                          { color: selected ? fg : fgDim, fontFamily: fonts.regular },
+                        ]}
+                      >
+                        {label}
+                      </Text>
+                      {price != null ? (
+                        <Text
+                          style={[styles.planChipPrice, { color: muted, fontFamily: fonts.regular }]}
+                          numberOfLines={1}
+                        >
+                          {price}
+                        </Text>
+                      ) : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
               <Text style={[styles.paywallFooter, { color: muted, fontFamily: fonts.regular }]}>
-                Enable it with Chinotto Plus
+                {trialMessage ?? 'Optional paid layer. Manage or cancel in Apple Account settings.'}
               </Text>
+              {renewalMessage != null ? (
+                <Text style={[styles.paywallSubtle, { color: muted, fontFamily: fonts.regular }]}>
+                  {renewalMessage}
+                </Text>
+              ) : null}
               {errorMessage != null ? (
                 <Text
                   style={[styles.error, { color: fgDim, fontFamily: fonts.regular }]}
@@ -222,10 +360,11 @@ export function EnableSyncModal({
               ) : null}
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Continue"
+                accessibilityLabel="Continue with selected plan"
                 disabled={busy}
                 style={({ pressed }) => [
                   styles.appleButton,
+                  styles.paywallPrimaryButton,
                   { backgroundColor: fg, opacity: busy ? 0.5 : pressed ? 0.88 : 1 },
                 ]}
                 onPress={() => void handlePlusContinue()}
@@ -238,8 +377,28 @@ export function EnableSyncModal({
                   </Text>
                 )}
               </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Restore purchases"
+                disabled={busy}
+                onPress={() => void handleRestorePurchases()}
+                style={styles.restorePurchases}
+              >
+                <Text style={{ color: fgDim, fontFamily: fonts.regular, fontSize: 15 }}>
+                  Restore purchases
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Not now"
+                disabled={busy}
+                onPress={handleClose}
+                style={styles.later}
+              >
+                <Text style={{ color: muted, fontFamily: fonts.regular }}>Not now</Text>
+              </Pressable>
             </>
-          ) : showEnableFlow ? (
+          ) : !postSyncSuccess && showEnableFlow ? (
             <>
               <Text style={[styles.body, { color: fgDim, fontFamily: fonts.regular }]}>
                 Use Apple to connect your devices.
@@ -286,7 +445,7 @@ export function EnableSyncModal({
                 <Text style={{ color: muted, fontFamily: fonts.regular }}>Not now</Text>
               </Pressable>
             </>
-          ) : authPhase === 'signed_in' ? (
+          ) : !postSyncSuccess && authPhase === 'signed_in' ? (
             <>
               {errorMessage != null ? (
                 <Text
@@ -316,7 +475,7 @@ export function EnableSyncModal({
                 <Text style={{ color: muted, fontFamily: fonts.regular, fontSize: 15 }}>Stop syncing</Text>
               </Pressable>
             </>
-          ) : (
+          ) : !postSyncSuccess ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Done"
@@ -326,7 +485,7 @@ export function EnableSyncModal({
             >
               <Text style={{ color: fg, fontFamily: fonts.medium, fontSize: 16 }}>Done</Text>
             </Pressable>
-          )}
+          ) : null}
         </Pressable>
       </Pressable>
     </Modal>
@@ -340,6 +499,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
   },
+  backdropSoft: {
+    backgroundColor: 'rgba(0,0,0,0.32)',
+  },
   sheet: {
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
@@ -348,6 +510,26 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     marginBottom: spacing.sm,
+  },
+  successTitle: {
+    fontSize: 20,
+    lineHeight: 26,
+    marginBottom: spacing.sm,
+  },
+  desktopLinkWrap: {
+    alignSelf: 'flex-start',
+    marginTop: spacing.sm,
+    paddingVertical: 4,
+  },
+  desktopLinkText: {
+    fontSize: 16,
+    lineHeight: 22,
+    textDecorationLine: 'underline',
+  },
+  copiedHint: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: spacing.xs,
   },
   paywallHeaderRow: {
     flexDirection: 'row',
@@ -368,11 +550,49 @@ const styles = StyleSheet.create({
     fontSize: 28,
     lineHeight: 30,
   },
+  planRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  planChip: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  planChipLabel: {
+    fontSize: 15,
+    lineHeight: 20,
+  },
+  planChipPrice: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  paywallPlansSpinner: {
+    marginBottom: spacing.sm,
+  },
+  restorePurchases: {
+    marginTop: spacing.sm,
+    alignSelf: 'center',
+    paddingVertical: spacing.xs,
+  },
   paywallFooter: {
     fontSize: 14,
     lineHeight: 20,
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  paywallSubtle: {
+    fontSize: 13,
+    lineHeight: 18,
     marginBottom: spacing.md,
+  },
+  paywallPrimaryButton: {
+    marginTop: spacing.xs,
   },
   body: {
     fontSize: 16,

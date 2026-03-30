@@ -1,4 +1,4 @@
-import { fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 
 import { SyncHeaderStatus } from '../SyncHeaderStatus';
 
@@ -55,5 +55,30 @@ describe('SyncHeaderStatus', () => {
 
     fireEvent.press(getByTestId('sync-header-cta'));
     expect(onPress).toHaveBeenCalledTimes(1);
+  });
+
+  it('plays one-shot enable-sync shimmer and calls onComplete after timing', () => {
+    jest.useFakeTimers();
+    try {
+      const onComplete = jest.fn();
+      const { getByTestId } = render(
+        <SyncHeaderStatus
+          phase="signed_out"
+          onPress={jest.fn()}
+          enableSyncLabelShimmer
+          onEnableSyncLabelShimmerComplete={onComplete}
+        />
+      );
+
+      expect(getByTestId('enable-sync-label-shimmer')).toBeTruthy();
+
+      act(() => {
+        jest.advanceTimersByTime(1300);
+      });
+
+      expect(onComplete).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
