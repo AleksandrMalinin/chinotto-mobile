@@ -290,12 +290,9 @@ describe('EnableSyncModal', () => {
 
     await flushPaywallPrefetch();
 
-    expect(getByText('Sync your thoughts across devices')).toBeTruthy();
-    expect(getByText('Everything stays local by default. Sync is optional.')).toBeTruthy();
-    expect(
-      getByText('Optional paid layer. Manage or cancel in Apple Account settings.')
-    ).toBeTruthy();
-    expect(getByLabelText('Continue with selected plan')).toBeTruthy();
+    expect(getByText('Continue on another device')).toBeTruthy();
+    expect(getByText('Local by default. Sync is optional.')).toBeTruthy();
+    expect(getByLabelText('Enable sync with selected plan')).toBeTruthy();
     expect(getByLabelText('Not now')).toBeTruthy();
   });
 
@@ -321,7 +318,7 @@ describe('EnableSyncModal', () => {
 
     await flushPaywallPrefetch();
 
-    fireEvent.press(getByLabelText('Continue with selected plan'));
+    fireEvent.press(getByLabelText('Enable sync with selected plan'));
 
     await waitFor(() => {
       expect(mockOpenSyncPurchaseFlow).toHaveBeenCalledWith({ packageKind: 'yearly' });
@@ -359,7 +356,7 @@ describe('EnableSyncModal', () => {
 
     await flushPaywallPrefetch();
 
-    fireEvent.press(getByLabelText('Continue with selected plan'));
+    fireEvent.press(getByLabelText('Enable sync with selected plan'));
 
     await waitFor(() => {
       expect(getByText(/Apple shows an active subscription/)).toBeTruthy();
@@ -385,7 +382,7 @@ describe('EnableSyncModal', () => {
     await flushPaywallPrefetch();
 
     fireEvent.press(getByText('Monthly'));
-    fireEvent.press(getByLabelText('Continue with selected plan'));
+    fireEvent.press(getByLabelText('Enable sync with selected plan'));
 
     await waitFor(() => {
       expect(mockOpenSyncPurchaseFlow).toHaveBeenCalledWith({ packageKind: 'monthly' });
@@ -425,8 +422,7 @@ describe('EnableSyncModal', () => {
     await flushPaywallPrefetch();
 
     fireEvent.press(getByText('Monthly'));
-    expect(getByText('Try it free for 1 week.')).toBeTruthy();
-    expect(getByText('Then $4.99/month.')).toBeTruthy();
+    expect(getByText('1-week free trial')).toBeTruthy();
   });
 
   it('does not show trial copy when selected package has no intro offer', async () => {
@@ -457,8 +453,7 @@ describe('EnableSyncModal', () => {
 
     await flushPaywallPrefetch();
 
-    expect(queryByText('Try it free for 1 week.')).toBeNull();
+    expect(queryByText('1-week free trial')).toBeNull();
     expect(queryByText('Then $4.99/month.')).toBeNull();
-    expect(queryByText('Optional paid layer. Manage or cancel in Apple Account settings.')).toBeTruthy();
   });
 });

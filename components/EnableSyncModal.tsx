@@ -139,43 +139,34 @@ export function EnableSyncModal({
     showEnableFlow && isPaywallEnabled() && !subscriptionHydrated;
   const showPlusPaywall =
     showEnableFlow && isPaywallEnabled() && subscriptionHydrated && !getCachedHasSyncEntitlement();
-  const selectedPlan = paywallPlans.find((p) => p.kind === selectedPackageKind);
-  const trialMessage = useMemo(() => {
-    if (selectedPlan == null) {
+  const monthlyTrialHint = useMemo(() => {
+    const monthlyPlan = paywallPlans.find((p) => p.kind === 'monthly');
+    if (monthlyPlan == null) {
       return null;
     }
-    if (selectedPlan.introTrialEligibleUndisclosed === true) {
-      return 'Includes a free trial. Apple shows the exact terms before you confirm.';
+    if (monthlyPlan.introTrialEligibleUndisclosed === true) {
+      return 'Free trial available';
     }
-    const hasTrial = selectedPlan.introIsFreeTrial === true && selectedPlan.introCycles != null;
+    const hasTrial = monthlyPlan.introIsFreeTrial === true && monthlyPlan.introCycles != null;
     if (!hasTrial) {
       return null;
     }
-    const cycles = selectedPlan.introCycles ?? 0;
-    const rawUnit = (selectedPlan.introPeriodUnit ?? '').toLowerCase();
+    const cycles = monthlyPlan.introCycles ?? 0;
+    const rawUnit = (monthlyPlan.introPeriodUnit ?? '').toLowerCase();
     const unit = rawUnit.endsWith('s') ? rawUnit.slice(0, -1) : rawUnit;
     if (cycles <= 0 || unit === '') {
-      return null;
+      return 'Monthly includes a free trial.';
     }
     const days = unit === 'day' ? cycles : null;
     const weeks = unit === 'week' ? cycles : null;
     if (days != null) {
-      return `Try it free for ${days} day${days === 1 ? '' : 's'}.`;
+      return `${days}-day free trial`;
     }
     if (weeks != null) {
-      return `Try it free for ${weeks} week${weeks === 1 ? '' : 's'}.`;
+      return `${weeks}-week free trial`;
     }
-    return `Try it free for ${cycles} ${unit}${cycles === 1 ? '' : 's'}.`;
-  }, [selectedPlan]);
-  const renewalMessage = useMemo(() => {
-    if (selectedPlan?.priceString == null) {
-      return null;
-    }
-    if (selectedPlan.kind === 'monthly') {
-      return `Then ${selectedPlan.priceString}/month.`;
-    }
-    return null;
-  }, [selectedPlan]);
+    return `${cycles}-${unit} free trial`;
+  }, [paywallPlans]);
   const showSyncTitle =
     !postSyncSuccess &&
     (authPhase !== 'signed_out' || (!showPlusPaywall && !showSubscriptionWait));
@@ -191,9 +182,12 @@ export function EnableSyncModal({
         disabled={busy}
       >
         <Pressable
-          style={[styles.sheet, { backgroundColor: bgElevated, borderColor: border }]}
+          style={[styles.sheet, { backgroundColor: 'rgba(18, 18, 26, 0.9)', borderColor: border }]}
           onPress={(ev) => ev.stopPropagation()}
         >
+          <View pointerEvents="none" style={styles.sheetAuraViolet} />
+          <View pointerEvents="none" style={styles.sheetAuraBlue} />
+          <View pointerEvents="none" style={styles.sheetInnerRing} />
           {postSyncSuccess ? (
             <>
               <Text
@@ -275,31 +269,19 @@ export function EnableSyncModal({
             </>
           ) : !postSyncSuccess && showEnableFlow && showPlusPaywall ? (
             <>
-              <View style={styles.paywallHeaderRow}>
-                <Text
-                  style={[styles.paywallTitle, { color: fg, fontFamily: fonts.medium }]}
-                  accessibilityRole="header"
-                >
-                  Sync your thoughts across devices
-                </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Close"
-                  disabled={busy}
-                  hitSlop={12}
-                  onPress={handleClose}
-                  style={({ pressed }) => [styles.paywallClose, { opacity: pressed ? 0.65 : 1 }]}
-                >
-                  <Text style={[styles.paywallCloseGlyph, { color: muted, fontFamily: fonts.regular }]}>×</Text>
-                </Pressable>
-              </View>
+              <Text
+                style={[styles.paywallTitle, { color: fg, fontFamily: fonts.medium }]}
+                accessibilityRole="header"
+              >
+                Continue on another device
+              </Text>
               <Text style={[styles.body, { color: fgDim, fontFamily: fonts.regular }]}>
-                Everything stays local by default. Sync is optional.
+                Local by default. Sync is optional.
               </Text>
               {paywallPlansLoading ? (
                 <ActivityIndicator style={styles.paywallPlansSpinner} color={fg} />
               ) : null}
-              <View style={styles.planRow} accessibilityRole="radiogroup" accessibilityLabel="Sync plan">
+              <View style={styles.planList} accessibilityRole="radiogroup" accessibilityLabel="Sync plan">
                 {CHINOTTO_PACKAGE_KIND_ORDER.map((kind) => {
                   const selected = selectedPackageKind === kind;
                   const label =
@@ -315,41 +297,54 @@ export function EnableSyncModal({
                       disabled={busy}
                       onPress={() => setSelectedPackageKind(kind)}
                       style={({ pressed }) => [
-                        styles.planChip,
+                        styles.planOption,
                         {
-                          borderColor: selected ? fg : border,
-                          opacity: pressed ? 0.85 : 1,
+                          borderColor: selected ? 'rgba(138,148,200,0.36)' : border,
+                          backgroundColor: selected ? 'rgba(128,138,188,0.08)' : 'transparent',
+                          opacity: pressed ? 0.9 : 1,
                         },
                       ]}
                     >
-                      <Text
-                        style={[
-                          styles.planChipLabel,
-                          { color: selected ? fg : fgDim, fontFamily: fonts.regular },
-                        ]}
-                      >
-                        {label}
-                      </Text>
-                      {price != null ? (
-                        <Text
-                          style={[styles.planChipPrice, { color: muted, fontFamily: fonts.regular }]}
-                          numberOfLines={1}
-                        >
-                          {price}
-                        </Text>
-                      ) : null}
+                      <View style={styles.planOptionLeft}>
+                        <View>
+                          <Text
+                            style={[
+                              styles.planOptionLabel,
+                              { color: selected ? fg : fgDim, fontFamily: fonts.regular },
+                            ]}
+                          >
+                            {label}
+                          </Text>
+                          {kind === 'monthly' && monthlyTrialHint != null ? (
+                            <Text
+                              style={[
+                                styles.planOptionHint,
+                                { color: muted, fontFamily: fonts.regular },
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {monthlyTrialHint}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </View>
+                      <View style={styles.planOptionRight}>
+                        {price != null ? (
+                          <Text
+                            style={[
+                              styles.planOptionPrice,
+                              { color: selected ? fgDim : muted, fontFamily: fonts.regular },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {price}
+                          </Text>
+                        ) : null}
+                      </View>
                     </Pressable>
                   );
                 })}
               </View>
-              <Text style={[styles.paywallFooter, { color: muted, fontFamily: fonts.regular }]}>
-                {trialMessage ?? 'Optional paid layer. Manage or cancel in Apple Account settings.'}
-              </Text>
-              {renewalMessage != null ? (
-                <Text style={[styles.paywallSubtle, { color: muted, fontFamily: fonts.regular }]}>
-                  {renewalMessage}
-                </Text>
-              ) : null}
               {errorMessage != null ? (
                 <Text
                   style={[styles.error, { color: fgDim, fontFamily: fonts.regular }]}
@@ -360,20 +355,20 @@ export function EnableSyncModal({
               ) : null}
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Continue with selected plan"
+                accessibilityLabel="Enable sync with selected plan"
                 disabled={busy}
                 style={({ pressed }) => [
                   styles.appleButton,
                   styles.paywallPrimaryButton,
-                  { backgroundColor: fg, opacity: busy ? 0.5 : pressed ? 0.88 : 1 },
+                  { opacity: busy ? 0.5 : pressed ? 0.88 : 1 },
                 ]}
                 onPress={() => void handlePlusContinue()}
               >
                 {busy ? (
-                  <ActivityIndicator color={bgElevated} />
+                  <ActivityIndicator color={fg} />
                 ) : (
-                  <Text style={[styles.appleLabel, { color: bgElevated, fontFamily: fonts.medium }]}>
-                    Continue
+                  <Text style={[styles.appleLabel, { color: fg, fontFamily: fonts.medium }]}>
+                    Enable sync
                   </Text>
                 )}
               </Pressable>
@@ -495,17 +490,59 @@ export function EnableSyncModal({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.54)',
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
   },
   backdropSoft: {
-    backgroundColor: 'rgba(0,0,0,0.32)',
+    backgroundColor: 'rgba(0,0,0,0.48)',
   },
   sheet: {
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     padding: spacing.lg,
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 38,
+    shadowOffset: { width: 0, height: 19 },
+    elevation: 14,
+    overflow: 'visible',
+  },
+  sheetAuraViolet: {
+    position: 'absolute',
+    top: -7,
+    right: -7,
+    bottom: -7,
+    left: -7,
+    borderRadius: radius.md + 7,
+    backgroundColor: 'transparent',
+    shadowColor: '#646eb4',
+    shadowOpacity: 0.14,
+    shadowRadius: 26,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  sheetAuraBlue: {
+    position: 'absolute',
+    top: -16,
+    right: -16,
+    bottom: -16,
+    left: -16,
+    borderRadius: radius.md + 16,
+    backgroundColor: 'transparent',
+    shadowColor: '#4664b4',
+    shadowOpacity: 0.085,
+    shadowRadius: 44,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  sheetInnerRing: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.03)',
   },
   title: {
     fontSize: 20,
@@ -531,46 +568,49 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: spacing.xs,
   },
-  paywallHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
+  paywallTitle: {
+    fontSize: 21,
+    lineHeight: 28,
     marginBottom: spacing.sm,
   },
-  paywallTitle: {
-    flex: 1,
-    fontSize: 19,
-    lineHeight: 26,
-  },
-  paywallClose: {
-    paddingTop: 2,
-    paddingLeft: spacing.xs,
-  },
-  paywallCloseGlyph: {
-    fontSize: 28,
-    lineHeight: 30,
-  },
-  planRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
+  planList: {
     marginTop: spacing.sm,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
+    gap: spacing.xs,
   },
-  planChip: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: radius.sm,
+  planOption: {
+    minHeight: 50,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  planChipLabel: {
+  planOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 0,
+  },
+  planOptionRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 0,
+    marginLeft: spacing.sm,
+  },
+  planOptionLabel: {
     fontSize: 15,
     lineHeight: 20,
   },
-  planChipPrice: {
+  planOptionHint: {
+    marginTop: 1,
     fontSize: 12,
     lineHeight: 16,
-    marginTop: 2,
+  },
+  planOptionPrice: {
+    fontSize: 13,
+    lineHeight: 18,
   },
   paywallPlansSpinner: {
     marginBottom: spacing.sm,
@@ -580,19 +620,16 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingVertical: spacing.xs,
   },
-  paywallFooter: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: spacing.sm,
-    marginBottom: spacing.xs,
-  },
-  paywallSubtle: {
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: spacing.md,
-  },
   paywallPrimaryButton: {
     marginTop: spacing.xs,
+    backgroundColor: 'rgba(160,170,255,0.22)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(160,170,255,0.36)',
+    borderTopColor: 'rgba(188,196,255,0.52)',
+    shadowColor: '#a0aaff',
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 0 },
   },
   body: {
     fontSize: 16,
@@ -610,7 +647,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   appleButton: {
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
