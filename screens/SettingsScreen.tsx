@@ -35,7 +35,6 @@ export function SettingsScreen({
   const t = useAppTheme();
   const insets = useSafeAreaInsets();
   const appVersion = Constants.expoConfig?.version ?? 'dev';
-  const runtimeVersion = Constants.expoConfig?.runtimeVersion;
   const headerLogoSize = 42;
   const gutter = screenContentGutter(0);
   const headerLogoAlignStyle = {
@@ -88,7 +87,7 @@ export function SettingsScreen({
             styles.content,
             {
               paddingHorizontal: gutter,
-              paddingBottom: Math.max(insets.bottom + 8, 10),
+              paddingBottom: Math.max(insets.bottom + 2, 6),
             },
           ]}
           contentInsetAdjustmentBehavior="never"
@@ -123,7 +122,7 @@ export function SettingsScreen({
                 <SettingsRow
                   variant="switch"
                   label="Haptic feedback"
-                  description="Subtle taps for controls like search open and close."
+                  description="Subtle taps for key controls."
                   value={hapticsEnabled}
                   onValueChange={onHapticsEnabledChange}
                 />
@@ -134,28 +133,27 @@ export function SettingsScreen({
                   variant="info"
                   label="Your thoughts stay local first"
                   description="Sync is optional and never blocks capture."
-                />
-                <SettingsRow
-                  variant="info"
-                  label="No folders, tags, or categories"
-                  description="Chinotto stays focused on quick thinking."
+                  isLast
                 />
               </SettingsSection>
 
-              <SettingsSection title="Philosophy">
-                <SettingsRow
-                  variant="info"
-                  label="Capture first. Revisit later."
-                  description="Thinking rarely starts structured."
-                />
+              <SettingsSection title="Manifesto">
                 <SettingsRow
                   testID="settings-open-manifesto"
                   variant="navigation"
-                  label="Read philosophy"
+                  label="Read"
                   description="Why Chinotto avoids organization before thinking."
                   onPress={onOpenManifesto}
+                  isLast
                 />
               </SettingsSection>
+
+              <View style={[styles.versionBlock, { borderColor: t.colors.border, backgroundColor: t.colors.accentSubtle }]}>
+                <View style={styles.versionRow}>
+                  <Text style={[styles.versionLabel, { color: t.colors.metaFg }]}>Version</Text>
+                  <Text style={[styles.versionValue, { color: t.colors.fgDim }]}>{appVersion}</Text>
+                </View>
+              </View>
 
               {onOpenDevMenu ? (
                 <SettingsSection title="Developer">
@@ -165,18 +163,13 @@ export function SettingsScreen({
                     label="Developer tools"
                     description="Debug and QA actions."
                     onPress={onOpenDevMenu}
+                    isLast
                   />
                 </SettingsSection>
               ) : null}
             </View>
 
             <View>
-              <View style={styles.buildMetaInline}>
-                <Text style={[styles.buildMetaText, { color: t.colors.metaFg }]}>
-                  {runtimeVersion != null ? `v${appVersion} · runtime ${String(runtimeVersion)}` : `v${appVersion}`}
-                </Text>
-              </View>
-
               <View style={styles.studioSignatureInline}>
                 <Text style={[styles.studioSignatureText, { color: 'rgba(160, 170, 255, 0.35)' }]}>
                   Bogart Labs
@@ -226,19 +219,34 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     letterSpacing: 0.2,
   },
-  buildMetaInline: {
+  versionBlock: {
     marginTop: 20,
-    alignItems: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    overflow: 'hidden',
   },
-  buildMetaText: {
+  versionRow: {
+    minHeight: 48,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  versionLabel: {
     fontFamily: fonts.regular,
-    fontSize: 11,
-    lineHeight: 16,
-    letterSpacing: 0.2,
-    opacity: 0.72,
+    fontSize: 13,
+    lineHeight: 18,
+    letterSpacing: 0.1,
+  },
+  versionValue: {
+    fontFamily: fonts.medium,
+    fontSize: 14,
+    lineHeight: 18,
+    letterSpacing: 0.15,
   },
   studioSignatureInline: {
-    marginTop: 10,
+    marginTop: 20,
     alignItems: 'center',
   },
   studioSignatureText: {
