@@ -1,5 +1,5 @@
 import Constants from 'expo-constants';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChinottoLogo, chinottoLogoLeadingOutset } from '../components/ChinottoLogo';
@@ -42,69 +42,70 @@ export function SettingsScreen({
   };
 
   return (
-    <View
-      testID="settings-screen"
-      style={[
-        styles.container,
-        {
-          backgroundColor: t.colors.bg,
-        },
-      ]}
-    >
-      <SafeAreaView style={styles.safe} edges={['top', 'right', 'left']}>
-        <View
-          style={[
-            styles.headerBar,
-            {
-              paddingHorizontal: gutter,
-              paddingTop: t.spacing.xs,
-              marginBottom: t.spacing.sm,
-            },
-          ]}
-        >
-          <View style={styles.headerLogoSlot}>
-            <Pressable
-              testID="settings-logo"
-              accessibilityRole="button"
-              accessibilityLabel="Chinotto"
-              accessibilityHint="Back to capture"
-              onPress={onClose}
-              hitSlop={12}
-              style={({ pressed }) => [{ opacity: pressed ? 0.92 : 1 }]}
-            >
-              <ChinottoLogo
-                size={headerLogoSize}
-                color={t.colors.fgDim}
-                style={headerLogoAlignStyle}
-              />
-            </Pressable>
-            <Text style={[styles.headerTitleInline, { color: t.colors.fg }]}>Settings</Text>
-          </View>
-        </View>
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={[
-            styles.content,
-            {
-              paddingHorizontal: gutter,
-              paddingBottom: Math.max(insets.bottom + 2, 6),
-            },
-          ]}
-          contentInsetAdjustmentBehavior="never"
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={styles.contentInner}>
-            <View>
-              <SettingsSection title="Sync">
-                <SettingsRow
-                  variant="navigation"
-                  label={syncStatusLabel === 'Off' ? 'Enable sync' : 'Sync'}
-                  description="Continue on desktop with the same Apple ID."
-                  valueLabel={syncStatusLabel}
-                  onPress={onOpenSync}
+    <Modal visible animationType="fade" presentationStyle="fullScreen" onRequestClose={onClose}>
+      <View
+        testID="settings-screen"
+        style={[
+          styles.container,
+          {
+            backgroundColor: t.colors.bg,
+          },
+        ]}
+      >
+        <SafeAreaView style={styles.safe} edges={['top', 'right', 'left']}>
+          <View
+            style={[
+              styles.headerBar,
+              {
+                paddingHorizontal: gutter,
+                paddingTop: t.spacing.xs,
+                marginBottom: t.spacing.sm,
+              },
+            ]}
+          >
+            <View style={styles.headerLogoSlot}>
+              <Pressable
+                testID="settings-logo"
+                accessibilityRole="button"
+                accessibilityLabel="Chinotto"
+                accessibilityHint="Back to capture"
+                onPress={onClose}
+                hitSlop={12}
+                style={({ pressed }) => [{ opacity: pressed ? 0.92 : 1 }]}
+              >
+                <ChinottoLogo
+                  size={headerLogoSize}
+                  color={t.colors.fgDim}
+                  style={headerLogoAlignStyle}
                 />
-              </SettingsSection>
+              </Pressable>
+              <Text style={[styles.headerTitleInline, { color: t.colors.fg }]}>Settings</Text>
+            </View>
+          </View>
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={[
+              styles.content,
+              {
+                paddingHorizontal: gutter,
+                paddingBottom: Math.max(insets.bottom + 2, 6),
+              },
+            ]}
+            contentInsetAdjustmentBehavior="never"
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.contentInner}>
+              <View>
+                <SettingsSection title="Sync">
+                  <SettingsRow
+                    variant="navigation"
+                    label={syncStatusLabel === 'Off' ? 'Enable sync' : 'Sync'}
+                    description="Continue on desktop with the same Apple ID."
+                    valueLabel={syncStatusLabel}
+                    onPress={onOpenSync}
+                  />
+                </SettingsSection>
 
               {canOpenAppIcon && onOpenAppIcon ? (
                 <SettingsSection title="Appearance">
@@ -151,7 +152,10 @@ export function SettingsScreen({
               <View style={[styles.versionBlock, { borderColor: t.colors.border, backgroundColor: t.colors.accentSubtle }]}>
                 <View style={styles.versionRow}>
                   <Text style={[styles.versionLabel, { color: t.colors.metaFg }]}>Version</Text>
-                  <Text style={[styles.versionValue, { color: t.colors.fgDim }]}>{appVersion}</Text>
+                  <View style={styles.versionValueWrap}>
+                    <Text style={[styles.versionValue, { color: t.colors.fgDim }]}>{appVersion}</Text>
+                    <Text style={[styles.versionBeta, { color: t.colors.metaFg }]}>β</Text>
+                  </View>
                 </View>
               </View>
 
@@ -169,17 +173,18 @@ export function SettingsScreen({
               ) : null}
             </View>
 
-            <View>
-              <View style={styles.studioSignatureInline}>
-                <Text style={[styles.studioSignatureText, { color: 'rgba(160, 170, 255, 0.35)' }]}>
-                  Bogart Labs
-                </Text>
+              <View>
+                <View style={styles.studioSignatureInline}>
+                  <Text style={[styles.studioSignatureText, { color: 'rgba(160, 170, 255, 0.35)' }]}>
+                    Bogart Labs
+                  </Text>
+                </View>
               </View>
             </View>
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    </View>
+          </ScrollView>
+        </SafeAreaView>
+      </View>
+    </Modal>
   );
 }
 
@@ -244,6 +249,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 18,
     letterSpacing: 0.15,
+  },
+  versionValueWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  versionBeta: {
+    fontFamily: fonts.medium,
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: 0.2,
+    opacity: 0.85,
   },
   studioSignatureInline: {
     marginTop: 20,
