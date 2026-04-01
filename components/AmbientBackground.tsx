@@ -100,14 +100,7 @@ export function AmbientBackground() {
         pointerEvents="none"
       />
 
-      <LinearGradient
-        colors={['transparent', 'rgba(5, 6, 11, 0.52)', 'rgba(5, 6, 11, 0.945)']}
-        locations={[0, 0.5, 1]}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-      />
+      {/* No dedicated bottom vignette: avoids visible strip near the home indicator area. */}
     </View>
   );
 }

@@ -8,6 +8,7 @@ import * as syncHeaderShimmerPrefs from '../../storage/syncHeaderShimmerPrefs';
 import * as firebaseAuthModule from '../../sync/firebaseAuth';
 import * as firebaseConfig from '../../sync/firebaseConfig';
 import * as syncQueueModule from '../../sync/syncQueue';
+import * as devMenuModule from '../../dev/showDevMenu';
 
 const mockOnAuthStateChanged = jest.fn();
 
@@ -37,6 +38,10 @@ jest.mock('../../sync/pushEntryForSync', () => ({
 
 jest.mock('../../sync/syncEngine', () => ({
   processSyncQueue: jest.fn(() => Promise.resolve()),
+}));
+
+jest.mock('../../dev/showDevMenu', () => ({
+  showDevMenu: jest.fn(),
 }));
 
 jest.mock('expo-clipboard', () => ({
@@ -274,6 +279,72 @@ describe('CaptureScreen', () => {
     expect(queryByTestId('stream-search-input')).toBeNull();
     fireEvent.press(getByTestId('stream-search-toggle'));
     expect(getByTestId('stream-search-input').props.value).toBe('');
+  });
+
+  it('opens Settings when the header logo is tapped', async () => {
+    const { findByTestId, getByTestId, queryByTestId } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <CaptureScreen />
+      </SafeAreaProvider>
+    );
+
+    await findByTestId('capture-input');
+    fireEvent.press(getByTestId('header-logo'));
+
+    expect(getByTestId('settings-screen')).toBeTruthy();
+
+    fireEvent.press(getByTestId('settings-logo'));
+    expect(queryByTestId('settings-screen')).toBeNull();
+  });
+
+  it('opens dev menu from Settings instead of the main header', async () => {
+    const onDevMenu = jest.fn();
+    jest.mocked(devMenuModule.showDevMenu).mockClear();
+
+    const { findByTestId, getByTestId } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <CaptureScreen onDevMenu={onDevMenu} />
+      </SafeAreaProvider>
+    );
+
+    await findByTestId('capture-input');
+    fireEvent.press(getByTestId('header-logo'));
+    fireEvent.press(getByTestId('settings-open-dev-menu'));
+
+    expect(jest.mocked(devMenuModule.showDevMenu)).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens manifesto from Settings and closes back to Settings', async () => {
+    const { findByTestId, getByTestId, queryByTestId } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <CaptureScreen />
+      </SafeAreaProvider>
+    );
+
+    await findByTestId('capture-input');
+    fireEvent.press(getByTestId('header-logo'));
+    fireEvent.press(getByTestId('settings-open-manifesto'));
+
+    expect(getByTestId('manifesto-screen')).toBeTruthy();
+
+    fireEvent.press(getByTestId('manifesto-logo'));
+
+    expect(queryByTestId('manifesto-screen')).toBeNull();
+    expect(getByTestId('settings-screen')).toBeTruthy();
+  });
+
+  it('hides app icon picker entry in Settings when feature flag is off', async () => {
+    const { findByTestId, getByTestId, queryByTestId } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <CaptureScreen />
+      </SafeAreaProvider>
+    );
+
+    await findByTestId('capture-input');
+    fireEvent.press(getByTestId('header-logo'));
+
+    expect(queryByTestId('settings-open-app-icon')).toBeNull();
+    expect(queryByTestId('app-icon-screen')).toBeNull();
   });
 });
 
