@@ -3,6 +3,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import {
+  Alert,
   Keyboard,
   KeyboardAvoidingView,
   LayoutAnimation,
@@ -28,7 +29,18 @@ import { EnableSyncModal } from '../components/EnableSyncModal';
 import { EntryReadSheet } from '../components/EntryReadSheet';
 import { RecentList } from '../components/RecentList';
 import { SyncHeaderStatus, type SyncHeaderAuthPhase } from '../components/SyncHeaderStatus';
+import { AppIconScreen } from './AppIconScreen';
+import { ManifestoScreen } from './ManifestoScreen';
+import { SettingsScreen } from './SettingsScreen';
+import { ENABLE_APP_ICON_SWITCHER } from '../src/features/flags';
+import {
+  getCurrentAppIconVariantId,
+  setCurrentAppIconVariantId,
+  supportsDynamicAppIcons,
+} from '../src/services/icons/appIcon';
+import { getAppIconVariant, type AppIconVariantId } from '../src/services/icons/iconVariants';
 import type { Entry } from '../types/entry';
+import { resetPaywallForPurchaseTesting } from '../dev/resetPaywallForPurchaseTesting';
 import { showDevMenu } from '../dev/showDevMenu';
 import {
   deleteEntry,
@@ -37,6 +49,17 @@ import {
   saveEntry,
   searchEntriesForRecall,
 } from '../storage/entryRepository';
+import { clearLocalSyncPaywallFlags } from '../monetization/subscriptionState';
+import { devRevenueCatLogOutAndRefreshEntitlementCache } from '../src/services/purchases/revenueCat';
+import {
+  hasEnableSyncShimmerCompleted,
+  hasFirstSavedThought,
+  hasSyncHeaderCtaBeenTapped,
+  markEnableSyncShimmerCompleted,
+  recordFirstSavedThought,
+  recordSyncHeaderCtaTapped,
+} from '../storage/syncHeaderShimmerPrefs';
+import { getHapticsEnabled, setHapticsEnabled } from '../storage/settingsPrefs';
 import { isFirebaseSyncConfigured } from '../sync/firebaseConfig';
 import { getOrInitAuth } from '../sync/firebaseAuth';
 import { getPendingSyncCount } from '../sync/syncQueue';
@@ -45,12 +68,6 @@ import { fonts, radius, screenContentGutter, screenContentInnerPad, useAppTheme 
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
-/** Light tap when the user explicitly opens or closes recall search — not on auto-collapse. */
-function searchChromeHaptic() {
-  if (Platform.OS === 'web') return;
-  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 }
 
 /** Calm expand/collapse for the search capsule (slightly slower than system default). */
@@ -68,6 +85,7 @@ const PAGE_SIZE = 20;
 const SCROLL_END_THRESHOLD_PX = 160;
 const SEARCH_DEBOUNCE_MS = 250;
 const SEARCH_MAX_RESULTS = 300;
+type SettingsRoute = 'settings' | 'manifesto' | 'app_icon';
 /** How often to refresh upload-queue state for the sync header while signed in. */
 const SYNC_UPLOAD_POLL_MS = 2500;
 /** Pending rows at or above this count can contribute to a “stuck” header after consecutive polls. */
@@ -90,6 +108,15 @@ export type CaptureScreenProps = {
   streamHighlightEntryId?: string | null;
   /** Schedule/clear handled in parent so manual capture and share share one timer. */
   onScheduleStreamHighlight?: (entryId: string) => void;
+  /** From App after {@link loadSubscriptionState}; defaults true for tests / isolation. */
+  subscriptionHydrated?: boolean;
+  /** Stub or real Plus purchase completed — refresh Firestore ingest when paywall is on. */
+  onSubscriptionUnlocked?: () => void;
+  /**
+   * Increment (from universal link / custom scheme) to open the same sync sheet as the header CTA,
+   * without recording a header “tap” for shimmer prefs.
+   */
+  syncEntryRequestNonce?: number;
 };
 
 export function CaptureScreen({
@@ -99,6 +126,9 @@ export function CaptureScreen({
   captureFocusNonce = 0,
   streamHighlightEntryId = null,
   onScheduleStreamHighlight,
+  subscriptionHydrated = true,
+  onSubscriptionUnlocked,
+  syncEntryRequestNonce = 0,
 }: CaptureScreenProps = {}) {
   const [text, setText] = useState('');
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -111,12 +141,21 @@ export function CaptureScreen({
   /** Search is secondary: hidden until user opens it — avoids competing with capture. */
   const [searchExpanded, setSearchExpanded] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
+  const [settingsRoute, setSettingsRoute] = useState<SettingsRoute | null>(null);
+  const [appIconVariantId, setAppIconVariantId] = useState<AppIconVariantId>('default');
+  const [hapticsEnabled, setHapticsEnabledState] = useState(true);
   const [authRestorePhase, setAuthRestorePhase] = useState<AuthRestorePhase>(() =>
     isFirebaseSyncConfigured() && Platform.OS === 'ios' ? 'restoring' : 'signed_out'
   );
   const [uploadPending, setUploadPending] = useState(false);
   const [uploadStuck, setUploadStuck] = useState(false);
+  const [enableSyncLabelShimmer, setEnableSyncLabelShimmer] = useState(false);
+  /** __DEV__: incremented from dev menu to re-show “Sync enabled” / desktop link sheet. */
+  const [devPostSyncPreviewNonce, setDevPostSyncPreviewNonce] = useState(0);
   const stuckPollsRef = useRef(0);
+  const lastSyncEntryNonceRef = useRef(0);
+  const authPhaseRef = useRef(authRestorePhase);
+  const enableSyncShimmerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<TextInput>(null);
   const searchInputRef = useRef<TextInput>(null);
   const searchBlurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -125,9 +164,11 @@ export function CaptureScreen({
   const loadingMoreRef = useRef(false);
   const searchQueryRef = useRef('');
   const searchActiveRef = useRef(false);
-  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth } = useWindowDimensions();
   const t = useAppTheme();
   const gutter = screenContentGutter(windowWidth);
+
+  authPhaseRef.current = authRestorePhase;
 
   entriesRef.current = entries;
   hasMoreRef.current = hasMore;
@@ -135,17 +176,38 @@ export function CaptureScreen({
   const searchTrimmed = searchQuery.trim();
   searchActiveRef.current = searchTrimmed.length > 0;
 
+  useEffect(() => {
+    void getHapticsEnabled().then(setHapticsEnabledState);
+  }, []);
+
+  useEffect(() => {
+    if (!ENABLE_APP_ICON_SWITCHER) {
+      return;
+    }
+    void getCurrentAppIconVariantId().then(setAppIconVariantId);
+  }, []);
+
+  const persistHapticsEnabled = useCallback((next: boolean) => {
+    setHapticsEnabledState(next);
+    void setHapticsEnabled(next);
+  }, []);
+
+  const playSearchChromeHaptic = useCallback(() => {
+    if (!hapticsEnabled || Platform.OS === 'web') return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  }, [hapticsEnabled]);
+
   const expandSearch = useCallback(() => {
-    searchChromeHaptic();
+    playSearchChromeHaptic();
     animateSearchLayout();
     setSearchExpanded(true);
     requestAnimationFrame(() => {
       searchInputRef.current?.focus();
     });
-  }, []);
+  }, [playSearchChromeHaptic]);
 
   const collapseSearch = useCallback(() => {
-    searchChromeHaptic();
+    playSearchChromeHaptic();
     Keyboard.dismiss();
     animateSearchLayout();
     setSearchQuery('');
@@ -155,7 +217,7 @@ export function CaptureScreen({
       clearTimeout(searchBlurTimerRef.current);
       searchBlurTimerRef.current = null;
     }
-  }, []);
+  }, [playSearchChromeHaptic]);
 
   const onSearchFocus = useCallback(() => {
     setSearchFocused(true);
@@ -240,6 +302,16 @@ export function CaptureScreen({
     });
     return () => cancelAnimationFrame(id);
   }, [captureFocusNonce]);
+
+  useEffect(
+    () => () => {
+      if (enableSyncShimmerTimerRef.current) {
+        clearTimeout(enableSyncShimmerTimerRef.current);
+        enableSyncShimmerTimerRef.current = null;
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     if (!isFirebaseSyncConfigured() || Platform.OS !== 'ios') {
@@ -354,6 +426,102 @@ export function CaptureScreen({
       });
   }, [refreshEntries, refreshUploadPending]);
 
+  /**
+   * One delayed shimmer after the first successful save (AsyncStorage), if the user never opened
+   * the sync CTA and the animation has not run before. If auth is still “restoring” when the timer
+   * fires, the sweep is skipped (calm; rare edge — user may already be ineligible on next save).
+   */
+  const scheduleEnableSyncLabelShimmerAfterFirstSave = useCallback(() => {
+    void (async () => {
+      if (!isFirebaseSyncConfigured() || Platform.OS !== 'ios') {
+        return;
+      }
+      if (enableSyncShimmerTimerRef.current !== null) {
+        return;
+      }
+      if (await hasSyncHeaderCtaBeenTapped()) {
+        return;
+      }
+      if (await hasEnableSyncShimmerCompleted()) {
+        return;
+      }
+      if (await hasFirstSavedThought()) {
+        return;
+      }
+      await recordFirstSavedThought();
+      if (enableSyncShimmerTimerRef.current !== null) {
+        return;
+      }
+      if (await hasSyncHeaderCtaBeenTapped()) {
+        return;
+      }
+      const delayMs = 1000 + Math.random() * 1000;
+      enableSyncShimmerTimerRef.current = setTimeout(() => {
+        enableSyncShimmerTimerRef.current = null;
+        void (async () => {
+          if (await hasSyncHeaderCtaBeenTapped()) {
+            return;
+          }
+          if (await hasEnableSyncShimmerCompleted()) {
+            return;
+          }
+          if (authPhaseRef.current !== 'signed_out') {
+            return;
+          }
+          setEnableSyncLabelShimmer(true);
+        })();
+      }, delayMs);
+    })();
+  }, []);
+
+  const openSyncModalFromHeader = useCallback(() => {
+    void recordSyncHeaderCtaTapped();
+    if (enableSyncShimmerTimerRef.current) {
+      clearTimeout(enableSyncShimmerTimerRef.current);
+      enableSyncShimmerTimerRef.current = null;
+    }
+    setEnableSyncLabelShimmer(false);
+    setSyncModalVisible(true);
+  }, []);
+
+  const openDevMenuFromSettings = useCallback(() => {
+    if (onDevMenu == null) {
+      return;
+    }
+    showDevMenu({
+      onResetWelcome: onDevMenu,
+      ...(__DEV__ && Platform.OS === 'ios'
+        ? {
+            onClearLocalSyncPaywallFlags: () => void clearLocalSyncPaywallFlags(),
+            onRevenueCatLogOut: () => void devRevenueCatLogOutAndRefreshEntitlementCache(),
+            onResetPaywallForPurchaseTesting: () => void resetPaywallForPurchaseTesting(),
+            onPreviewSyncEnabledSheet: () => {
+              setDevPostSyncPreviewNonce((n) => n + 1);
+              setSyncModalVisible(true);
+            },
+          }
+        : {}),
+    });
+  }, [onDevMenu]);
+
+  useEffect(() => {
+    if (syncEntryRequestNonce <= lastSyncEntryNonceRef.current) {
+      return;
+    }
+    lastSyncEntryNonceRef.current = syncEntryRequestNonce;
+    if (enableSyncShimmerTimerRef.current) {
+      clearTimeout(enableSyncShimmerTimerRef.current);
+      enableSyncShimmerTimerRef.current = null;
+    }
+    setEnableSyncLabelShimmer(false);
+    setSyncModalVisible(true);
+  }, [syncEntryRequestNonce]);
+
+  const onEnableSyncLabelShimmerComplete = useCallback(() => {
+    setEnableSyncLabelShimmer(false);
+    void markEnableSyncShimmerCompleted();
+  }, []);
+
   const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;
 
@@ -414,19 +582,29 @@ export function CaptureScreen({
           void runSearch(sq);
         }
         void refreshUploadPending();
+        scheduleEnableSyncLabelShimmerAfterFirstSave();
       })
       .catch((err) => {
         if (__DEV__) {
           console.warn('saveEntry failed', err);
         }
       });
-  }, [text, runSearch, onScheduleStreamHighlight, refreshUploadPending]);
+  }, [
+    text,
+    runSearch,
+    onScheduleStreamHighlight,
+    refreshUploadPending,
+    scheduleEnableSyncLabelShimmerAfterFirstSave,
+  ]);
 
   /** Taller composer so capture reads clearly as the primary surface on device. */
   const composerMinHeight = 76;
   const composerMaxHeight = 120;
-  /** Search stays a quiet utility strip — not a second “composer” (no accent fill until focused). */
-  const searchIdleSurface = t.isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.04)';
+  /** Search chrome: low-contrast, no accent tint (keeps capture visually primary). */
+  const searchSurface = t.isDark ? 'rgba(255,255,255,0.015)' : 'rgba(0,0,0,0.02)';
+  const searchBorderIdle = t.isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.07)';
+  const searchBorderFocus = t.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.14)';
+  const searchPressedSurface = t.isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.04)';
   const headerLogoSize = 42;
   /** Ring geometry: align **outer ring** with search field (gutter only); composer is inset +`screenContentInnerPad`. */
   const headerLogoAlignStyle = { marginLeft: -chinottoLogoLeadingOutset(headerLogoSize) };
@@ -434,7 +612,7 @@ export function CaptureScreen({
   return (
     <View style={styles.shell}>
       <AmbientBackground />
-      <SafeAreaView style={styles.safe} edges={['top', 'right', 'left', 'bottom']}>
+      <SafeAreaView style={styles.safe} edges={['top', 'right', 'left']}>
         <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View
             style={[
@@ -452,35 +630,27 @@ export function CaptureScreen({
                 isFirebaseSyncConfigured() && Platform.OS === 'ios' && styles.headerReserveDevMenuTray,
               ]}
             >
-              {onDevMenu != null ? (
-                <Pressable
-                  accessibilityLabel="Chinotto"
-                  accessibilityHint="Long press opens developer menu"
-                  delayLongPress={450}
-                  hitSlop={12}
-                  onLongPress={() => showDevMenu({ onResetWelcome: onDevMenu })}
-                >
-                  <ChinottoLogo
-                    testID="header-logo"
-                    size={headerLogoSize}
-                    color={t.colors.fgDim}
-                    style={headerLogoAlignStyle}
-                  />
-                </Pressable>
-              ) : (
+              <Pressable
+                accessibilityLabel="Chinotto"
+                accessibilityHint="Opens Settings"
+                hitSlop={12}
+                onPress={() => setSettingsRoute('settings')}
+              >
                 <ChinottoLogo
                   testID="header-logo"
                   size={headerLogoSize}
                   color={t.colors.fgDim}
                   style={headerLogoAlignStyle}
                 />
-              )}
+              </Pressable>
               {isFirebaseSyncConfigured() && Platform.OS === 'ios' ? (
                 <SyncHeaderStatus
                   phase={authRestorePhase}
                   uploadPending={authRestorePhase === 'signed_in' && uploadPending}
                   uploadStuck={authRestorePhase === 'signed_in' && uploadStuck}
-                  onPress={() => setSyncModalVisible(true)}
+                  onPress={openSyncModalFromHeader}
+                  enableSyncLabelShimmer={enableSyncLabelShimmer}
+                  onEnableSyncLabelShimmerComplete={onEnableSyncLabelShimmerComplete}
                   style={styles.syncAfterLogo}
                 />
               ) : null}
@@ -497,7 +667,6 @@ export function CaptureScreen({
               styles.scrollContent,
               {
                 flexGrow: 1,
-                minHeight: windowHeight,
               },
             ]}
           >
@@ -524,8 +693,8 @@ export function CaptureScreen({
                       styles.searchPill,
                       styles.searchPillExpanded,
                       {
-                        backgroundColor: searchFocused ? t.colors.accentSubtle : searchIdleSurface,
-                        borderColor: searchFocused ? t.colors.borderFocus : t.colors.border,
+                        backgroundColor: searchSurface,
+                        borderColor: searchFocused ? searchBorderFocus : searchBorderIdle,
                       },
                     ]}
                   >
@@ -561,7 +730,7 @@ export function CaptureScreen({
                       style={({ pressed }) => [
                         styles.searchCloseOrb,
                         {
-                          backgroundColor: pressed ? t.colors.accentSubtle : 'transparent',
+                          backgroundColor: pressed ? searchPressedSurface : 'transparent',
                         },
                       ]}
                     >
@@ -578,12 +747,12 @@ export function CaptureScreen({
                       styles.searchPill,
                       styles.searchPillCollapsed,
                       {
-                        backgroundColor: searchIdleSurface,
-                        borderColor: t.colors.border,
-                        opacity: pressed ? 0.92 : 1,
+                        backgroundColor: pressed ? searchPressedSurface : searchSurface,
+                        borderColor: searchBorderIdle,
+                        opacity: pressed ? 0.96 : 1,
                       },
                     ]}
-                    android_ripple={{ color: 'rgba(255,255,255,0.06)', borderless: false }}
+                    android_ripple={{ color: 'rgba(255,255,255,0.03)', borderless: false }}
                   >
                     <Ionicons name="search" size={15} color={t.colors.sectionFg} style={styles.searchPillIcon} />
                     <Text
@@ -633,6 +802,60 @@ export function CaptureScreen({
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+      {settingsRoute === 'settings' ? (
+        <SettingsScreen
+          onClose={() => setSettingsRoute(null)}
+          onOpenSync={openSyncModalFromHeader}
+          onOpenManifesto={() => setSettingsRoute('manifesto')}
+          canOpenAppIcon={ENABLE_APP_ICON_SWITCHER}
+          onOpenAppIcon={
+            ENABLE_APP_ICON_SWITCHER
+              ? () => setSettingsRoute('app_icon')
+              : undefined
+          }
+          appIconLabel={ENABLE_APP_ICON_SWITCHER ? getAppIconVariant(appIconVariantId).name : undefined}
+          syncStatusLabel={
+            authRestorePhase === 'restoring'
+              ? 'Checking sync'
+              : authRestorePhase === 'signed_in'
+                ? uploadStuck
+                  ? 'Sync paused'
+                  : uploadPending
+                    ? 'Syncing…'
+                    : 'Synced'
+                : 'Off'
+          }
+          hapticsEnabled={hapticsEnabled}
+          onHapticsEnabledChange={persistHapticsEnabled}
+          onOpenDevMenu={onDevMenu != null ? openDevMenuFromSettings : undefined}
+        />
+      ) : null}
+      {settingsRoute === 'manifesto' ? (
+        <ManifestoScreen
+          onClose={() => setSettingsRoute('settings')}
+        />
+      ) : null}
+      {ENABLE_APP_ICON_SWITCHER && settingsRoute === 'app_icon' ? (
+        <AppIconScreen
+          selectedId={appIconVariantId}
+          supportsDynamicIcons={supportsDynamicAppIcons()}
+          onSelect={(id) => {
+            void setCurrentAppIconVariantId(id)
+              .then(setAppIconVariantId)
+              .catch((error) => {
+                if (__DEV__) {
+                  console.warn('[AppIcon] setCurrentAppIconVariantId failed', error);
+                }
+                Alert.alert(
+                  'Could not change app icon',
+                  String(error?.message ?? error ?? 'Please reinstall/rebuild the iOS app and try again.')
+                );
+              });
+          }}
+          onClose={() => setSettingsRoute('settings')}
+        />
+      ) : null}
+      {/* Enable sync sheet: opened only from the header CTA. Paid step uses monetization/syncPurchaseFlow when EXPO_PUBLIC_ENABLE_PAYWALL=true. */}
       <EnableSyncModal
         visible={syncModalVisible}
         onClose={() => setSyncModalVisible(false)}
@@ -643,6 +866,11 @@ export function CaptureScreen({
             .catch(() => {});
         }}
         authPhase={authRestorePhase}
+        subscriptionHydrated={subscriptionHydrated}
+        onSubscriptionUnlocked={onSubscriptionUnlocked}
+        devPostSyncPreviewNonce={
+          __DEV__ && devPostSyncPreviewNonce > 0 ? devPostSyncPreviewNonce : undefined
+        }
         syncHealthNote={
           authRestorePhase === 'signed_in' && uploadStuck
             ? 'Uploads are waiting—check your connection. Nothing is lost; thoughts stay on this device.'

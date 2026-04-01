@@ -1,7 +1,10 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useRef } from 'react';
 import {
   Animated,
+  Easing,
   type StyleProp,
+  type TextStyle,
   type ViewStyle,
   Platform,
   Pressable,
@@ -23,6 +26,12 @@ export type SyncHeaderStatusProps = {
   uploadStuck?: boolean;
   onPress: () => void;
   style?: StyleProp<ViewStyle>;
+  /**
+   * One-shot soft highlight over “Enable sync” (signed_out only). Parent turns off after
+   * {@link onEnableSyncLabelShimmerComplete}.
+   */
+  enableSyncLabelShimmer?: boolean;
+  onEnableSyncLabelShimmerComplete?: () => void;
 };
 
 const DOT_SIZE = 7;
@@ -45,12 +54,77 @@ function syncDotShadowStyle(): ViewStyle {
   };
 }
 
+type EnableSyncLabelWithShimmerProps = {
+  text: string;
+  textStyle: StyleProp<TextStyle>;
+  isDark: boolean;
+  onComplete?: () => void;
+};
+
+/** Single left→right sweep; low contrast; no loop (`useNativeDriver: false` for reliable layout clip). */
+function EnableSyncLabelWithShimmer({ text, textStyle, isDark, onComplete }: EnableSyncLabelWithShimmerProps) {
+  const sweep = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    let cancelled = false;
+    sweep.setValue(0);
+    const anim = Animated.timing(sweep, {
+      toValue: 1,
+      duration: 1280,
+      easing: Easing.inOut(Easing.quad),
+      useNativeDriver: false,
+    });
+    anim.start(({ finished }) => {
+      if (finished && !cancelled) {
+        onComplete?.();
+      }
+    });
+    return () => {
+      cancelled = true;
+      anim.stop();
+    };
+  }, [onComplete, sweep]);
+
+  const translateX = sweep.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-36, 108],
+  });
+
+  const colors = isDark
+    ? (['transparent', 'rgba(255,255,255,0.11)', 'transparent'] as const)
+    : (['transparent', 'rgba(0,0,0,0.07)', 'transparent'] as const);
+
+  return (
+    <View style={styles.labelShimmerHost} testID="enable-sync-label-shimmer">
+      <Text style={textStyle}>{text}</Text>
+      <Animated.View
+        pointerEvents="none"
+        accessible={false}
+        importantForAccessibility="no"
+        style={[StyleSheet.absoluteFillObject, styles.labelShimmerClip, { opacity: 0.18 }]}
+      >
+        <Animated.View style={{ height: '100%', transform: [{ translateX }] }}>
+          <LinearGradient
+            colors={[...colors]}
+            locations={[0, 0.5, 1]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={styles.labelShimmerBand}
+          />
+        </Animated.View>
+      </Animated.View>
+    </View>
+  );
+}
+
 export function SyncHeaderStatus({
   phase,
   uploadPending = false,
   uploadStuck = false,
   onPress,
   style,
+  enableSyncLabelShimmer = false,
+  onEnableSyncLabelShimmerComplete,
 }: SyncHeaderStatusProps) {
   const t = useAppTheme();
   const pulse = useRef(new Animated.Value(0.45)).current;
@@ -157,7 +231,16 @@ export function SyncHeaderStatus({
             />
           )
         ) : null}
-        <Text style={[styles.label, { color: textColor, fontFamily: fonts.regular }]}>{label}</Text>
+        {phase === 'signed_out' && enableSyncLabelShimmer ? (
+          <EnableSyncLabelWithShimmer
+            text={label}
+            textStyle={[styles.label, { color: textColor, fontFamily: fonts.regular }]}
+            isDark={t.isDark}
+            onComplete={onEnableSyncLabelShimmerComplete}
+          />
+        ) : (
+          <Text style={[styles.label, { color: textColor, fontFamily: fonts.regular }]}>{label}</Text>
+        )}
       </View>
     </Pressable>
   );
@@ -177,5 +260,16 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 13,
     letterSpacing: 0.18,
+  },
+  labelShimmerHost: {
+    alignSelf: 'flex-start',
+    position: 'relative',
+  },
+  labelShimmerClip: {
+    overflow: 'hidden',
+  },
+  labelShimmerBand: {
+    width: 44,
+    height: '100%',
   },
 });

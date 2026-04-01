@@ -16,6 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.chinotto.mobile",
+      "associatedDomains": ["applinks:getchinotto.app"],
       "usesAppleSignIn": true,
       "entitlements": {
         "com.apple.security.application-groups": [

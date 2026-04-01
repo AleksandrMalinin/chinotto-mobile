@@ -1,8 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AccessibilityInfo,
-  Animated,
-  Easing,
   Platform,
   Pressable,
   StyleSheet,
@@ -10,7 +7,6 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 
 import type { Entry } from '../types/entry';
@@ -41,14 +37,8 @@ export type RecentListProps = {
 
 const DELETE_ACTION_WIDTH = 76;
 
-/** Transient left-edge trace — quicker and lighter than the composer surface. */
-const HIGHLIGHT_FADE_IN_MS = 200;
-const HIGHLIGHT_HOLD_MS = 420;
-const HIGHLIGHT_FADE_OUT_MS = 340;
-
 /** Parent should clear `highlightEntryId` after this (full fade + small buffer). */
-export const STREAM_HIGHLIGHT_CLEAR_AFTER_MS =
-  HIGHLIGHT_FADE_IN_MS + HIGHLIGHT_HOLD_MS + HIGHLIGHT_FADE_OUT_MS + 320;
+export const STREAM_HIGHLIGHT_CLEAR_AFTER_MS = 0;
 
 /** Pressed stream row — full-bleed tint, softer than a card fill. */
 function entryPressedBackground(isDark: boolean): string {
@@ -59,11 +49,6 @@ type StreamRowProps = {
   item: Entry;
   isLastInSection: boolean;
   isNewest: boolean;
-  highlightEntryId: string | null;
-  reduceMotion: boolean;
-  highlightOpacity: Animated.Value;
-  traceGradientColors: readonly [string, string, string];
-  traceGradientLocations: readonly number[];
   /** Matches `CaptureScreen` scroll `paddingHorizontal` so rows can full-bleed under press/trace. */
   streamGutter: number;
   onEntryPress?: (entry: Entry) => void;
@@ -74,11 +59,6 @@ function RecentStreamRow({
   item,
   isLastInSection,
   isNewest,
-  highlightEntryId,
-  reduceMotion,
-  highlightOpacity,
-  traceGradientColors,
-  traceGradientLocations,
   streamGutter,
   onEntryPress,
   onEntryDelete,
@@ -107,21 +87,6 @@ function RecentStreamRow({
         },
       ]}
     >
-      {highlightEntryId === item.id && !reduceMotion ? (
-        <Animated.View
-          pointerEvents="none"
-          importantForAccessibility="no"
-          style={[styles.entryRowTraceLayer, { opacity: highlightOpacity }]}
-        >
-          <LinearGradient
-            colors={[...traceGradientColors]}
-            locations={[...traceGradientLocations]}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={styles.entryRowTraceGradient}
-          />
-        </Animated.View>
-      ) : null}
       {pressed ? (
         <View
           pointerEvents="none"
@@ -258,52 +223,9 @@ function RecentListInner({
   const t = useAppTheme();
   const { colors, typography, isDark } = t;
   const { meta } = typography;
-  const [reduceMotion, setReduceMotion] = useState(false);
-  const highlightOpacity = useRef(new Animated.Value(0)).current;
-  const highlightAnim = useRef<Animated.CompositeAnimation | null>(null);
-
-  useEffect(() => {
-    void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
-  }, []);
-
-  useEffect(() => {
-    highlightAnim.current?.stop();
-    highlightAnim.current = null;
-    if (!highlightEntryId || reduceMotion) {
-      highlightOpacity.setValue(0);
-      return;
-    }
-    highlightOpacity.setValue(0);
-    const seq = Animated.sequence([
-      Animated.timing(highlightOpacity, {
-        toValue: 1,
-        duration: HIGHLIGHT_FADE_IN_MS,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-      Animated.delay(HIGHLIGHT_HOLD_MS),
-      Animated.timing(highlightOpacity, {
-        toValue: 0,
-        duration: HIGHLIGHT_FADE_OUT_MS,
-        easing: Easing.in(Easing.quad),
-        useNativeDriver: true,
-      }),
-    ]);
-    highlightAnim.current = seq;
-    seq.start();
-    return () => {
-      seq.stop();
-    };
-  }, [highlightEntryId, reduceMotion, highlightOpacity]);
 
   const groups = useMemo(() => groupEntriesByDate(entries), [entries]);
   const newestShownId = groups[0]?.items[0]?.id ?? null;
-  /** Left → right, no hard stop (avoids a visible “panel” edge). */
-  const traceGradientColors = isDark
-    ? (['rgba(136, 146, 204, 0.052)', 'rgba(136, 146, 204, 0.016)', 'rgba(136, 146, 204, 0)'] as const)
-    : (['rgba(102, 112, 178, 0.04)', 'rgba(102, 112, 178, 0.012)', 'rgba(102, 112, 178, 0)'] as const);
-  const traceGradientLocations = [0, 0.38, 1] as const;
-
   if (!visible) {
     return null;
   }
@@ -369,11 +291,6 @@ function RecentListInner({
                 item={item}
                 isLastInSection={isLastInSection}
                 isNewest={item.id === newestShownId}
-                highlightEntryId={highlightEntryId}
-                reduceMotion={reduceMotion}
-                highlightOpacity={highlightOpacity}
-                traceGradientColors={traceGradientColors}
-                traceGradientLocations={traceGradientLocations}
                 streamGutter={streamGutter}
                 onEntryPress={onEntryPress}
                 onEntryDelete={onEntryDelete}
@@ -427,22 +344,6 @@ const styles = StyleSheet.create({
   },
   rowOuterRelative: {
     position: 'relative',
-  },
-  /**
-   * Leading-edge wash: rectangular band behind the row (no radius / no clip) so it never reads
-   * as a second “card” on top of the stream.
-   */
-  entryRowTraceLayer: {
-    position: 'absolute',
-    left: 0,
-    top: 5,
-    bottom: 5,
-    width: '62%',
-    zIndex: 0,
-  },
-  entryRowTraceGradient: {
-    flex: 1,
-    width: '100%',
   },
   pressableAboveTrace: {
     width: '100%',

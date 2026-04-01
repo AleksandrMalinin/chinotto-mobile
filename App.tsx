@@ -11,13 +11,17 @@ import { BrandSplash } from './components/BrandSplash';
 import { STREAM_HIGHLIGHT_CLEAR_AFTER_MS } from './components/RecentList';
 import { CaptureScreen } from './screens/CaptureScreen';
 import { WelcomeOnboardingScreen } from './screens/WelcomeOnboardingScreen';
+import { loadSubscriptionState } from './monetization/subscriptionState';
+import { bootstrapRevenueCat } from './src/services/purchases/initRevenueCat';
 import { composeIncomingShareCaptureText } from './share/extractShareEntryTexts';
 import { startMobileFirestoreIngest } from './sync/firestoreIngest';
 import { resolvePushEntryForSync } from './sync/pushEntryForSync';
 import { startBackgroundSync } from './sync/syncEngine';
+import { useSyncDeepLink } from './linking/useSyncDeepLink';
 import { initDatabase } from './storage/db';
 import { saveEntry } from './storage/entryRepository';
 import { clearWelcomeFlag, hasCompletedWelcome } from './storage/welcomeFlag';
+import { isFirebaseSyncConfigured } from './sync/firebaseConfig';
 import { useCaptureWidgetDeepLinkFocus } from './widgets/useCaptureWidgetDeepLinkFocus';
 import { useExperimentalIosHomeWidgetRegistration } from './widgets/useExperimentalIosHomeWidget';
 import { colorsDark } from './theme';
@@ -103,6 +107,8 @@ export default function App() {
     'OpenSauceOne-500': require('./assets/fonts/OpenSauceOne-Medium.ttf'),
   });
   const [dbReady, setDbReady] = useState(false);
+  const [subscriptionLoaded, setSubscriptionLoaded] = useState(false);
+  const [firestoreIngestEpoch, setFirestoreIngestEpoch] = useState(0);
   const [remoteIngestVersion, setRemoteIngestVersion] = useState(0);
   const [phase, setPhase] = useState<AppPhase>('boot');
   /** Snapshot after `hasCompletedWelcome()` — drives brand → welcome vs main. */
@@ -114,6 +120,7 @@ export default function App() {
   const [captureFocusNonce, setCaptureFocusNonce] = useState(0);
   const [streamHighlightEntryId, setStreamHighlightEntryId] = useState<string | null>(null);
   const streamHighlightClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [syncEntryRequestNonce, setSyncEntryRequestNonce] = useState(0);
   const {
     resolvedSharedPayloads,
     sharedPayloads,
@@ -154,6 +161,14 @@ export default function App() {
     void initDatabase().finally(() => setDbReady(true));
   }, []);
 
+  useEffect(() => {
+    void (async () => {
+      await bootstrapRevenueCat();
+      await loadSubscriptionState();
+      setSubscriptionLoaded(true);
+    })();
+  }, []);
+
   useExperimentalIosHomeWidgetRegistration(dbReady);
 
   useCaptureWidgetDeepLinkFocus(
@@ -161,6 +176,18 @@ export default function App() {
       setCaptureFocusNonce((n) => n + 1);
     }, [])
   );
+
+  const bumpSyncEntryFromDeepLink = useCallback(() => {
+    setSyncEntryRequestNonce((n) => n + 1);
+  }, []);
+
+  useSyncDeepLink({
+    enabled: Platform.OS === 'ios' && isFirebaseSyncConfigured(),
+    phase,
+    dbReady,
+    subscriptionLoaded,
+    onSyncDeepLink: bumpSyncEntryFromDeepLink,
+  });
 
   useEffect(() => {
     if (!dbReady || isResolving) {
@@ -233,7 +260,7 @@ export default function App() {
   }, [shareSavedAck]);
 
   useEffect(() => {
-    if (!dbReady) {
+    if (!dbReady || !subscriptionLoaded) {
       return;
     }
     let cancelled = false;
@@ -250,17 +277,17 @@ export default function App() {
       cancelled = true;
       stop?.();
     };
-  }, [dbReady]);
+  }, [dbReady, subscriptionLoaded]);
 
   useEffect(() => {
-    if (!dbReady) {
+    if (!dbReady || !subscriptionLoaded) {
       return;
     }
     const stopIngest = startMobileFirestoreIngest(() => {
       setRemoteIngestVersion((v) => v + 1);
     });
     return stopIngest;
-  }, [dbReady]);
+  }, [dbReady, subscriptionLoaded, firestoreIngestEpoch]);
 
   useEffect(() => {
     if (!fontsLoaded || !dbReady) {
@@ -308,8 +335,11 @@ export default function App() {
               remoteIngestVersion={remoteIngestVersion}
               externalEntriesEpoch={externalEntriesEpoch}
               captureFocusNonce={captureFocusNonce}
+              syncEntryRequestNonce={syncEntryRequestNonce}
               streamHighlightEntryId={streamHighlightEntryId}
               onScheduleStreamHighlight={scheduleStreamHighlight}
+              subscriptionHydrated={subscriptionLoaded}
+              onSubscriptionUnlocked={() => setFirestoreIngestEpoch((n) => n + 1)}
               {...(__DEV__ ? { onDevMenu: onDevResetWelcome } : {})}
             />
           )}

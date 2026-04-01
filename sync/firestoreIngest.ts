@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 
 import type { Entry } from '../types/entry';
+import { isSyncAccessBlocked } from '../monetization/syncAccessPolicy';
 import {
   applyRemoteTombstoneDeletes,
   ingestRemoteFirestoreRows,
@@ -166,6 +167,9 @@ export async function runFirestoreIngestBackfill(
  */
 export function startMobileFirestoreIngest(onIngested: () => void): () => void {
   if (!isFirebaseSyncConfigured()) {
+    return () => {};
+  }
+  if (isSyncAccessBlocked()) {
     return () => {};
   }
 

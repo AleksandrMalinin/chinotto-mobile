@@ -142,6 +142,9 @@ export function StreamFlowPanel({ calm = false, deferMotion = false, typingAccen
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
     >
+      <View pointerEvents="none" style={styles.auraViolet} />
+      <View pointerEvents="none" style={styles.auraBlue} />
+
       <BlobField
         panelW={panelW}
         panelH={panelH}
@@ -375,11 +378,49 @@ const styles = StyleSheet.create({
     ...Platform.select({
       ios: {
         shadowColor: 'rgba(0,0,0,0.45)',
-        shadowOffset: { width: 0, height: 20 },
-        shadowOpacity: 0.55,
-        shadowRadius: 48,
+        shadowOffset: { width: 0, height: 19 },
+        shadowOpacity: 0.4,
+        shadowRadius: 38,
       },
       android: { elevation: 12 },
+      default: {},
+    }),
+  },
+  auraViolet: {
+    position: 'absolute',
+    top: -7,
+    right: -7,
+    bottom: -7,
+    left: -7,
+    borderRadius: 29,
+    backgroundColor: 'transparent',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#646eb4',
+        shadowOpacity: 0.14,
+        shadowRadius: 26,
+        shadowOffset: { width: 0, height: 0 },
+      },
+      android: {},
+      default: {},
+    }),
+  },
+  auraBlue: {
+    position: 'absolute',
+    top: -16,
+    right: -16,
+    bottom: -16,
+    left: -16,
+    borderRadius: 38,
+    backgroundColor: 'transparent',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#4664b4',
+        shadowOpacity: 0.085,
+        shadowRadius: 44,
+        shadowOffset: { width: 0, height: 0 },
+      },
+      android: {},
       default: {},
     }),
   },
@@ -398,10 +439,10 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.06)',
     ...Platform.select({
       ios: {
-        shadowColor: 'rgba(100,110,180,0.2)',
+        shadowColor: '#646eb4',
         shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 1,
-        shadowRadius: 40,
+        shadowOpacity: 0.14,
+        shadowRadius: 26,
       },
       android: {},
       default: {},

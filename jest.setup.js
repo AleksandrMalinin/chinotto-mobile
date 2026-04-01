@@ -55,6 +55,78 @@ jest.mock('expo-linear-gradient', () => {
   };
 });
 
+jest.mock('react-native-purchases', () => {
+  const emptyCustomerInfo = {
+    entitlements: { active: {}, all: {} },
+    activeSubscriptions: [],
+    allPurchasedProductIdentifiers: [],
+    nonSubscriptionTransactions: [],
+    originalAppUserId: '',
+    originalPurchaseDate: null,
+    originalApplicationVersion: null,
+    managementURL: null,
+    firstSeen: '',
+    requestDate: '',
+    latestExpirationDate: null,
+  };
+  const INTRO_ELIGIBILITY_STATUS = {
+    INTRO_ELIGIBILITY_STATUS_UNKNOWN: 0,
+    INTRO_ELIGIBILITY_STATUS_INELIGIBLE: 1,
+    INTRO_ELIGIBILITY_STATUS_ELIGIBLE: 2,
+    INTRO_ELIGIBILITY_STATUS_NO_INTRO_OFFER_EXISTS: 3,
+  };
+  const Purchases = {
+    configure: jest.fn(),
+    setLogLevel: jest.fn(),
+    STOREKIT_VERSION: {
+      STOREKIT_1: 'STOREKIT_1',
+      STOREKIT_2: 'STOREKIT_2',
+      DEFAULT: 'DEFAULT',
+    },
+    checkTrialOrIntroductoryPriceEligibility: jest.fn(() => Promise.resolve({})),
+    getCustomerInfo: jest.fn(() => Promise.resolve(emptyCustomerInfo)),
+    getOfferings: jest.fn(() => Promise.resolve({ current: null, all: {} })),
+    purchasePackage: jest.fn(() =>
+      Promise.resolve({
+        customerInfo: emptyCustomerInfo,
+        productIdentifier: 'monthly',
+      })
+    ),
+    restorePurchases: jest.fn(() => Promise.resolve(emptyCustomerInfo)),
+    addCustomerInfoUpdateListener: jest.fn(),
+    removeCustomerInfoUpdateListener: jest.fn(() => true),
+    LOG_LEVEL: {
+      DEBUG: 'DEBUG',
+      ERROR: 'ERROR',
+      WARN: 'WARN',
+      INFO: 'INFO',
+      VERBOSE: 'VERBOSE',
+    },
+    PURCHASES_ERROR_CODE: {
+      PURCHASE_CANCELLED_ERROR: '1',
+    },
+    PACKAGE_TYPE: {
+      UNKNOWN: 'UNKNOWN',
+      CUSTOM: 'CUSTOM',
+      LIFETIME: 'LIFETIME',
+      ANNUAL: 'ANNUAL',
+      MONTHLY: 'MONTHLY',
+      WEEKLY: 'WEEKLY',
+      TWO_MONTH: 'TWO_MONTH',
+      THREE_MONTH: 'THREE_MONTH',
+      SIX_MONTH: 'SIX_MONTH',
+    },
+  };
+  return {
+    __esModule: true,
+    default: Purchases,
+    LOG_LEVEL: Purchases.LOG_LEVEL,
+    INTRO_ELIGIBILITY_STATUS,
+  };
+});
+
+jest.mock('react-native-purchases-ui', () => ({}));
+
 jest.mock('expo-haptics', () => ({
   ImpactFeedbackStyle: {
     Light: 0,
@@ -115,7 +187,9 @@ jest.mock('react-native-svg', () => {
     __esModule: true,
     default: Mock,
     Circle: Mock,
+    Rect: Mock,
     Path: Mock,
+    Text: Mock,
     Defs: Mock,
     G: Mock,
     LinearGradient: Mock,

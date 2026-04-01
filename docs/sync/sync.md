@@ -143,7 +143,7 @@ service cloud.firestore {
 
 **Push behavior:** `firebasePushEntry` requires a **non-anonymous** user. Anonymous-only sessions must complete **Enable sync** before uploads succeed (queue stays pending until then).
 
-**Edge case:** If Apple is **already linked to a different Firebase user**, `linkWithCredential` can fail with `auth/credential-already-in-use`. The app surfaces explanatory copy (same Apple ID vs one Firebase library per device); full account merge is out of v1 scope — see `docs/sync-apple-qa.md` for manual checks.
+**Edge case:** If Apple is **already linked to a different Firebase user**, `linkWithCredential` can fail with `auth/credential-already-in-use`. The app surfaces explanatory copy (same Apple ID vs one Firebase library per device); full account merge is out of v1 scope — see `docs/sync/sync-apple-qa.md` for manual checks.
 
 **Env:** root `.env.example`. **Success:** Firestore write resolves → `markSynced`. **Failure:** leave pending.
 
@@ -155,7 +155,7 @@ service cloud.firestore {
 
 ## 5. Desktop (separate app)
 
-**Desktop behavior (architecture, ops, IPC):** [Chinotto `docs/sync.md`](https://github.com/AleksandrMalinin/chinotto/blob/main/docs/sync.md). **This file (`chinotto-mobile/docs/sync.md`)** is the **wire contract** (payloads, Firestore layout, §8 tombstones, mobile module map).
+**Desktop behavior (architecture, ops, IPC):** [Chinotto `docs/sync.md`](https://github.com/AleksandrMalinin/chinotto/blob/main/docs/sync.md). **This file (`chinotto-mobile/docs/sync/sync.md`)** is the **wire contract** (payloads, Firestore layout, §8 tombstones, mobile module map).
 
 **Shipping / alignment:** [sync-release-checklist.md](./sync-release-checklist.md) — mirrored in `chinotto-app`; update **both** when rows change.
 

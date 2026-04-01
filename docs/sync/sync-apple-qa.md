@@ -2,6 +2,12 @@
 
 **Scope:** Manual sanity checks for **Sign in with Apple + Firestore** on **iOS** (this repo). Use when validating a build or after auth/sync changes.
 
+### Dev: “Sync enabled” / desktop link sheet (repeatable)
+
+In **`__DEV__`** builds, **long-press** the Chinotto logo on the capture screen → **Preview “Sync enabled” sheet**. Opens the same post-sync copy + **Continue on desktop** (clipboard) flow without signing in again. Use it as many times as you need; each menu action bumps an internal counter so the preview always applies.
+
+For the real path, use **Enable sync** → Continue with Apple (and paywall/trial if enabled).
+
 ---
 
 ## 1. Same Apple ID, two devices (iPhone + iPad or iPhone + desktop)
@@ -51,4 +57,4 @@
 ## 5. Related docs
 
 - [sync.md](./sync.md) — Firestore layout, tombstones, backfill, limits.
-- Optional local `docs/PRODUCT_STATE.md` (gitignored) — shipped-behavior snapshot if you keep one.
+- Optional local `docs/product/PRODUCT_STATE.md` (gitignored) — shipped-behavior snapshot if you keep one.

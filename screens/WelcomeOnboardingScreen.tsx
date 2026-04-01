@@ -11,6 +11,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import Svg, { Defs, LinearGradient as SvgLinearGradient, Stop, Text as SvgText } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AmbientBackground } from '../components/AmbientBackground';
@@ -103,12 +104,14 @@ export function WelcomeOnboardingScreen({ onComplete }: Props) {
     if (t.isDark) {
       return {
         gradient: [
-          'rgba(168, 180, 238, 0.2)',
-          'rgba(112, 126, 192, 0.12)',
-          'rgba(86, 100, 162, 0.09)',
+          'rgba(160,170,255,0.24)',
+          'rgba(136,150,230,0.2)',
+          'rgba(110,124,202,0.16)',
         ] as const,
-        shadowColor: '#9aa6e0',
-        textColor: colors.entryBody,
+        shadowColor: '#a0aaff',
+        borderColor: 'rgba(160,170,255,0.34)',
+        borderTopColor: 'rgba(188,196,255,0.5)',
+        textColor: colors.fg,
       };
     }
     return {
@@ -118,9 +121,11 @@ export function WelcomeOnboardingScreen({ onComplete }: Props) {
         'rgba(88, 102, 175, 0.1)',
       ] as const,
       shadowColor: '#8890c8',
+      borderColor: 'rgba(125, 138, 210, 0.28)',
+      borderTopColor: 'rgba(155, 166, 232, 0.45)',
       textColor: colors.entryBody,
     };
-  }, [t.isDark, colors.entryBody]);
+  }, [t.isDark, colors.entryBody, colors.fg]);
 
   const handleContinue = useCallback(() => {
     void (async () => {
@@ -147,20 +152,42 @@ export function WelcomeOnboardingScreen({ onComplete }: Props) {
 
           <View style={[styles.copyColumn, { paddingHorizontal: t.spacing.md }]}>
             <Animated.View testID="welcome-entrance-title" style={entranceStyle(entranceTitle)}>
-              <Text
-                style={[
-                  styles.title,
-                  {
-                    color: colors.fg,
-                    fontFamily: typography.capture.fontFamily,
-                    fontSize: 22,
-                    lineHeight: 30,
-                    letterSpacing: 0.2,
-                  },
-                ]}
-              >
-                Write it down. No structure.
-              </Text>
+              <View style={styles.titleGradientWrap}>
+                <Text
+                  style={[
+                    styles.titleHiddenText,
+                    {
+                      fontFamily: typography.capture.fontFamily,
+                      fontSize: 22,
+                      lineHeight: 30,
+                      letterSpacing: 0.2,
+                    },
+                  ]}
+                >
+                  Write it down. No structure.
+                </Text>
+                <Svg width="100%" height={34} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                  <Defs>
+                    <SvgLinearGradient id="welcomeHeadlineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <Stop offset="0%" stopColor="rgba(255,255,255,0.96)" />
+                      <Stop offset="38%" stopColor="rgba(198,206,255,0.92)" />
+                      <Stop offset="72%" stopColor="rgba(255,255,255,0.9)" />
+                      <Stop offset="100%" stopColor="rgba(255,220,200,0.82)" />
+                    </SvgLinearGradient>
+                  </Defs>
+                  <SvgText
+                    x="50%"
+                    y={24}
+                    textAnchor="middle"
+                    fill="url(#welcomeHeadlineGradient)"
+                    fontFamily={typography.capture.fontFamily}
+                    fontSize={22}
+                    letterSpacing={0.2}
+                  >
+                    Write it down. No structure.
+                  </SvgText>
+                </Svg>
+              </View>
             </Animated.View>
             <Animated.View testID="welcome-entrance-support" style={entranceStyle(entranceSupport)}>
               <Text
@@ -221,9 +248,9 @@ export function WelcomeOnboardingScreen({ onComplete }: Props) {
                   Platform.OS === 'ios'
                     ? {
                         shadowColor: ctaSurface.shadowColor,
-                        shadowOffset: { width: 0, height: 5 },
-                        shadowOpacity: 0.16,
-                        shadowRadius: 22,
+                        shadowOffset: { width: 0, height: 0 },
+                        shadowOpacity: 0.22,
+                        shadowRadius: 14,
                       }
                     : { elevation: 4 },
                 ]}
@@ -233,7 +260,13 @@ export function WelcomeOnboardingScreen({ onComplete }: Props) {
                   locations={[0, 0.42, 1]}
                   start={{ x: 0.5, y: 0 }}
                   end={{ x: 0.5, y: 1 }}
-                  style={styles.ctaGradient}
+                  style={[
+                    styles.ctaGradient,
+                    {
+                      borderColor: ctaSurface.borderColor,
+                      borderTopColor: ctaSurface.borderTopColor,
+                    },
+                  ]}
                 >
                   <Text
                     style={{
@@ -282,6 +315,14 @@ const styles = StyleSheet.create({
   title: {
     textAlign: 'center',
   },
+  titleGradientWrap: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  titleHiddenText: {
+    position: 'absolute',
+    opacity: 0,
+  },
   lead: {
     textAlign: 'center',
   },
@@ -305,5 +346,6 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 28,
     borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
   },
 });
