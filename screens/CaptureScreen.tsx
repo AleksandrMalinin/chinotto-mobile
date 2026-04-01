@@ -85,6 +85,7 @@ const PAGE_SIZE = 20;
 const SCROLL_END_THRESHOLD_PX = 160;
 const SEARCH_DEBOUNCE_MS = 250;
 const SEARCH_MAX_RESULTS = 300;
+type SettingsRoute = 'settings' | 'manifesto' | 'app_icon';
 /** How often to refresh upload-queue state for the sync header while signed in. */
 const SYNC_UPLOAD_POLL_MS = 2500;
 /** Pending rows at or above this count can contribute to a “stuck” header after consecutive polls. */
@@ -140,9 +141,7 @@ export function CaptureScreen({
   /** Search is secondary: hidden until user opens it — avoids competing with capture. */
   const [searchExpanded, setSearchExpanded] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
-  const [settingsVisible, setSettingsVisible] = useState(false);
-  const [manifestoVisible, setManifestoVisible] = useState(false);
-  const [appIconVisible, setAppIconVisible] = useState(false);
+  const [settingsRoute, setSettingsRoute] = useState<SettingsRoute | null>(null);
   const [appIconVariantId, setAppIconVariantId] = useState<AppIconVariantId>('default');
   const [hapticsEnabled, setHapticsEnabledState] = useState(true);
   const [authRestorePhase, setAuthRestorePhase] = useState<AuthRestorePhase>(() =>
@@ -165,7 +164,7 @@ export function CaptureScreen({
   const loadingMoreRef = useRef(false);
   const searchQueryRef = useRef('');
   const searchActiveRef = useRef(false);
-  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth } = useWindowDimensions();
   const t = useAppTheme();
   const gutter = screenContentGutter(windowWidth);
 
@@ -635,7 +634,7 @@ export function CaptureScreen({
                 accessibilityLabel="Chinotto"
                 accessibilityHint="Opens Settings"
                 hitSlop={12}
-                onPress={() => setSettingsVisible(true)}
+                onPress={() => setSettingsRoute('settings')}
               >
                 <ChinottoLogo
                   testID="header-logo"
@@ -668,7 +667,6 @@ export function CaptureScreen({
               styles.scrollContent,
               {
                 flexGrow: 1,
-                minHeight: windowHeight,
               },
             ]}
           >
@@ -804,16 +802,17 @@ export function CaptureScreen({
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
-      {settingsVisible ? (
+      {settingsRoute === 'settings' ? (
         <SettingsScreen
-          onClose={() => setSettingsVisible(false)}
-          onOpenSync={() => {
-            setSettingsVisible(false);
-            openSyncModalFromHeader();
-          }}
-          onOpenManifesto={() => setManifestoVisible(true)}
+          onClose={() => setSettingsRoute(null)}
+          onOpenSync={openSyncModalFromHeader}
+          onOpenManifesto={() => setSettingsRoute('manifesto')}
           canOpenAppIcon={ENABLE_APP_ICON_SWITCHER}
-          onOpenAppIcon={ENABLE_APP_ICON_SWITCHER ? () => setAppIconVisible(true) : undefined}
+          onOpenAppIcon={
+            ENABLE_APP_ICON_SWITCHER
+              ? () => setSettingsRoute('app_icon')
+              : undefined
+          }
           appIconLabel={ENABLE_APP_ICON_SWITCHER ? getAppIconVariant(appIconVariantId).name : undefined}
           syncStatusLabel={
             authRestorePhase === 'restoring'
@@ -831,8 +830,12 @@ export function CaptureScreen({
           onOpenDevMenu={onDevMenu != null ? openDevMenuFromSettings : undefined}
         />
       ) : null}
-      {manifestoVisible ? <ManifestoScreen onClose={() => setManifestoVisible(false)} /> : null}
-      {ENABLE_APP_ICON_SWITCHER && appIconVisible ? (
+      {settingsRoute === 'manifesto' ? (
+        <ManifestoScreen
+          onClose={() => setSettingsRoute('settings')}
+        />
+      ) : null}
+      {ENABLE_APP_ICON_SWITCHER && settingsRoute === 'app_icon' ? (
         <AppIconScreen
           selectedId={appIconVariantId}
           supportsDynamicIcons={supportsDynamicAppIcons()}
@@ -849,7 +852,7 @@ export function CaptureScreen({
                 );
               });
           }}
-          onClose={() => setAppIconVisible(false)}
+          onClose={() => setSettingsRoute('settings')}
         />
       ) : null}
       {/* Enable sync sheet: opened only from the header CTA. Paid step uses monetization/syncPurchaseFlow when EXPO_PUBLIC_ENABLE_PAYWALL=true. */}

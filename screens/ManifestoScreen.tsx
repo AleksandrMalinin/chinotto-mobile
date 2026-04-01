@@ -1,5 +1,6 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import Constants from 'expo-constants';
 
 import { ChinottoLogo, chinottoLogoLeadingOutset } from '../components/ChinottoLogo';
 import { fonts, screenContentGutter, useAppTheme } from '../theme';
@@ -18,69 +19,71 @@ const MANIFESTO_PARAGRAPHS = [
 
 export function ManifestoScreen({ onClose }: ManifestoScreenProps) {
   const t = useAppTheme();
+  const insets = useSafeAreaInsets();
   const headerLogoSize = 42;
   const gutter = screenContentGutter(0);
+  const topInset = Math.max(insets.top, Constants.statusBarHeight ?? 0, 44);
   const headerLogoAlignStyle = {
     marginLeft: -chinottoLogoLeadingOutset(headerLogoSize),
   };
 
   return (
     <View testID="manifesto-screen" style={[styles.container, { backgroundColor: t.colors.bg }]}>
-      <SafeAreaView style={styles.safe} edges={['top', 'right', 'left']}>
-        <View
-          style={[
-            styles.headerBar,
-            {
-              paddingHorizontal: gutter,
-              paddingTop: t.spacing.xs,
-              marginBottom: t.spacing.sm,
-            },
-          ]}
-        >
-          <View style={styles.headerLogoSlot}>
-            <Pressable
-              testID="manifesto-logo"
-              accessibilityRole="button"
-              accessibilityLabel="Chinotto"
-              accessibilityHint="Back to settings"
-              onPress={onClose}
-              hitSlop={12}
-              style={({ pressed }) => [{ opacity: pressed ? 0.92 : 1 }]}
-            >
-              <ChinottoLogo size={headerLogoSize} color={t.colors.fgDim} style={headerLogoAlignStyle} />
-            </Pressable>
-          </View>
-        </View>
-
-        <ScrollView
-          contentContainerStyle={[
-            styles.content,
-            {
-              paddingHorizontal: gutter,
-            },
-          ]}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          <Text style={[styles.title, { color: t.colors.fg }]}>Philosophy</Text>
-          <Text style={[styles.kicker, { color: t.colors.metaFg }]}>Capture first. Revisit later.</Text>
-
-          <View style={styles.body}>
-            {MANIFESTO_PARAGRAPHS.map((paragraph, idx) => (
-              <Text
-                key={`${paragraph}-${idx}`}
-                style={[
-                  styles.paragraph,
-                  {
-                    color: idx === 0 ? t.colors.fg : t.colors.fgDim,
-                  },
-                ]}
+      <SafeAreaView style={styles.safe} edges={['right', 'left']}>
+          <View
+            style={[
+              styles.headerBar,
+              {
+                paddingHorizontal: gutter,
+                paddingTop: topInset + t.spacing.xs,
+                marginBottom: t.spacing.sm,
+              },
+            ]}
+          >
+            <View style={styles.headerLogoSlot}>
+              <Pressable
+                testID="manifesto-logo"
+                accessibilityRole="button"
+                accessibilityLabel="Chinotto"
+                accessibilityHint="Back to settings"
+                onPress={onClose}
+                hitSlop={12}
+                style={({ pressed }) => [{ opacity: pressed ? 0.92 : 1 }]}
               >
-                {paragraph}
-              </Text>
-            ))}
+                <ChinottoLogo size={headerLogoSize} color={t.colors.fgDim} style={headerLogoAlignStyle} />
+              </Pressable>
+            </View>
           </View>
-        </ScrollView>
+
+          <ScrollView
+            contentContainerStyle={[
+              styles.content,
+              {
+                paddingHorizontal: gutter,
+              },
+            ]}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <Text style={[styles.title, { color: t.colors.fg }]}>Philosophy</Text>
+            <Text style={[styles.kicker, { color: t.colors.metaFg }]}>Capture first. Revisit later.</Text>
+
+            <View style={styles.body}>
+              {MANIFESTO_PARAGRAPHS.map((paragraph, idx) => (
+                <Text
+                  key={`${paragraph}-${idx}`}
+                  style={[
+                    styles.paragraph,
+                    {
+                      color: idx === 0 ? t.colors.fg : t.colors.fgDim,
+                    },
+                  ]}
+                >
+                  {paragraph}
+                </Text>
+              ))}
+            </View>
+          </ScrollView>
       </SafeAreaView>
     </View>
   );

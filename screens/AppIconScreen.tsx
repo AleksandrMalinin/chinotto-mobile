@@ -1,6 +1,7 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import Constants from 'expo-constants';
 
 import { ChinottoLogo, chinottoLogoLeadingOutset } from '../components/ChinottoLogo';
 import {
@@ -24,8 +25,10 @@ export function AppIconScreen({
   onClose,
 }: AppIconScreenProps) {
   const t = useAppTheme();
+  const insets = useSafeAreaInsets();
   const headerLogoSize = 42;
   const gutter = screenContentGutter(0);
+  const topInset = Math.max(insets.top, Constants.statusBarHeight ?? 0, 44);
   const headerLogoAlignStyle = {
     marginLeft: -chinottoLogoLeadingOutset(headerLogoSize),
   };
@@ -33,96 +36,96 @@ export function AppIconScreen({
 
   return (
     <View testID="app-icon-screen" style={[styles.container, { backgroundColor: t.colors.bg }]}>
-      <SafeAreaView style={styles.safe} edges={['top', 'right', 'left']}>
-        <View
-          style={[
-            styles.headerBar,
-            {
-              paddingHorizontal: gutter,
-              paddingTop: t.spacing.xs,
-              marginBottom: t.spacing.sm,
-            },
-          ]}
-        >
-          <View style={styles.headerLogoSlot}>
-            <Pressable
-              testID="app-icon-logo"
-              accessibilityRole="button"
-              accessibilityLabel="Chinotto"
-              accessibilityHint="Back to settings"
-              onPress={onClose}
-              hitSlop={12}
-              style={({ pressed }) => [{ opacity: pressed ? 0.92 : 1 }]}
-            >
-              <ChinottoLogo size={headerLogoSize} color={t.colors.fgDim} style={headerLogoAlignStyle} />
-            </Pressable>
-          </View>
-        </View>
-
-        <ScrollView
-          contentContainerStyle={[
-            styles.content,
-            {
-              paddingHorizontal: gutter,
-            },
-          ]}
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={[styles.title, { color: t.colors.fg }]}>App Icon</Text>
-          <Text style={[styles.subtitle, { color: t.colors.metaFg }]}>
-            Alternate expressions of the same Chinotto mark.
-          </Text>
-
-          <View style={styles.grid}>
-            {APP_ICON_VARIANTS.map((variant) => {
-              const isSelected = selectedId === variant.id;
-              const iconTileStyle = {
-                backgroundColor: variant.iosBackground,
-                borderColor: isSelected ? t.colors.borderFocus : t.colors.border,
-              };
-              return (
-                <Pressable
-                  key={variant.id}
-                  testID={`app-icon-option-${variant.id}`}
-                  onPress={() => onSelect(variant.id)}
-                  style={({ pressed }) => [
-                    styles.tileWrap,
-                    {
-                      opacity: pressed ? 0.93 : 1,
-                    },
-                  ]}
-                >
-                  <View style={[styles.tile, iconTileStyle]}>
-                    {variant.gradientStops ? (
-                      <LinearGradient
-                        colors={variant.gradientStops}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={StyleSheet.absoluteFill}
-                      />
-                    ) : null}
-                    <ChinottoLogo size={42} color={variant.foreground} />
-                    {isSelected ? (
-                      <View style={[styles.badge, { backgroundColor: t.colors.bg }]}>
-                        <Text style={[styles.badgeText, { color: t.colors.fg }]}>✓</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                  <Text style={[styles.tileLabel, { color: isSelected ? t.colors.fg : t.colors.fgDim }]}>
-                    {variant.name}
-                  </Text>
-                </Pressable>
-              );
-            })}
+      <SafeAreaView style={styles.safe} edges={['right', 'left']}>
+          <View
+            style={[
+              styles.headerBar,
+              {
+                paddingHorizontal: gutter,
+                paddingTop: topInset + t.spacing.xs,
+                marginBottom: t.spacing.sm,
+              },
+            ]}
+          >
+            <View style={styles.headerLogoSlot}>
+              <Pressable
+                testID="app-icon-logo"
+                accessibilityRole="button"
+                accessibilityLabel="Chinotto"
+                accessibilityHint="Back to settings"
+                onPress={onClose}
+                hitSlop={12}
+                style={({ pressed }) => [{ opacity: pressed ? 0.92 : 1 }]}
+              >
+                <ChinottoLogo size={headerLogoSize} color={t.colors.fgDim} style={headerLogoAlignStyle} />
+              </Pressable>
+            </View>
           </View>
 
-          <Text style={[styles.current, { color: t.colors.metaFg }]}>Current: {selected.name}</Text>
-          {!supportsDynamicIcons ? (
-            <Text style={[styles.note, { color: t.colors.metaFg }]}>
-              App icon switching is not available on this device build.
+          <ScrollView
+            contentContainerStyle={[
+              styles.content,
+              {
+                paddingHorizontal: gutter,
+              },
+            ]}
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={[styles.title, { color: t.colors.fg }]}>App Icon</Text>
+            <Text style={[styles.subtitle, { color: t.colors.metaFg }]}>
+              Alternate expressions of the same Chinotto mark.
             </Text>
-          ) : null}
-        </ScrollView>
+
+            <View style={styles.grid}>
+              {APP_ICON_VARIANTS.map((variant) => {
+                const isSelected = selectedId === variant.id;
+                const iconTileStyle = {
+                  backgroundColor: variant.iosBackground,
+                  borderColor: isSelected ? t.colors.borderFocus : t.colors.border,
+                };
+                return (
+                  <Pressable
+                    key={variant.id}
+                    testID={`app-icon-option-${variant.id}`}
+                    onPress={() => onSelect(variant.id)}
+                    style={({ pressed }) => [
+                      styles.tileWrap,
+                      {
+                        opacity: pressed ? 0.93 : 1,
+                      },
+                    ]}
+                  >
+                    <View style={[styles.tile, iconTileStyle]}>
+                      {variant.gradientStops ? (
+                        <LinearGradient
+                          colors={variant.gradientStops}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={StyleSheet.absoluteFill}
+                        />
+                      ) : null}
+                      <ChinottoLogo size={42} color={variant.foreground} />
+                      {isSelected ? (
+                        <View style={[styles.badge, { backgroundColor: t.colors.bg }]}>
+                          <Text style={[styles.badgeText, { color: t.colors.fg }]}>✓</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <Text style={[styles.tileLabel, { color: isSelected ? t.colors.fg : t.colors.fgDim }]}>
+                      {variant.name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text style={[styles.current, { color: t.colors.metaFg }]}>Current: {selected.name}</Text>
+            {!supportsDynamicIcons ? (
+              <Text style={[styles.note, { color: t.colors.metaFg }]}>
+                App icon switching is not available on this device build.
+              </Text>
+            ) : null}
+          </ScrollView>
       </SafeAreaView>
     </View>
   );

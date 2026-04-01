@@ -1,5 +1,5 @@
 import Constants from 'expo-constants';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChinottoLogo, chinottoLogoLeadingOutset } from '../components/ChinottoLogo';
@@ -37,28 +37,28 @@ export function SettingsScreen({
   const appVersion = Constants.expoConfig?.version ?? 'dev';
   const headerLogoSize = 42;
   const gutter = screenContentGutter(0);
+  const topInset = Math.max(insets.top, Constants.statusBarHeight ?? 0, 44);
   const headerLogoAlignStyle = {
     marginLeft: -chinottoLogoLeadingOutset(headerLogoSize),
   };
 
   return (
-    <Modal visible animationType="fade" presentationStyle="fullScreen" onRequestClose={onClose}>
-      <View
-        testID="settings-screen"
-        style={[
-          styles.container,
-          {
-            backgroundColor: t.colors.bg,
-          },
-        ]}
-      >
-        <SafeAreaView style={styles.safe} edges={['top', 'right', 'left']}>
+    <View
+      testID="settings-screen"
+      style={[
+        styles.container,
+        {
+          backgroundColor: t.colors.bg,
+        },
+      ]}
+    >
+      <SafeAreaView style={styles.safe} edges={['right', 'left']}>
           <View
             style={[
               styles.headerBar,
               {
                 paddingHorizontal: gutter,
-                paddingTop: t.spacing.xs,
+                paddingTop: topInset + t.spacing.xs,
                 marginBottom: t.spacing.sm,
               },
             ]}
@@ -182,9 +182,8 @@ export function SettingsScreen({
               </View>
             </View>
           </ScrollView>
-        </SafeAreaView>
-      </View>
-    </Modal>
+      </SafeAreaView>
+    </View>
   );
 }
 
