@@ -86,14 +86,28 @@ users/{firebaseUid}/entries/{entryId}
 - **Phase 2:** optional tombstone field **`deletedAt`** — see §8 (type `Timestamp`, not ISO string in Firestore).  
 - **Creates (Phase 1):** `setDoc` — retries are safe (same doc id and payload). **Deletes (Phase 2):** `setDoc` with **`{ merge: true }`** and `deletedAt: serverTimestamp()` (preferred over `updateDoc` alone so missing remote docs still tombstone). Idempotent if already tombstoned.
 
+**Cross-device sync access (desktop gating):**
+
+- **`users/{firebaseUid}`** (optional parent doc): `chinottoSyncAccess.active` (bool) + `updatedAt` — mobile writes when RevenueCat **Chinotto Pro** (or paywall-off) aligns with a signed-in Apple user; desktop reads after Sign in with Apple (same Apple ID → same Firebase uid).
+- **`sync_desktop_sessions/{sessionId}`**: `{ unlocked: true, updatedAt }` — mobile writes when access is confirmed and the user opened the app via desktop QR (`?ds=<uuid>`). Desktop listens **without** signing in so the modal can enable **Sign in with Apple** only after unlock.
+
+**Product narrative:** [`cross-device-sync-unlock-flow.md`](./cross-device-sync-unlock-flow.md) (scenarios, UI states, edge cases).
+
 **Security Rules** (paste in console → Firestore → Rules → Publish):
 
 ```txt
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{userId}/entries/{entryId} {
+    match /sync_desktop_sessions/{sessionId} {
+      allow read: if true;
+      allow create, update: if request.auth != null;
+    }
+    match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
+      match /entries/{entryId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
   }
 }
@@ -117,6 +131,7 @@ service cloud.firestore {
 | `sync/pushEntryForSync.ts` | `resolvePushEntryForSync()` → Firestore or mock. |
 | `sync/syncQueue.ts` / `syncEngine.ts` | Persistent queue, `processSyncQueue`, background interval; tombstone flush after each tick. |
 | `sync/tombstoneOutbox.ts` / `tombstoneFlush.ts` | Durable tombstone outbox (coalesced per `entry_id`); `flushSyncTombstoneOutbox` → Firestore `setDoc` + merge (`deletedAt`). |
+| `sync/firestoreSyncAccessMirror.ts` | Mirrors paid sync access to `users/{uid}.chinottoSyncAccess` and optional `sync_desktop_sessions/{ds}` for desktop QR sessions. |
 | `sync/ingestSuppression.ts` | `firestore_ingest_suppressed_ids` bridge (local delete until tombstone ack). |
 | `sync/firestoreTombstone.ts` | `isFirestoreDocumentTombstoned` for snapshot rows. |
 | `sync/firestoreIngest.ts` | `startMobileFirestoreIngest` — `onSnapshot` ingest + remote tombstones; **`runFirestoreIngestBackfill`** paginates `getDocs` after sign-in to load older rows beyond the live snapshot `limit`. |
@@ -304,6 +319,7 @@ Record **implementation** and cross-repo **alignment** changes for **mobile** he
 
 | Date | Change |
 |------|--------|
+| 2026-04-02 | Cross-device **unlock** mirror + desktop `SyncModal` gating (§3). Doc: [`cross-device-sync-unlock-flow.md`](./cross-device-sync-unlock-flow.md). Mirror clears stashed `ds` after a successful `sync_desktop_sessions` write. |
 | 2026-03-29 | Docs: unified release checklist with desktop; removed `desktop-alignment.md` and `desktop-sync-implementation.md`; desktop ingest/ops in Chinotto [`docs/sync.md`](https://github.com/AleksandrMalinin/chinotto/blob/main/docs/sync.md) + `sync-deletion-v2.md`; this file remains wire contract. |
 
 ---
