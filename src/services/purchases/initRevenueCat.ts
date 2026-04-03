@@ -18,6 +18,7 @@ function iosStoreKitVersionFromEnv():
 import { REVENUECAT_IOS_API_KEY } from './constants';
 import { syncEntitlementCacheFromCustomerInfo } from './entitlementCache';
 import { warnIfActiveSubscriptionButMissingChinottoProEntitlement } from './entitlements';
+import { mirrorChinottoSyncAccessToFirestore } from '../../../sync/firestoreSyncAccessMirror';
 import { logRevenueCatSubscriptionsAndProducts } from './revenueCatDebugLog';
 import { refreshEntitlementCacheFromRevenueCat } from './revenueCat';
 
@@ -75,6 +76,7 @@ export function initRevenueCat(): void {
     const onCustomerInfoUpdated: CustomerInfoUpdateListener = (customerInfo) => {
       syncEntitlementCacheFromCustomerInfo(customerInfo);
       warnIfActiveSubscriptionButMissingChinottoProEntitlement(customerInfo);
+      void mirrorChinottoSyncAccessToFirestore();
     };
     Purchases.addCustomerInfoUpdateListener(onCustomerInfoUpdated);
   } catch (err) {

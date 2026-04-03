@@ -63,6 +63,7 @@ import { getHapticsEnabled, setHapticsEnabled } from '../storage/settingsPrefs';
 import { isFirebaseSyncConfigured } from '../sync/firebaseConfig';
 import { getOrInitAuth } from '../sync/firebaseAuth';
 import { getPendingSyncCount } from '../sync/syncQueue';
+import { mirrorChinottoSyncAccessToFirestore } from '../sync/firestoreSyncAccessMirror';
 import { flushSyncTombstoneOutbox } from '../sync/tombstoneFlush';
 import { fonts, radius, screenContentGutter, screenContentInnerPad, useAppTheme } from '../theme';
 
@@ -350,6 +351,7 @@ export function CaptureScreen({
       }
 
       setAuthRestorePhase(nextPhase);
+      void mirrorChinottoSyncAccessToFirestore();
     });
   }, []);
 

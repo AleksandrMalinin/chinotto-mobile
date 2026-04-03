@@ -17,6 +17,7 @@ import { restorePurchases } from '../src/services/purchases/revenueCat';
 import { getOrInitAuth } from '../sync/firebaseAuth';
 import { resolvePushEntryForSync } from '../sync/pushEntryForSync';
 import { processSyncQueue } from '../sync/syncEngine';
+import { mirrorChinottoSyncAccessToFirestore } from '../sync/firestoreSyncAccessMirror';
 import { flushSyncTombstoneOutbox } from '../sync/tombstoneFlush';
 
 import type { SyncModalAuthPhase } from './EnableSyncModal';
@@ -150,9 +151,11 @@ export function useEnableSyncController(params: {
       switch (result.kind) {
         case 'already_has_sync_access':
           onSubscriptionUnlocked?.();
+          void mirrorChinottoSyncAccessToFirestore();
           break;
         case 'purchased':
           onSubscriptionUnlocked?.();
+          void mirrorChinottoSyncAccessToFirestore();
           if (!getCachedHasSyncEntitlement()) {
             setErrorMessage(
               'Apple shows an active subscription, but this app has not received sync access yet. In RevenueCat, attach each product to the entitlement Chinotto Pro, then tap Restore purchases. After that, Continue will take you to Sign in with Apple.'
@@ -183,6 +186,7 @@ export function useEnableSyncController(params: {
       }
       if (getCachedHasSyncEntitlement()) {
         onSubscriptionUnlocked?.();
+        void mirrorChinottoSyncAccessToFirestore();
         return;
       }
       if (info != null) {
@@ -202,6 +206,7 @@ export function useEnableSyncController(params: {
       await enableAppleSyncWithFirebase();
       await processSyncQueue(resolvePushEntryForSync());
       await flushSyncTombstoneOutbox();
+      await mirrorChinottoSyncAccessToFirestore();
       onEnabled();
       setPostSyncSuccess(true);
     } catch (err: unknown) {

@@ -179,6 +179,10 @@ jest.mock('@expo/ui/swift-ui/modifiers', () => ({
   },
 }));
 
+jest.mock('./sync/firestoreSyncAccessMirror', () => ({
+  mirrorChinottoSyncAccessToFirestore: jest.fn(() => Promise.resolve()),
+}));
+
 jest.mock('react-native-svg', () => {
   const React = require('react');
   const { View } = require('react-native');
