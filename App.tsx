@@ -177,7 +177,7 @@ export default function App() {
     }, [])
   );
 
-  const bumpSyncEntryFromDeepLink = useCallback(() => {
+  const bumpSyncEntryFromDeepLink = useCallback((_url: string) => {
     setSyncEntryRequestNonce((n) => n + 1);
   }, []);
 

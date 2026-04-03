@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import * as Linking from 'expo-linking';
 
+import { stashDesktopSyncSessionFromUrlIfPresent } from './desktopSyncSessionStash';
 import { isSyncDeepLinkUrl } from './syncDeepLink';
 
 export type AppMainPhase = 'boot' | 'brand' | 'welcome' | 'main';
@@ -16,11 +17,13 @@ export function useSyncDeepLink(options: {
   phase: AppMainPhase;
   dbReady: boolean;
   subscriptionLoaded: boolean;
-  onSyncDeepLink: () => void;
+  /** Receives the full URL (for optional `ds` desktop session id). */
+  onSyncDeepLink: (url: string) => void;
 }): void {
   const { enabled, phase, dbReady, subscriptionLoaded, onSyncDeepLink } = options;
 
   const pendingRef = useRef(false);
+  const pendingUrlRef = useRef<string | null>(null);
   const onSyncDeepLinkRef = useRef(onSyncDeepLink);
   onSyncDeepLinkRef.current = onSyncDeepLink;
 
@@ -36,7 +39,11 @@ export function useSyncDeepLink(options: {
       return;
     }
     pendingRef.current = false;
-    onSyncDeepLinkRef.current();
+    const url = pendingUrlRef.current;
+    pendingUrlRef.current = null;
+    if (url != null && url !== '') {
+      onSyncDeepLinkRef.current(url);
+    }
   }, [enabled]);
 
   useEffect(() => {
@@ -49,9 +56,11 @@ export function useSyncDeepLink(options: {
     }
 
     const consume = (url: string | null) => {
-      if (!isSyncDeepLinkUrl(url)) {
+      if (url == null || url.trim() === '' || !isSyncDeepLinkUrl(url)) {
         return;
       }
+      stashDesktopSyncSessionFromUrlIfPresent(url);
+      pendingUrlRef.current = url;
       pendingRef.current = true;
       flushPending();
     };
