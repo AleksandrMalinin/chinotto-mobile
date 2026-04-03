@@ -46,6 +46,7 @@ describe('useSyncDeepLink', () => {
       rerender({ phase: 'main', db: true, sub: true });
     });
     expect(onSyncDeepLink).toHaveBeenCalledTimes(1);
+    expect(onSyncDeepLink).toHaveBeenCalledWith('https://getchinotto.app/sync');
   });
 
   it('consumes getInitialURL when already on main', async () => {
@@ -62,7 +63,10 @@ describe('useSyncDeepLink', () => {
       })
     );
 
-    await waitFor(() => expect(onSyncDeepLink).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(onSyncDeepLink).toHaveBeenCalledTimes(1);
+      expect(onSyncDeepLink).toHaveBeenCalledWith('https://getchinotto.app/sync');
+    });
   });
 
   it('does not subscribe when disabled', () => {

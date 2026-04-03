@@ -1,4 +1,12 @@
-import { CHINOTTO_SYNC_UNIVERSAL_HOST, isSyncDeepLinkUrl } from '../syncDeepLink';
+import {
+  CHINOTTO_SYNC_UNIVERSAL_HOST,
+  isSyncDeepLinkUrl,
+  isValidDesktopSyncSessionId,
+  parseDesktopSyncSessionIdFromUrl,
+} from '../syncDeepLink';
+
+const SAMPLE_DS =
+  'a1b2c3d4-e5f6-4789-a012-3456789abcde' as const;
 
 describe('isSyncDeepLinkUrl', () => {
   it('accepts HTTPS sync URL on configured host', () => {
@@ -30,5 +38,33 @@ describe('isSyncDeepLinkUrl', () => {
     expect(isSyncDeepLinkUrl(null)).toBe(false);
     expect(isSyncDeepLinkUrl('')).toBe(false);
     expect(isSyncDeepLinkUrl('chinotto://capture')).toBe(false);
+  });
+});
+
+describe('parseDesktopSyncSessionIdFromUrl', () => {
+  it('parses ds from HTTPS sync URL', () => {
+    expect(
+      parseDesktopSyncSessionIdFromUrl(`https://${CHINOTTO_SYNC_UNIVERSAL_HOST}/sync?ds=${SAMPLE_DS}`)
+    ).toBe(SAMPLE_DS);
+  });
+
+  it('parses ds from chinotto scheme', () => {
+    expect(parseDesktopSyncSessionIdFromUrl(`chinotto:///sync?ds=${SAMPLE_DS}`)).toBe(SAMPLE_DS);
+  });
+
+  it('rejects non-v4 or missing ds', () => {
+    expect(parseDesktopSyncSessionIdFromUrl(`https://${CHINOTTO_SYNC_UNIVERSAL_HOST}/sync`)).toBeNull();
+    expect(
+      parseDesktopSyncSessionIdFromUrl(
+        `https://${CHINOTTO_SYNC_UNIVERSAL_HOST}/sync?ds=not-a-uuid`
+      )
+    ).toBeNull();
+  });
+});
+
+describe('isValidDesktopSyncSessionId', () => {
+  it('accepts v4 uuid only', () => {
+    expect(isValidDesktopSyncSessionId(SAMPLE_DS)).toBe(true);
+    expect(isValidDesktopSyncSessionId('6ba7b810-9dad-11d1-80b4-00c04fd430c8')).toBe(false);
   });
 });
