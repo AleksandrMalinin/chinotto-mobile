@@ -2,6 +2,8 @@ import { render, screen } from '@testing-library/react-native';
 import { AccessibilityInfo } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import type { AdaptiveChromeContextValue } from '../../theme';
+
 jest.mock('../../components/AmbientBackground', () => ({
   AmbientBackground: () => null,
 }));
@@ -15,10 +17,11 @@ jest.mock('../../components/StreamFlowPanel', () => {
   };
 });
 
+import { AdaptiveChromeContext } from '../../theme';
 import { WelcomeOnboardingScreen } from '../WelcomeOnboardingScreen';
 
-function renderWelcome() {
-  return render(
+function renderWelcome(chrome?: AdaptiveChromeContextValue) {
+  const inner = (
     <SafeAreaProvider
       initialMetrics={{
         frame: { x: 0, y: 0, width: 390, height: 844 },
@@ -28,6 +31,10 @@ function renderWelcome() {
       <WelcomeOnboardingScreen onComplete={jest.fn()} />
     </SafeAreaProvider>
   );
+  if (chrome == null) {
+    return render(inner);
+  }
+  return render(<AdaptiveChromeContext.Provider value={chrome}>{inner}</AdaptiveChromeContext.Provider>);
 }
 
 describe('WelcomeOnboardingScreen', () => {
@@ -43,11 +50,20 @@ describe('WelcomeOnboardingScreen', () => {
 
   it('renders copy, primary action, and staged entrance regions', async () => {
     renderWelcome();
-    expect(await screen.findByText('Write it down. No structure.')).toBeTruthy();
-    expect(screen.getByLabelText('Capture it')).toBeTruthy();
+    expect(await screen.findByLabelText('Write it down. No structure.')).toBeTruthy();
+    expect(screen.getByLabelText('Capture')).toBeTruthy();
     expect(screen.getByTestId('welcome-entrance-visual')).toBeTruthy();
     expect(screen.getByTestId('welcome-entrance-title')).toBeTruthy();
     expect(screen.getByTestId('welcome-entrance-support')).toBeTruthy();
     expect(screen.getByTestId('welcome-entrance-cta')).toBeTruthy();
+  });
+
+  it('does not depend on adaptive sunlight chrome (headline stays wired to standard dark)', async () => {
+    renderWelcome({
+      blendProgress: 1,
+      displayChrome: 'sunlight',
+      setDisplayChrome: jest.fn(),
+    });
+    expect(await screen.findByLabelText('Write it down. No structure.')).toBeTruthy();
   });
 });
