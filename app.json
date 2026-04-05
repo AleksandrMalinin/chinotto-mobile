@@ -25,7 +25,9 @@
         ]
       },
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSMicrophoneUsageDescription": "Chinotto uses the microphone to turn a short spoken thought into text on your device.",
+        "NSSpeechRecognitionUsageDescription": "Chinotto uses speech recognition to turn what you say into text in the capture field. Audio stays on your device."
       }
     },
     "android": {
