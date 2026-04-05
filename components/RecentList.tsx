@@ -83,7 +83,7 @@ function RecentStreamRow({
         styles.rowOuterRelative,
         !isLastInSection && {
           borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: colors.border,
+          borderBottomColor: colors.streamDivider,
         },
       ]}
     >
@@ -138,13 +138,17 @@ function RecentStreamRow({
                 styles.line,
                 {
                   flex: 1,
-                  color: colors.entryBody,
+                  color: t.sunlightMode
+                    ? isNewest
+                      ? colors.entryBody
+                      : colors.fgDim
+                    : colors.entryBody,
                   fontFamily: isNewest ? fonts.medium : body.fontFamily,
                   fontSize: isNewest ? 17 : body.fontSize,
                   lineHeight: isNewest ? 26 : body.lineHeight,
                   letterSpacing: isNewest ? 0.17 : 0.16,
                   marginRight: t.spacing.sm,
-                  opacity: isNewest ? 1 : 0.84,
+                  opacity: t.sunlightMode ? 1 : isNewest ? 1 : 0.84,
                 },
               ]}
               numberOfLines={4}
@@ -156,7 +160,7 @@ function RecentStreamRow({
                 styles.time,
                 {
                   color: colors.muted,
-                  fontFamily: fonts.regular,
+                  fontFamily: t.sunlightMode ? fonts.medium : fonts.regular,
                   fontSize: 11,
                   lineHeight: 15,
                 },
@@ -221,7 +225,7 @@ function RecentListInner({
   const { width: windowWidth } = useWindowDimensions();
   const streamGutter = screenContentGutter(windowWidth);
   const t = useAppTheme();
-  const { colors, typography, isDark } = t;
+  const { colors, typography } = t;
   const { meta } = typography;
 
   const groups = useMemo(() => groupEntriesByDate(entries), [entries]);
@@ -272,7 +276,7 @@ function RecentListInner({
               styles.sectionLabel,
               {
                 paddingHorizontal: streamGutter,
-                color: isDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.2)',
+                color: colors.sectionFg,
                 fontFamily: meta.fontFamily,
                 fontSize: meta.fontSize,
                 lineHeight: 18,

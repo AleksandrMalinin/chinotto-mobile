@@ -269,8 +269,6 @@ export function CaptureScreen({
       }
     }, 220);
   }, []);
-  /** Slightly dim the stream while composing so capture reads primary; list stays visible. */
-  const streamSecondary = text.trim().length > 0;
 
   const runSearch = useCallback(async (q: string) => {
     try {
@@ -727,11 +725,27 @@ export function CaptureScreen({
   /** Taller composer so capture reads clearly as the primary surface on device. */
   const composerMinHeight = 76;
   const composerMaxHeight = 120;
-  /** Search chrome: low-contrast, no accent tint (keeps capture visually primary). */
-  const searchSurface = t.isDark ? 'rgba(255,255,255,0.015)' : 'rgba(0,0,0,0.02)';
-  const searchBorderIdle = t.isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.07)';
-  const searchBorderFocus = t.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.14)';
-  const searchPressedSurface = t.isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.04)';
+  /** Search: default dark whisper; sunlight = spec tokens (surface / border / placeholder). */
+  const searchSurface = t.sunlightMode
+    ? t.colors.surfaceSearch
+    : t.isDark
+      ? 'rgba(255,255,255,0.015)'
+      : 'rgba(0,0,0,0.02)';
+  const searchBorderIdle = t.colors.searchBorder;
+  const searchBorderFocus = t.sunlightMode
+    ? t.colors.searchBorder
+    : t.isDark
+      ? 'rgba(255,255,255,0.1)'
+      : 'rgba(0,0,0,0.14)';
+  const searchPressedSurface = t.sunlightMode ? t.colors.accentSubtle : t.isDark
+    ? 'rgba(255,255,255,0.03)'
+    : 'rgba(0,0,0,0.04)';
+  const searchBorderWidth = t.sunlightMode ? 1 : StyleSheet.hairlineWidth;
+  const searchIconColor = t.colors.sectionFg;
+  const searchPlaceholderColor = t.colors.searchPlaceholder;
+  const capturePlaceholderColor = t.colors.metaFg;
+  const searchFieldFg = t.sunlightMode ? t.colors.fg : t.colors.fgDim;
+  const headerLogoColor = t.sunlightMode ? t.colors.metaFg : t.colors.fgDim;
   const headerLogoSize = 42;
   /** Ring geometry: align **outer ring** with search field (gutter only); composer is inset +`screenContentInnerPad`. */
   const headerLogoAlignStyle = { marginLeft: -chinottoLogoLeadingOutset(headerLogoSize) };
@@ -766,7 +780,7 @@ export function CaptureScreen({
                 <ChinottoLogo
                   testID="header-logo"
                   size={headerLogoSize}
-                  color={t.colors.fgDim}
+                  color={headerLogoColor}
                   style={headerLogoAlignStyle}
                 />
               </Pressable>
@@ -812,7 +826,7 @@ export function CaptureScreen({
                       minHeight={composerMinHeight}
                       maxHeight={composerMaxHeight}
                       placeholder="Jot a thought…"
-                      placeholderTextColor={t.colors.metaFg}
+                      placeholderTextColor={capturePlaceholderColor}
                     />
                   </View>
                   {showVoiceCapture ? (
@@ -840,10 +854,11 @@ export function CaptureScreen({
                       {
                         backgroundColor: searchSurface,
                         borderColor: searchFocused ? searchBorderFocus : searchBorderIdle,
+                        borderWidth: searchBorderWidth,
                       },
                     ]}
                   >
-                    <Ionicons name="search" size={15} color={t.colors.sectionFg} style={styles.searchPillIcon} />
+                    <Ionicons name="search" size={15} color={searchIconColor} style={styles.searchPillIcon} />
                     <TextInput
                       ref={searchInputRef}
                       testID="stream-search-input"
@@ -852,13 +867,13 @@ export function CaptureScreen({
                       onFocus={onSearchFocus}
                       onBlur={onSearchBlur}
                       placeholder="Find in stream…"
-                      placeholderTextColor={t.colors.sectionFg}
+                      placeholderTextColor={searchPlaceholderColor}
                       accessibilityLabel="Find in stream"
                       style={[
                         styles.searchFieldExpanded,
                         {
                           fontFamily: fonts.regular,
-                          color: t.colors.fgDim,
+                          color: searchFieldFg,
                         },
                       ]}
                       keyboardAppearance={t.isDark ? 'dark' : 'light'}
@@ -894,17 +909,21 @@ export function CaptureScreen({
                       {
                         backgroundColor: pressed ? searchPressedSurface : searchSurface,
                         borderColor: searchBorderIdle,
+                        borderWidth: searchBorderWidth,
                         opacity: pressed ? 0.96 : 1,
                       },
                     ]}
-                    android_ripple={{ color: 'rgba(255,255,255,0.03)', borderless: false }}
+                    android_ripple={{
+                      color: t.sunlightMode ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.03)',
+                      borderless: false,
+                    }}
                   >
-                    <Ionicons name="search" size={15} color={t.colors.sectionFg} style={styles.searchPillIcon} />
+                    <Ionicons name="search" size={15} color={searchIconColor} style={styles.searchPillIcon} />
                     <Text
                       style={[
                         styles.searchPillHint,
                         {
-                          color: t.colors.sectionFg,
+                          color: searchIconColor,
                           fontFamily: fonts.regular,
                           fontSize: t.typography.meta.fontSize,
                           lineHeight: 18,
@@ -918,27 +937,25 @@ export function CaptureScreen({
                 )}
               </View>
             </View>
-            <View style={{ opacity: streamSecondary ? 0.64 : 1 }}>
-              <RecentList
-                entries={searchTrimmed.length > 0 ? searchResults : entries}
-                visible
-                highlightEntryId={searchTrimmed.length > 0 ? null : streamHighlightEntryId}
-                emptyHint={
-                  searchTrimmed.length > 0
-                    ? 'Nothing matches that search.'
-                    : entries.length === 0
-                      ? 'Nothing here yet.'
-                      : undefined
-                }
-                listFooterHint={
-                  searchTrimmed.length > 0 && searchTruncated
-                    ? `Showing first ${SEARCH_MAX_RESULTS} matches`
+            <RecentList
+              entries={searchTrimmed.length > 0 ? searchResults : entries}
+              visible
+              highlightEntryId={searchTrimmed.length > 0 ? null : streamHighlightEntryId}
+              emptyHint={
+                searchTrimmed.length > 0
+                  ? 'Nothing matches that search.'
+                  : entries.length === 0
+                    ? 'Nothing here yet.'
                     : undefined
-                }
-                onEntryPress={setReadEntry}
-                onEntryDelete={handleEntryDelete}
-              />
-            </View>
+              }
+              listFooterHint={
+                searchTrimmed.length > 0 && searchTruncated
+                  ? `Showing first ${SEARCH_MAX_RESULTS} matches`
+                  : undefined
+              }
+              onEntryPress={setReadEntry}
+              onEntryDelete={handleEntryDelete}
+            />
             <Pressable
               style={[styles.bottomFill, { flexGrow: 1, minHeight: 1 }]}
               accessible={false}
