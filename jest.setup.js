@@ -30,6 +30,13 @@ jest.mock('expo-font', () => ({
   isLoaded: jest.fn(() => true),
 }));
 
+jest.mock('expo-brightness', () => ({
+  isAvailableAsync: jest.fn(() => Promise.resolve(true)),
+  getBrightnessAsync: jest.fn(() => Promise.resolve(0.5)),
+  getSystemBrightnessAsync: jest.fn(() => Promise.resolve(0.5)),
+  addBrightnessListener: jest.fn(() => ({ remove: jest.fn() })),
+}));
+
 jest.mock('@expo/vector-icons', () => {
   const React = require('react');
   const { View } = require('react-native');
