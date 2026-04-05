@@ -29,11 +29,14 @@ import { EnableSyncModal } from '../components/EnableSyncModal';
 import { EntryReadSheet } from '../components/EntryReadSheet';
 import { RecentList } from '../components/RecentList';
 import { SyncHeaderStatus, type SyncHeaderAuthPhase } from '../components/SyncHeaderStatus';
+import { VoiceCaptureControl } from '../components/VoiceCaptureControl';
 import { AppIconScreen } from './AppIconScreen';
 import { ManifestoScreen } from './ManifestoScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { ENABLE_APP_ICON_SWITCHER } from '../src/features/flags';
 import type { ScreenshotScene } from '../src/features/screenshotMode';
+import { mergeVoiceTranscript } from '../src/features/voiceCapture/mergeVoiceTranscript';
+import { useVoiceCapture } from '../src/features/voiceCapture/useVoiceCapture';
 import { SCREENSHOT_DEMO_COMPOSER_TEXT, SCREENSHOT_DEMO_ENTRIES } from '../src/screenshots/demoEntries';
 import {
   getCurrentAppIconVariantId,
@@ -638,6 +641,30 @@ export function CaptureScreen({
     })();
   }, []);
 
+  const onVoiceTranscriptFinal = useCallback(
+    (spoken: string, _reason: string) => {
+      if (screenshotActive) {
+        return;
+      }
+      setText((prev) => mergeVoiceTranscript(prev, spoken));
+      if (hapticsEnabled) {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+    },
+    [hapticsEnabled, screenshotActive],
+  );
+
+  const {
+    phase: voicePhase,
+    start: startVoiceCaptureSession,
+    stop: stopVoiceCaptureSession,
+    supported: voiceCaptureNativeReady,
+  } = useVoiceCapture({
+    onTranscriptFinal: onVoiceTranscriptFinal,
+  });
+
+  const showVoiceCapture = voiceCaptureNativeReady && !screenshotActive;
+
   const handleSubmit = useCallback(() => {
     if (screenshotActive) {
       return;
@@ -754,6 +781,19 @@ export function CaptureScreen({
             */}
             <View style={{ paddingHorizontal: gutter }}>
               <View style={styles.composerBlock}>
+                {showVoiceCapture ? (
+                  <VoiceCaptureControl
+                    phase={voicePhase}
+                    theme={t}
+                    onPress={() => {
+                      if (voicePhase === 'listening') {
+                        stopVoiceCaptureSession();
+                      } else {
+                        void startVoiceCaptureSession();
+                      }
+                    }}
+                  />
+                ) : null}
                 <CaptureInput
                   ref={inputRef}
                   value={text}
