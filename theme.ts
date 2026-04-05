@@ -11,6 +11,10 @@
  * Font files: `assets/fonts/OpenSauceOne-{Regular,Medium}.ttf` (SIL OFL; keys `OpenSauceOne-400` / `500`).
  */
 
+import { createContext, useContext, useMemo } from 'react';
+
+import type { AppearanceMode } from './storage/appearancePrefs';
+
 /** Dark shell — values from design-system.md “Colors” table + recurring body opacity. */
 export const colorsDark = {
   bg: '#0a0a0e',
@@ -27,6 +31,14 @@ export const colorsDark = {
   accentSubtle: 'rgba(128,138,188,0.08)',
   atmosphereSoft: 'rgba(88,104,168,0.26)',
   glow: 'rgba(90,108,156,0.16)',
+  /** Whisper lift for search capsule (standard dark). */
+  surfaceSearch: 'rgba(255,255,255,0.015)',
+  /** Search capsule outline (idle); focus uses stronger hairline in `CaptureScreen`. */
+  searchBorder: 'rgba(255,255,255,0.05)',
+  /** Stream row hairlines — aligns with `border` in default dark. */
+  streamDivider: 'rgba(255,255,255,0.07)',
+  /** Search field placeholder (standard dark). */
+  searchPlaceholder: 'rgba(255,255,255,0.45)',
   /** Recurring stream body — `.entry-row-text` */
   entryBody: 'rgba(255,255,255,0.9)',
   /** Caret / selection tint (cool lavender; not a separate CSS var in §2 table). */
@@ -35,7 +47,42 @@ export const colorsDark = {
   swipeDeleteBg: 'rgba(108, 116, 178, 0.48)',
 } as const;
 
-/** Light shell — same roles, calm editorial (not marketing chrome). */
+/**
+ * Sunlight mode — high-contrast dark (not a light theme). Optional user preference for readability
+ * in bright environments.
+ */
+export const colorsSunlight = {
+  /**
+   * Neutral-warm charcoal — pairs with cooler `bgElevated` / search so layers read by temperature,
+   * not higher luminance.
+   */
+  bg: '#13121c',
+  /** Cool blue-slate lift — subtle hue separation from `bg`. */
+  bgElevated: '#1d2130',
+  /** Primary — capture / stream lead. */
+  fg: '#ffffff',
+  /** Secondary body / labels. */
+  fgDim: 'rgba(255,255,255,0.84)',
+  /** Timestamps (paired with medium weight in RecentList). */
+  muted: 'rgba(255,255,255,0.72)',
+  sectionFg: 'rgba(255,255,255,0.78)',
+  metaFg: 'rgba(255,255,255,0.78)',
+  border: 'rgba(255,255,255,0.26)',
+  borderFocus: 'rgba(200,208,255,0.72)',
+  accentSubtle: 'rgba(100,110,175,0.22)',
+  atmosphereSoft: 'rgba(88,100,150,0.12)',
+  glow: 'rgba(110,125,180,0.14)',
+  streamDivider: 'rgba(120,140,255,0.12)',
+  /** Cool-tinted fill — reads slightly bluer than the warm-neutral `bg`. */
+  surfaceSearch: 'rgba(102,118,198,0.14)',
+  searchBorder: 'rgba(180,200,255,0.18)',
+  searchPlaceholder: 'rgba(255,255,255,0.72)',
+  entryBody: '#ffffff',
+  accent: 'rgba(220,226,255,1)',
+  swipeDeleteBg: 'rgba(72, 78, 118, 0.72)',
+} as const;
+
+/** Light shell — same roles, calm editorial (not marketing chrome). Reserved; shell stays dark-family in normal use. */
 export const colorsLight = {
   bg: '#f5f5f7',
   bgElevated: '#ffffff',
@@ -49,12 +96,16 @@ export const colorsLight = {
   accentSubtle: 'rgba(100,110,180,0.08)',
   atmosphereSoft: 'rgba(72,88,132,0.08)',
   glow: 'rgba(90,108,156,0.1)',
+  surfaceSearch: 'rgba(0,0,0,0.03)',
+  searchBorder: 'rgba(0,0,0,0.07)',
+  streamDivider: 'rgba(0,0,0,0.08)',
+  searchPlaceholder: 'rgba(0,0,0,0.45)',
   entryBody: 'rgba(28,28,34,0.92)',
   accent: 'rgba(90,100,200,0.88)',
   swipeDeleteBg: 'rgba(100, 108, 175, 0.28)',
 } as const;
 
-export type ThemeColors = typeof colorsDark | typeof colorsLight;
+export type ThemeColors = typeof colorsDark | typeof colorsSunlight | typeof colorsLight;
 
 /** Registered `fontFamily` names from `App.tsx` `useFonts` — Open Sauce One 400 / 500. */
 export const fonts = {
@@ -125,18 +176,39 @@ export const captureInputPaddingBottom = 8;
 
 export type AppTheme = {
   colors: ThemeColors;
+  /**
+   * Semantic dark chrome — always true for the shipped shell (standard dark or sunlight).
+   * Branches that picked “light marketing” colors are unused at runtime.
+   */
   isDark: boolean;
+  /** High-contrast dark palette when the user enables Sunlight mode in Settings. */
+  sunlightMode: boolean;
   spacing: typeof spacing;
   radius: typeof radius;
   duration: typeof duration;
   typography: typeof typography;
 };
 
-export function getTheme(colorScheme: string | null | undefined): AppTheme {
-  const isDark = colorScheme !== 'light';
+export type { AppearanceMode };
+
+export type AppearanceModeContextValue = {
+  mode: AppearanceMode;
+  setMode: (next: AppearanceMode) => void;
+};
+
+/**
+ * Set by the root App after loading appearance from AsyncStorage; default lets tests run without a provider.
+ */
+export const AppearanceModeContext = createContext<AppearanceModeContextValue>({
+  mode: 'default',
+  setMode: () => {},
+});
+
+export function resolveAppTheme(sunlightMode: boolean): AppTheme {
   return {
-    colors: isDark ? colorsDark : colorsLight,
-    isDark,
+    colors: sunlightMode ? colorsSunlight : colorsDark,
+    isDark: true,
+    sunlightMode,
     spacing,
     radius,
     duration,
@@ -144,11 +216,13 @@ export function getTheme(colorScheme: string | null | undefined): AppTheme {
   };
 }
 
-/**
- * Chinotto matches the desktop shell: dark charcoal (`--bg`). We always use the dark
- * palette so the app looks like the same product regardless of system light/dark.
- * (`app.json` sets `userInterfaceStyle: "dark"` for status bar / native chrome.)
- */
+/** @deprecated Use `resolveAppTheme(false)` (or `true`) in tests. */
+export function getTheme(_colorScheme?: string | null | undefined): AppTheme {
+  return resolveAppTheme(false);
+}
+
+/** Live theme for the dark-family shell from the user’s Appearance setting. */
 export function useAppTheme(): AppTheme {
-  return getTheme('dark');
+  const { mode } = useContext(AppearanceModeContext);
+  return useMemo(() => resolveAppTheme(mode === 'sunlight'), [mode]);
 }
