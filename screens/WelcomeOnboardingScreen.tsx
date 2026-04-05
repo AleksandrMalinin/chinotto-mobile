@@ -101,6 +101,19 @@ export function WelcomeOnboardingScreen({ onComplete }: Props) {
   );
 
   const ctaSurface = useMemo(() => {
+    if (t.sunlightMode) {
+      return {
+        gradient: [
+          'rgba(120,130,188,0.42)',
+          'rgba(105,115,175,0.38)',
+          'rgba(95,105,165,0.36)',
+        ] as const,
+        shadowColor: 'rgba(80, 90, 140, 0.45)',
+        borderColor: 'rgba(160,170,220,0.45)',
+        borderTopColor: 'rgba(190,198,240,0.5)',
+        textColor: colors.fg,
+      };
+    }
     if (t.isDark) {
       return {
         gradient: [
@@ -125,7 +138,7 @@ export function WelcomeOnboardingScreen({ onComplete }: Props) {
       borderTopColor: 'rgba(155, 166, 232, 0.45)',
       textColor: colors.entryBody,
     };
-  }, [t.isDark, colors.entryBody, colors.fg]);
+  }, [t.isDark, t.sunlightMode, colors.entryBody, colors.fg]);
 
   const handleContinue = useCallback(() => {
     void (async () => {
@@ -169,10 +182,19 @@ export function WelcomeOnboardingScreen({ onComplete }: Props) {
                 <Svg width="100%" height={34} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
                   <Defs>
                     <SvgLinearGradient id="welcomeHeadlineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                      <Stop offset="0%" stopColor="rgba(255,255,255,0.96)" />
-                      <Stop offset="38%" stopColor="rgba(198,206,255,0.92)" />
-                      <Stop offset="72%" stopColor="rgba(255,255,255,0.9)" />
-                      <Stop offset="100%" stopColor="rgba(255,220,200,0.82)" />
+                      {t.sunlightMode ? (
+                        <>
+                          <Stop offset="0%" stopColor="#ffffff" />
+                          <Stop offset="100%" stopColor="#ffffff" />
+                        </>
+                      ) : (
+                        <>
+                          <Stop offset="0%" stopColor="rgba(255,255,255,0.96)" />
+                          <Stop offset="38%" stopColor="rgba(198,206,255,0.92)" />
+                          <Stop offset="72%" stopColor="rgba(255,255,255,0.9)" />
+                          <Stop offset="100%" stopColor="rgba(255,220,200,0.82)" />
+                        </>
+                      )}
                     </SvgLinearGradient>
                   </Defs>
                   <SvgText
@@ -249,10 +271,10 @@ export function WelcomeOnboardingScreen({ onComplete }: Props) {
                     ? {
                         shadowColor: ctaSurface.shadowColor,
                         shadowOffset: { width: 0, height: 0 },
-                        shadowOpacity: 0.22,
-                        shadowRadius: 14,
+                        shadowOpacity: t.sunlightMode ? 0.12 : 0.22,
+                        shadowRadius: t.sunlightMode ? 6 : 14,
                       }
-                    : { elevation: 4 },
+                    : { elevation: t.sunlightMode ? 2 : 4 },
                 ]}
               >
                 <LinearGradient

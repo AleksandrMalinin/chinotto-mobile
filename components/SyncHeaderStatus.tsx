@@ -40,10 +40,15 @@ const DOT_LABEL_GAP = 8;
 
 /** Lavender from the shell palette; deliberately not a “success” green. */
 const SYNC_DOT_FILL = 'rgba(148, 156, 212, 0.58)';
+const SYNC_DOT_FILL_SUNLIGHT = 'rgba(210, 216, 255, 0.92)';
 const SYNC_DOT_SHADOW_IOS = 'rgba(165, 172, 225, 0.55)';
 
-function syncDotShadowStyle(): ViewStyle {
-  if (Platform.OS !== 'ios') {
+function syncDotFill(sunlightMode: boolean): string {
+  return sunlightMode ? SYNC_DOT_FILL_SUNLIGHT : SYNC_DOT_FILL;
+}
+
+function syncDotShadowStyle(sunlightMode: boolean): ViewStyle {
+  if (sunlightMode || Platform.OS !== 'ios') {
     return {};
   }
   return {
@@ -58,11 +63,18 @@ type EnableSyncLabelWithShimmerProps = {
   text: string;
   textStyle: StyleProp<TextStyle>;
   isDark: boolean;
+  sunlightMode: boolean;
   onComplete?: () => void;
 };
 
 /** Single left→right sweep; low contrast; no loop (`useNativeDriver: false` for reliable layout clip). */
-function EnableSyncLabelWithShimmer({ text, textStyle, isDark, onComplete }: EnableSyncLabelWithShimmerProps) {
+function EnableSyncLabelWithShimmer({
+  text,
+  textStyle,
+  isDark,
+  sunlightMode,
+  onComplete,
+}: EnableSyncLabelWithShimmerProps) {
   const sweep = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -101,7 +113,11 @@ function EnableSyncLabelWithShimmer({ text, textStyle, isDark, onComplete }: Ena
         pointerEvents="none"
         accessible={false}
         importantForAccessibility="no"
-        style={[StyleSheet.absoluteFillObject, styles.labelShimmerClip, { opacity: 0.18 }]}
+        style={[
+          StyleSheet.absoluteFillObject,
+          styles.labelShimmerClip,
+          { opacity: sunlightMode ? 0.07 : 0.18 },
+        ]}
       >
         <Animated.View style={{ height: '100%', transform: [{ translateX }] }}>
           <LinearGradient
@@ -172,7 +188,9 @@ export function SyncHeaderStatus({
   /** Intentionally quiet — sync is optional; never compete with capture. */
   const textColor =
     phase === 'signed_out'
-      ? t.colors.sectionFg
+      ? t.sunlightMode
+        ? t.colors.metaFg
+        : t.colors.sectionFg
       : phase === 'signed_in'
         ? uploadStuck
           ? t.colors.sectionFg
@@ -210,9 +228,9 @@ export function SyncHeaderStatus({
               style={[
                 styles.dot,
                 {
-                  backgroundColor: SYNC_DOT_FILL,
+                  backgroundColor: syncDotFill(t.sunlightMode),
                   opacity: pulse,
-                  ...syncDotShadowStyle(),
+                  ...syncDotShadowStyle(t.sunlightMode),
                 },
               ]}
             />
@@ -223,9 +241,9 @@ export function SyncHeaderStatus({
               style={[
                 styles.dot,
                 {
-                  backgroundColor: SYNC_DOT_FILL,
+                  backgroundColor: syncDotFill(t.sunlightMode),
                   opacity: 0.52,
-                  ...syncDotShadowStyle(),
+                  ...syncDotShadowStyle(t.sunlightMode),
                 },
               ]}
             />
@@ -236,6 +254,7 @@ export function SyncHeaderStatus({
             text={label}
             textStyle={[styles.label, { color: textColor, fontFamily: fonts.regular }]}
             isDark={t.isDark}
+            sunlightMode={t.sunlightMode}
             onComplete={onEnableSyncLabelShimmerComplete}
           />
         ) : (

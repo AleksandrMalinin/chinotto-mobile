@@ -17,7 +17,7 @@ import {
   CHINOTTO_PACKAGE_KIND_ORDER,
   REVENUECAT_IOS_API_KEY,
 } from '../src/services/purchases/constants';
-import { fonts, radius, spacing } from '../theme';
+import { fonts, radius, spacing, useAppTheme } from '../theme';
 import { useEnableSyncController } from './useEnableSyncController';
 
 /**
@@ -152,6 +152,7 @@ export function EnableSyncModal({
   bgElevated,
   border,
 }: EnableSyncModalProps) {
+  const { sunlightMode } = useAppTheme();
   const {
     busy,
     errorMessage,
@@ -324,6 +325,32 @@ export function EnableSyncModal({
     (authPhase !== 'signed_out' || (!showPlusPaywall && !showSubscriptionWait));
   const interactionLocked = busy || marketingPreviewFreezeActions;
 
+  const sheetShadowLift = sunlightMode
+    ? Platform.select({
+        ios: {
+          shadowColor: '#000',
+          shadowOpacity: 0.22,
+          shadowRadius: 14,
+          shadowOffset: { width: 0, height: 8 },
+        },
+        android: { elevation: 8 },
+        default: {},
+      }) ?? {}
+    : {};
+
+  const paywallPrimaryShadowLift = sunlightMode
+    ? Platform.select({
+        ios: {
+          shadowColor: '#000',
+          shadowOpacity: 0.1,
+          shadowRadius: 6,
+          shadowOffset: { width: 0, height: 2 },
+        },
+        android: { elevation: 2 },
+        default: {},
+      }) ?? {}
+    : {};
+
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={handleClose}>
       <Pressable
@@ -335,12 +362,29 @@ export function EnableSyncModal({
         disabled={busy}
       >
         <Pressable
-          style={[styles.sheet, { backgroundColor: 'rgba(18, 18, 26, 0.9)', borderColor: border }]}
+          style={[
+            styles.sheet,
+            sheetShadowLift,
+            {
+              backgroundColor: sunlightMode ? bgElevated : 'rgba(18, 18, 26, 0.9)',
+              borderColor: border,
+            },
+          ]}
           onPress={(ev) => ev.stopPropagation()}
         >
-          <View pointerEvents="none" style={styles.sheetAuraViolet} />
-          <View pointerEvents="none" style={styles.sheetAuraBlue} />
-          <View pointerEvents="none" style={styles.sheetInnerRing} />
+          {sunlightMode ? null : (
+            <>
+              <View pointerEvents="none" style={styles.sheetAuraViolet} />
+              <View pointerEvents="none" style={styles.sheetAuraBlue} />
+            </>
+          )}
+          <View
+            pointerEvents="none"
+            style={[
+              styles.sheetInnerRing,
+              sunlightMode ? { borderColor: 'rgba(255,255,255,0.22)' } : null,
+            ]}
+          />
           {postSyncSuccess ? (
             <>
               <Text
@@ -544,6 +588,7 @@ export function EnableSyncModal({
                 style={({ pressed }) => [
                   styles.appleButton,
                   styles.paywallPrimaryButton,
+                  paywallPrimaryShadowLift,
                   { opacity: busy ? 0.5 : pressed ? 0.88 : 1 },
                 ]}
                 onPress={() => void handlePlusContinue()}

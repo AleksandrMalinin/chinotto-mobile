@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
   Animated,
@@ -12,6 +12,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Path, Stop } from 'react-native-svg';
 
+import { useAppTheme } from '../theme';
 import { IntroRadialBlobView, type IntroBlobProfile } from './introRadialBlob';
 
 /**
@@ -53,6 +54,7 @@ export type StreamFlowPanelProps = {
 };
 
 export function StreamFlowPanel({ calm = false, deferMotion = false, typingAccent = false }: StreamFlowPanelProps) {
+  const { sunlightMode } = useAppTheme();
   const { width: windowWidth } = useWindowDimensions();
   const panelW = Math.min(260, windowWidth * 0.88);
   const panelH = (panelW * 13) / 11;
@@ -136,14 +138,87 @@ export function StreamFlowPanel({ calm = false, deferMotion = false, typingAccen
     ]).start();
   }, [typingAccent, svgPulse]);
 
+  const panelShadowStyle = useMemo((): ViewStyle => {
+    if (sunlightMode) {
+      return Platform.select({
+        ios: {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.35,
+          shadowRadius: 4,
+        },
+        android: { elevation: 3 },
+        default: {},
+      }) ?? {};
+    }
+    return Platform.select({
+      ios: {
+        shadowColor: 'rgba(0,0,0,0.45)',
+        shadowOffset: { width: 0, height: 19 },
+        shadowOpacity: 0.4,
+        shadowRadius: 38,
+      },
+      android: { elevation: 12 },
+      default: {},
+    }) ?? {};
+  }, [sunlightMode]);
+
+  const auraVioletStyle = useMemo(
+    (): ViewStyle[] => [
+      styles.auraViolet,
+      sunlightMode
+        ? (Platform.select({
+            ios: { shadowColor: 'transparent', shadowOpacity: 0, shadowRadius: 0 },
+            default: {},
+          }) ?? {})
+        : {},
+    ],
+    [sunlightMode]
+  );
+
+  const auraBlueStyle = useMemo(
+    (): ViewStyle[] => [
+      styles.auraBlue,
+      sunlightMode
+        ? (Platform.select({
+            ios: { shadowColor: 'transparent', shadowOpacity: 0, shadowRadius: 0 },
+            default: {},
+          }) ?? {})
+        : {},
+    ],
+    [sunlightMode]
+  );
+
+  const glassColors = sunlightMode
+    ? (['#2c2e3e', '#282a38', '#2a2c3c'] as const)
+    : (['rgba(18,18,28,0.55)', 'rgba(12,14,22,0.35)', 'rgba(20,22,34,0.5)'] as const);
+
+  const glassBorder = sunlightMode ? 'rgba(140, 152, 210, 0.32)' : 'rgba(255,255,255,0.06)';
+
+  const glassShadowStyle = useMemo((): ViewStyle => {
+    if (sunlightMode) {
+      return {};
+    }
+    return Platform.select({
+      ios: {
+        shadowColor: '#646eb4',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.14,
+        shadowRadius: 26,
+      },
+      android: {},
+      default: {},
+    }) ?? {};
+  }, [sunlightMode]);
+
   return (
     <View
-      style={[styles.panel, { width: panelW, height: panelH }]}
+      style={[styles.panel, panelShadowStyle, { width: panelW, height: panelH }]}
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
     >
-      <View pointerEvents="none" style={styles.auraViolet} />
-      <View pointerEvents="none" style={styles.auraBlue} />
+      <View pointerEvents="none" style={auraVioletStyle} />
+      <View pointerEvents="none" style={auraBlueStyle} />
 
       <BlobField
         panelW={panelW}
@@ -153,11 +228,11 @@ export function StreamFlowPanel({ calm = false, deferMotion = false, typingAccen
       />
 
       <LinearGradient
-        colors={['rgba(18,18,28,0.55)', 'rgba(12,14,22,0.35)', 'rgba(20,22,34,0.5)']}
+        colors={[...glassColors]}
         locations={[0, 0.48, 1]}
         start={{ x: 0.35, y: 0 }}
         end={{ x: 0.65, y: 1 }}
-        style={[styles.glass, StyleSheet.absoluteFillObject]}
+        style={[styles.glass, glassShadowStyle, { borderColor: glassBorder }, StyleSheet.absoluteFillObject]}
       />
 
       <View style={[styles.svgPad, { paddingTop: padT, paddingHorizontal: padH, paddingBottom: padB }]}>
