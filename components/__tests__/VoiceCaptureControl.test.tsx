@@ -4,7 +4,7 @@ import { VoiceMicButton } from '../VoiceCaptureControl';
 import { getTheme } from '../../theme';
 
 describe('VoiceMicButton', () => {
-  const theme = getTheme('dark');
+  const theme = getTheme();
 
   it('invokes onPress when pressed', () => {
     const onPress = jest.fn();
