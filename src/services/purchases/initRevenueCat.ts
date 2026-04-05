@@ -1,6 +1,8 @@
 import { Platform } from 'react-native';
 import Purchases, { LOG_LEVEL, type CustomerInfoUpdateListener } from 'react-native-purchases';
 
+import { isPaywallEnabled } from '../../../monetization/paywallConfig';
+
 function iosStoreKitVersionFromEnv():
   | typeof Purchases.STOREKIT_VERSION.STOREKIT_1
   | typeof Purchases.STOREKIT_VERSION.STOREKIT_2
@@ -50,6 +52,11 @@ export function initRevenueCat(): void {
     Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.DEBUG : LOG_LEVEL.ERROR);
 
     if (Platform.OS === 'ios') {
+      if (!__DEV__ && isPaywallEnabled() && REVENUECAT_IOS_API_KEY.startsWith('test_')) {
+        console.error(
+          '[RevenueCat] Paywall is on but the embedded iOS key is test_* — set EXPO_PUBLIC_REVENUECAT_IOS_API_KEY (appl_…) on EAS and rebuild. Purchases will not work in this binary.',
+        );
+      }
       const storeKitVersion = iosStoreKitVersionFromEnv();
       Purchases.configure({
         apiKey: REVENUECAT_IOS_API_KEY,
