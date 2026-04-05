@@ -1,7 +1,7 @@
 import { forwardRef } from 'react';
 import { Platform, StyleSheet, TextInput, useWindowDimensions } from 'react-native';
 
-import { useAppTheme } from '../theme';
+import { captureInputPaddingBottom, captureInputPaddingTop, useAppTheme } from '../theme';
 
 export type CaptureInputProps = {
   value: string;
@@ -54,8 +54,8 @@ export const CaptureInput = forwardRef<TextInput, CaptureInputProps>(
             letterSpacing: capture.letterSpacing,
             lineHeight: capture.lineHeight,
             paddingHorizontal: 0,
-            paddingTop: 6,
-            paddingBottom: 8,
+            paddingTop: captureInputPaddingTop,
+            paddingBottom: captureInputPaddingBottom,
           },
         ]}
         value={value}

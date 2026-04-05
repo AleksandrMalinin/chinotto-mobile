@@ -9,7 +9,7 @@ import {
 } from './NativeVoiceCapture';
 
 export type UseVoiceCaptureOptions = {
-  /** MVP: omit to avoid live reflow; V2: update input from partials. */
+  /** Live transcript while listening (full best string per callback, not deltas). */
   onTranscriptPartial?: (text: string) => void;
   onTranscriptFinal: (text: string, reason: string) => void;
 };

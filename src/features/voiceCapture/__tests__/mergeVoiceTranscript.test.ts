@@ -17,4 +17,10 @@ describe('mergeVoiceTranscript', () => {
     expect(mergeVoiceTranscript('alpha', '')).toBe('alpha');
     expect(mergeVoiceTranscript('alpha', '   ')).toBe('alpha');
   });
+
+  it('supports live partials from a fixed base (composer snapshot at mic start)', () => {
+    const base = 'Note: ';
+    expect(mergeVoiceTranscript(base, 'one')).toBe('Note: one');
+    expect(mergeVoiceTranscript(base, 'one two')).toBe('Note: one two');
+  });
 });

@@ -29,7 +29,7 @@ import { EnableSyncModal } from '../components/EnableSyncModal';
 import { EntryReadSheet } from '../components/EntryReadSheet';
 import { RecentList } from '../components/RecentList';
 import { SyncHeaderStatus, type SyncHeaderAuthPhase } from '../components/SyncHeaderStatus';
-import { VoiceCaptureControl } from '../components/VoiceCaptureControl';
+import { VoiceMicButton } from '../components/VoiceCaptureControl';
 import { AppIconScreen } from './AppIconScreen';
 import { ManifestoScreen } from './ManifestoScreen';
 import { SettingsScreen } from './SettingsScreen';
@@ -178,6 +178,8 @@ export function CaptureScreen({
   const loadingMoreRef = useRef(false);
   const searchQueryRef = useRef('');
   const searchActiveRef = useRef(false);
+  /** Composer snapshot when mic starts; partials/final merge with this so live text does not stack. */
+  const voiceCaptureBaseRef = useRef('');
   const { width: windowWidth } = useWindowDimensions();
   const t = useAppTheme();
   const gutter = screenContentGutter(windowWidth);
@@ -641,12 +643,22 @@ export function CaptureScreen({
     })();
   }, []);
 
+  const onVoiceTranscriptPartial = useCallback(
+    (partial: string) => {
+      if (screenshotActive) {
+        return;
+      }
+      setText(mergeVoiceTranscript(voiceCaptureBaseRef.current, partial));
+    },
+    [screenshotActive],
+  );
+
   const onVoiceTranscriptFinal = useCallback(
     (spoken: string, _reason: string) => {
       if (screenshotActive) {
         return;
       }
-      setText((prev) => mergeVoiceTranscript(prev, spoken));
+      setText(mergeVoiceTranscript(voiceCaptureBaseRef.current, spoken));
       if (hapticsEnabled) {
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
@@ -660,6 +672,7 @@ export function CaptureScreen({
     stop: stopVoiceCaptureSession,
     supported: voiceCaptureNativeReady,
   } = useVoiceCapture({
+    onTranscriptPartial: onVoiceTranscriptPartial,
     onTranscriptFinal: onVoiceTranscriptFinal,
   });
 
@@ -781,29 +794,34 @@ export function CaptureScreen({
             */}
             <View style={{ paddingHorizontal: gutter }}>
               <View style={styles.composerBlock}>
-                {showVoiceCapture ? (
-                  <VoiceCaptureControl
-                    phase={voicePhase}
-                    theme={t}
-                    onPress={() => {
-                      if (voicePhase === 'listening') {
-                        stopVoiceCaptureSession();
-                      } else {
-                        void startVoiceCaptureSession();
-                      }
-                    }}
-                  />
-                ) : null}
-                <CaptureInput
-                  ref={inputRef}
-                  value={text}
-                  onChangeText={setText}
-                  onSubmit={handleSubmit}
-                  minHeight={composerMinHeight}
-                  maxHeight={composerMaxHeight}
-                  placeholder="Write a thought…"
-                  placeholderTextColor={t.colors.metaFg}
-                />
+                <View style={styles.composerInputRow}>
+                  <View style={styles.composerInputWrap}>
+                    <CaptureInput
+                      ref={inputRef}
+                      value={text}
+                      onChangeText={setText}
+                      onSubmit={handleSubmit}
+                      minHeight={composerMinHeight}
+                      maxHeight={composerMaxHeight}
+                      placeholder="Jot a thought…"
+                      placeholderTextColor={t.colors.metaFg}
+                    />
+                  </View>
+                  {showVoiceCapture ? (
+                    <VoiceMicButton
+                      phase={voicePhase}
+                      theme={t}
+                      onPress={() => {
+                        if (voicePhase === 'listening') {
+                          stopVoiceCaptureSession();
+                        } else {
+                          voiceCaptureBaseRef.current = text;
+                          void startVoiceCaptureSession();
+                        }
+                      }}
+                    />
+                  ) : null}
+                </View>
               </View>
               <View style={{ marginTop: t.spacing.lg }}>
                 {searchExpanded ? (
@@ -1059,6 +1077,15 @@ const styles = StyleSheet.create({
   composerBlock: {
     paddingHorizontal: screenContentInnerPad,
     paddingVertical: 14,
+  },
+  composerInputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+  },
+  composerInputWrap: {
+    flex: 1,
+    minWidth: 0,
   },
   /** Full-width capsule — metadata scale; reads as chrome, not a second composer. */
   searchPill: {

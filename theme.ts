@@ -119,6 +119,10 @@ export const typography = {
   },
 } as const;
 
+/** Must match vertical padding on the capture `TextInput` (`CaptureInput`). Used for mic alignment. */
+export const captureInputPaddingTop = 6;
+export const captureInputPaddingBottom = 8;
+
 export type AppTheme = {
   colors: ThemeColors;
   isDark: boolean;
