@@ -22,6 +22,9 @@ export function AmbientBackground() {
   const pulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
+    if (t.sunlightMode) {
+      return;
+    }
     let animation: Animated.CompositeAnimation | undefined;
     let cancelled = false;
 
@@ -52,7 +55,23 @@ export function AmbientBackground() {
       cancelled = true;
       animation?.stop();
     };
-  }, [pulse]);
+  }, [pulse, t.sunlightMode]);
+
+  /** Sunlight: near-flat base — minimal wash so text/surfaces keep luminance contrast outdoors. */
+  if (t.sunlightMode) {
+    return (
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: t.colors.bg }]} />
+        <LinearGradient
+          colors={['rgba(92, 104, 152, 0.028)', 'transparent', 'rgba(72, 88, 132, 0.02)']}
+          locations={[0, 0.52, 1]}
+          start={{ x: 0.06, y: 0 }}
+          end={{ x: 0.94, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
