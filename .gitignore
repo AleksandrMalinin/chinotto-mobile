@@ -50,6 +50,9 @@ pnpm-debug.log*
 # Test / coverage
 coverage/
 
+# Local App Store screenshot exports (`scripts/store-screenshots.sh`)
+store-screenshots-out/
+
 # Internal planning / handoff (local only)
 INTERNAL_MOBILE_DESKTOP_STATE.md
 
