@@ -16,8 +16,7 @@ dist/
 web-build/
 expo-env.d.ts
 
-# Native projects from `expo prebuild` or `expo run:*` — regenerate locally or via EAS
-/ios
+# Native: iOS project is tracked; Android still generated locally (`expo prebuild`) unless added later
 /android
 
 # Kotlin
@@ -79,6 +78,6 @@ GoogleService-Info.plist
 # .idea/
 
 # ---
-# What we commit: source, assets, app.json, pnpm-lock.yaml, docs (except PRODUCT_STATE), scripts.
-# What stays local: node_modules, .expo, ios/android prebuild output, env files, logs, coverage,
+# What we commit: source, assets, app.json, pnpm-lock.yaml, docs (except PRODUCT_STATE), scripts, ios/.
+# What stays local: node_modules, .expo, android/ prebuild output (if untracked), env files, logs, coverage,
 # INTERNAL_*, docs/product/PRODUCT_STATE.md (optional local snapshot).
