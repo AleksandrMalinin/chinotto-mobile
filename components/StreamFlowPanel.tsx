@@ -12,7 +12,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Path, Stop } from 'react-native-svg';
 
-import { useAppTheme } from '../theme';
+import { getTheme, useAppTheme } from '../theme';
 import { IntroRadialBlobView, type IntroBlobProfile } from './introRadialBlob';
 
 /**
@@ -51,10 +51,22 @@ export type StreamFlowPanelProps = {
   deferMotion?: boolean;
   /** One-shot SVG opacity pulse (desktop typing accent). */
   typingAccent?: boolean;
+  /**
+   * When false, use standard dark chrome only (welcome). Avoids adaptive sunlight tint on a
+   * surface that shares the capture stream illustration but is not the main shell.
+   */
+  useAdaptiveChrome?: boolean;
 };
 
-export function StreamFlowPanel({ calm = false, deferMotion = false, typingAccent = false }: StreamFlowPanelProps) {
-  const { sunlightMode } = useAppTheme();
+export function StreamFlowPanel({
+  calm = false,
+  deferMotion = false,
+  typingAccent = false,
+  useAdaptiveChrome = true,
+}: StreamFlowPanelProps) {
+  const adaptive = useAppTheme();
+  const fixed = useMemo(() => getTheme(), []);
+  const { sunlightMode } = useAdaptiveChrome ? adaptive : fixed;
   const { width: windowWidth } = useWindowDimensions();
   const panelW = Math.min(260, windowWidth * 0.88);
   const panelH = (panelW * 13) / 11;

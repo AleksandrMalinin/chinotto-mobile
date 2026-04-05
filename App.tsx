@@ -32,7 +32,7 @@ import { clearWelcomeFlag, hasCompletedWelcome } from './storage/welcomeFlag';
 import { isFirebaseSyncConfigured } from './sync/firebaseConfig';
 import { useCaptureWidgetDeepLinkFocus } from './widgets/useCaptureWidgetDeepLinkFocus';
 import { useExperimentalIosHomeWidgetRegistration } from './widgets/useExperimentalIosHomeWidget';
-import { AdaptiveChromeContext, useAppTheme } from './theme';
+import { AdaptiveChromeContext, getTheme, useAppTheme } from './theme';
 
 /** Keep native splash visible until we call hide (fonts + DB + short beat). */
 void SplashScreen.preventAutoHideAsync();
@@ -48,8 +48,8 @@ const SHARE_SAVE_DEBOUNCE_MS = 400;
 type AppPhase = 'boot' | 'brand' | 'welcome' | 'main';
 
 function BootPhaseShell({ children }: { children: ReactNode }) {
-  const t = useAppTheme();
-  return <View style={{ flex: 1, backgroundColor: t.colors.bg }}>{children}</View>;
+  const bg = useMemo(() => getTheme().colors.bg, []);
+  return <View style={{ flex: 1, backgroundColor: bg }}>{children}</View>;
 }
 
 function ShareSavedAck({ visible }: { visible: boolean }) {

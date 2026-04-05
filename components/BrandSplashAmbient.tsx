@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import {
   AccessibilityInfo,
   Animated,
@@ -8,18 +8,18 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { useAppTheme } from '../theme';
+import { getTheme } from '../theme';
 
 /** Same pulse cadence as `AmbientBackground`. */
 const PULSE_MS = 20000;
 
 /**
  * Splash shell: same gradient stack + smooth transitions as before; values tuned **darker**
- * globally (muted neon + slightly heavier vignette). Crossfades toward the sunlight wash using
- * {@link AppTheme.blendProgress}.
+ * globally (muted neon + slightly heavier vignette). Does **not** follow adaptive sunlight — same
+ * rationale as welcome: one short surface, stable look while `CaptureScreen` picks up appearance.
  */
 export function BrandSplashAmbient() {
-  const t = useAppTheme();
+  const t = useMemo(() => getTheme(), []);
   const pulse = useRef(new Animated.Value(1)).current;
   const normalWeight = Math.max(0, 1 - t.blendProgress);
   const sunWeight = Math.max(0, t.blendProgress);
