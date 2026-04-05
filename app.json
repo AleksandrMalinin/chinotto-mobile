@@ -44,7 +44,24 @@
     },
     "extra": {
       "eas": {
-        "projectId": "75f836d7-4d98-401b-a733-0ac61429d31e"
+        "projectId": "75f836d7-4d98-401b-a733-0ac61429d31e",
+        "build": {
+          "experimental": {
+            "ios": {
+              "appExtensions": [
+                {
+                  "targetName": "expo-sharing-extension",
+                  "bundleIdentifier": "com.chinotto.mobile.expo-sharing-extension",
+                  "entitlements": {
+                    "com.apple.security.application-groups": [
+                      "group.com.chinotto.mobile"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        }
       }
     },
     "plugins": [
