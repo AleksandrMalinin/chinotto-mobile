@@ -6,7 +6,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChinottoLogo, chinottoLogoLeadingOutset } from '../components/ChinottoLogo';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { SettingsSection } from '../components/settings/SettingsSection';
-import { AppearanceModeContext, fonts, screenContentGutter, useAppTheme } from '../theme';
+import { AdaptiveChromeContext, fonts, screenContentGutter, useAppTheme } from '../theme';
 
 type SettingsScreenProps = {
   onClose: () => void;
@@ -33,7 +33,7 @@ export function SettingsScreen({
   onHapticsEnabledChange,
   onOpenDevMenu,
 }: SettingsScreenProps) {
-  const { mode: appearanceMode, setMode: setAppearanceMode } = useContext(AppearanceModeContext);
+  const { displayChrome, setDisplayChrome } = useContext(AdaptiveChromeContext);
   const t = useAppTheme();
   const insets = useSafeAreaInsets();
   const appVersion = Constants.expoConfig?.version ?? 'dev';
@@ -111,19 +111,28 @@ export function SettingsScreen({
 
               <SettingsSection title="Appearance">
                 <SettingsRow
-                  testID="settings-appearance-default"
+                  testID="settings-chrome-auto"
                   variant="choice"
-                  label="Default"
-                  selected={appearanceMode === 'default'}
-                  onPress={() => setAppearanceMode('default')}
+                  label="Auto"
+                  description="Adapts to your environment."
+                  selected={displayChrome === 'auto'}
+                  onPress={() => setDisplayChrome('auto')}
                 />
                 <SettingsRow
-                  testID="settings-appearance-sunlight"
+                  testID="settings-chrome-normal"
                   variant="choice"
-                  label="Sunlight mode"
-                  description="Better visibility in bright light"
-                  selected={appearanceMode === 'sunlight'}
-                  onPress={() => setAppearanceMode('sunlight')}
+                  label="Standard"
+                  description="Original Chinotto look."
+                  selected={displayChrome === 'normal'}
+                  onPress={() => setDisplayChrome('normal')}
+                />
+                <SettingsRow
+                  testID="settings-chrome-sunlight"
+                  variant="choice"
+                  label="Sunlight"
+                  description="High contrast for bright conditions."
+                  selected={displayChrome === 'sunlight'}
+                  onPress={() => setDisplayChrome('sunlight')}
                   isLast={!canOpenAppIcon || !onOpenAppIcon}
                 />
                 {canOpenAppIcon && onOpenAppIcon ? (

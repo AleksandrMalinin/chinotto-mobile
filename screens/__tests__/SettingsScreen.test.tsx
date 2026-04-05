@@ -2,7 +2,8 @@ import type { ComponentProps } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { AppearanceModeContext } from '../../theme';
+import type { AdaptiveChromeContextValue } from '../../theme';
+import { AdaptiveChromeContext } from '../../theme';
 import { SettingsScreen } from '../SettingsScreen';
 
 jest.mock('expo-constants', () => {
@@ -24,12 +25,18 @@ jest.mock('../../components/ChinottoLogo', () => {
 });
 
 function renderSettings(
-  appearanceMode: 'default' | 'sunlight',
-  setMode: jest.Mock,
   props?: Partial<ComponentProps<typeof SettingsScreen>>,
+  chrome: Partial<AdaptiveChromeContextValue> = {},
 ) {
-  return render(
-    <AppearanceModeContext.Provider value={{ mode: appearanceMode, setMode }}>
+  const setDisplayChrome = jest.fn();
+  const value: AdaptiveChromeContextValue = {
+    blendProgress: 0,
+    displayChrome: 'auto',
+    setDisplayChrome,
+    ...chrome,
+  };
+  const view = render(
+    <AdaptiveChromeContext.Provider value={value}>
       <SafeAreaProvider
         initialMetrics={{
           frame: { x: 0, y: 0, width: 390, height: 844 },
@@ -46,29 +53,43 @@ function renderSettings(
           {...props}
         />
       </SafeAreaProvider>
-    </AppearanceModeContext.Provider>
+    </AdaptiveChromeContext.Provider>
   );
+  return { ...view, setDisplayChrome };
 }
 
 describe('SettingsScreen', () => {
-  it('lists Default and Sunlight mode under Appearance', async () => {
-    const setMode = jest.fn();
-    renderSettings('default', setMode);
+  it('lists Appearance with contrast options', async () => {
+    renderSettings();
 
     expect(await screen.findByText('Appearance')).toBeTruthy();
-    expect(screen.getByText('Default')).toBeTruthy();
-    expect(screen.getByText('Sunlight mode')).toBeTruthy();
-    expect(screen.getByText('Better visibility in bright light')).toBeTruthy();
+    expect(screen.getByTestId('settings-chrome-auto')).toBeTruthy();
+    expect(screen.getByTestId('settings-chrome-normal')).toBeTruthy();
+    expect(screen.getByTestId('settings-chrome-sunlight')).toBeTruthy();
+    expect(screen.getByText('Experience')).toBeTruthy();
   });
 
-  it('invokes setMode when choosing an appearance option', async () => {
-    const setMode = jest.fn();
-    renderSettings('default', setMode);
+  it('calls setDisplayChrome when choosing a contrast mode', async () => {
+    const { setDisplayChrome } = renderSettings();
 
-    fireEvent.press(await screen.findByTestId('settings-appearance-sunlight'));
-    expect(setMode).toHaveBeenCalledWith('sunlight');
+    fireEvent.press(await screen.findByTestId('settings-chrome-sunlight'));
+    expect(setDisplayChrome).toHaveBeenCalledWith('sunlight');
 
-    fireEvent.press(screen.getByTestId('settings-appearance-default'));
-    expect(setMode).toHaveBeenCalledWith('default');
+    fireEvent.press(screen.getByTestId('settings-chrome-normal'));
+    expect(setDisplayChrome).toHaveBeenCalledWith('normal');
+
+    fireEvent.press(screen.getByTestId('settings-chrome-auto'));
+    expect(setDisplayChrome).toHaveBeenCalledWith('auto');
+  });
+
+  it('shows App icon row under Appearance when enabled', async () => {
+    renderSettings({
+      canOpenAppIcon: true,
+      onOpenAppIcon: jest.fn(),
+      appIconLabel: 'Chinotto',
+    });
+
+    expect(await screen.findByText('Appearance')).toBeTruthy();
+    expect(screen.getByTestId('settings-open-app-icon')).toBeTruthy();
   });
 });
