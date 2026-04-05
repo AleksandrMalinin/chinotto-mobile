@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -21,17 +21,18 @@ import { useScreenshotSceneLink } from './linking/useScreenshotSceneLink';
 import { useSyncDeepLink } from './linking/useSyncDeepLink';
 import { isScreenshotMode } from './src/features/screenshotMode';
 import { initDatabase } from './storage/db';
-import { saveEntry } from './storage/entryRepository';
 import {
-  getAppearanceMode,
-  setAppearanceMode as persistAppearanceMode,
-  type AppearanceMode,
-} from './storage/appearancePrefs';
+  getDisplayChromePreference,
+  setDisplayChromePreference as persistDisplayChromePreference,
+  type DisplayChromePreference,
+} from './storage/displayChromePrefs';
+import { saveEntry } from './storage/entryRepository';
+import { useAdaptiveChromeBlend } from './hooks/useAdaptiveChromeBlend';
 import { clearWelcomeFlag, hasCompletedWelcome } from './storage/welcomeFlag';
 import { isFirebaseSyncConfigured } from './sync/firebaseConfig';
 import { useCaptureWidgetDeepLinkFocus } from './widgets/useCaptureWidgetDeepLinkFocus';
 import { useExperimentalIosHomeWidgetRegistration } from './widgets/useExperimentalIosHomeWidget';
-import { AppearanceModeContext, useAppTheme } from './theme';
+import { AdaptiveChromeContext, useAppTheme } from './theme';
 
 /** Keep native splash visible until we call hide (fonts + DB + short beat). */
 void SplashScreen.preventAutoHideAsync();
@@ -124,8 +125,31 @@ export default function App() {
     'OpenSauceOne-500': require('./assets/fonts/OpenSauceOne-Medium.ttf'),
   });
   const [dbReady, setDbReady] = useState(false);
-  const [appearanceMode, setAppearanceModeState] = useState<AppearanceMode>('default');
-  const [appearanceReady, setAppearanceReady] = useState(false);
+  const { blendProgress: adaptiveBlend, ready: chromeReady } = useAdaptiveChromeBlend();
+  const [displayChrome, setDisplayChromeState] = useState<DisplayChromePreference>('auto');
+  const [displayChromeReady, setDisplayChromeReady] = useState(false);
+
+  useEffect(() => {
+    void getDisplayChromePreference().then((p) => {
+      setDisplayChromeState(p);
+      setDisplayChromeReady(true);
+    });
+  }, []);
+
+  const setDisplayChrome = useCallback((next: DisplayChromePreference) => {
+    setDisplayChromeState(next);
+    void persistDisplayChromePreference(next);
+  }, []);
+
+  const blendProgress = useMemo(() => {
+    if (displayChrome === 'normal') {
+      return 0;
+    }
+    if (displayChrome === 'sunlight') {
+      return 1;
+    }
+    return adaptiveBlend;
+  }, [displayChrome, adaptiveBlend]);
   const [subscriptionLoaded, setSubscriptionLoaded] = useState(false);
   const [firestoreIngestEpoch, setFirestoreIngestEpoch] = useState(0);
   const [remoteIngestVersion, setRemoteIngestVersion] = useState(0);
@@ -180,18 +204,6 @@ export default function App() {
 
   useEffect(() => {
     void initDatabase().finally(() => setDbReady(true));
-  }, []);
-
-  useEffect(() => {
-    void getAppearanceMode().then((mode) => {
-      setAppearanceModeState(mode);
-      setAppearanceReady(true);
-    });
-  }, []);
-
-  const setAppearanceMode = useCallback((next: AppearanceMode) => {
-    setAppearanceModeState(next);
-    void persistAppearanceMode(next);
   }, []);
 
   useEffect(() => {
@@ -375,12 +387,12 @@ export default function App() {
     }
   }, [phase, fontsLoaded, dbReady]);
 
-  if (!fontsLoaded || !dbReady || !appearanceReady || phase === 'boot') {
+  if (!fontsLoaded || !dbReady || !chromeReady || !displayChromeReady || phase === 'boot') {
     return null;
   }
 
   return (
-    <AppearanceModeContext.Provider value={{ mode: appearanceMode, setMode: setAppearanceMode }}>
+    <AdaptiveChromeContext.Provider value={{ blendProgress, displayChrome, setDisplayChrome }}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
           <View style={{ flex: 1 }}>
@@ -411,6 +423,6 @@ export default function App() {
           </View>
         </SafeAreaProvider>
       </GestureHandlerRootView>
-    </AppearanceModeContext.Provider>
+    </AdaptiveChromeContext.Provider>
   );
 }
