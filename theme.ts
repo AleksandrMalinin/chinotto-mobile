@@ -13,7 +13,10 @@
 
 import { createContext, useContext, useMemo } from 'react';
 
-import type { AppearanceMode } from './storage/appearancePrefs';
+import type { DisplayChromePreference } from './storage/displayChromePrefs';
+import { blendColorPair } from './theme/colorBlend';
+
+export type { DisplayChromePreference };
 
 /** Dark shell — values from design-system.md “Colors” table + recurring body opacity. */
 export const colorsDark = {
@@ -48,8 +51,8 @@ export const colorsDark = {
 } as const;
 
 /**
- * Sunlight mode — high-contrast dark (not a light theme). Optional user preference for readability
- * in bright environments.
+ * Sunlight legibility palette — high-contrast dark (not a light theme). Blended in when adaptive
+ * brightness reports a bright screen ({@link theme/adaptiveBrightness}).
  */
 export const colorsSunlight = {
   /**
@@ -106,6 +109,27 @@ export const colorsLight = {
 } as const;
 
 export type ThemeColors = typeof colorsDark | typeof colorsSunlight | typeof colorsLight;
+
+/** Adaptive shell: `normal` is default dark; `sunlight` is high-readability chrome from brightness. */
+export type ChromeMode = 'normal' | 'sunlight';
+
+type DarkSunKey = keyof typeof colorsDark & keyof typeof colorsSunlight;
+
+function blendDarkSunChrome(progress: number): ThemeColors {
+  const t = Math.min(1, Math.max(0, progress));
+  if (t <= 0) {
+    return colorsDark;
+  }
+  if (t >= 1) {
+    return colorsSunlight;
+  }
+  const keys = Object.keys(colorsDark) as DarkSunKey[];
+  const blended = {} as Record<DarkSunKey, string>;
+  for (const k of keys) {
+    blended[k] = blendColorPair(colorsDark[k], colorsSunlight[k], t);
+  }
+  return blended as unknown as ThemeColors;
+}
 
 /** Registered `fontFamily` names from `App.tsx` `useFonts` — Open Sauce One 400 / 500. */
 export const fonts = {
@@ -176,39 +200,55 @@ export const captureInputPaddingBottom = 8;
 
 export type AppTheme = {
   colors: ThemeColors;
+  /** Resolved adaptive mode from brightness (matches `sunlightMode` after blend crosses midpoint). */
+  mode: ChromeMode;
   /**
    * Semantic dark chrome — always true for the shipped shell (standard dark or sunlight).
    * Branches that picked “light marketing” colors are unused at runtime.
    */
   isDark: boolean;
-  /** High-contrast dark palette when the user enables Sunlight mode in Settings. */
+  /** True when adaptive blend is at or past the midpoint (sunlight legibility chrome). */
   sunlightMode: boolean;
+  /**
+   * Same as {@link AdaptiveChromeContext} `blendProgress` — use for gradual ambient/gradient
+   * crossfade (colors already interpolate via {@link resolveAppTheme}).
+   */
+  blendProgress: number;
   spacing: typeof spacing;
   radius: typeof radius;
   duration: typeof duration;
   typography: typeof typography;
 };
 
-export type { AppearanceMode };
-
-export type AppearanceModeContextValue = {
-  mode: AppearanceMode;
-  setMode: (next: AppearanceMode) => void;
+/**
+ * Set by root `App`: animated 0–1 blend between {@link colorsDark} and {@link colorsSunlight}.
+ * Default matches tests and storybook-style renders without a provider.
+ */
+export type AdaptiveChromeContextValue = {
+  /** Effective 0–1 blend after optional display override. */
+  blendProgress: number;
+  displayChrome: DisplayChromePreference;
+  setDisplayChrome: (next: DisplayChromePreference) => void;
 };
 
-/**
- * Set by the root App after loading appearance from AsyncStorage; default lets tests run without a provider.
- */
-export const AppearanceModeContext = createContext<AppearanceModeContextValue>({
-  mode: 'default',
-  setMode: () => {},
+export const AdaptiveChromeContext = createContext<AdaptiveChromeContextValue>({
+  blendProgress: 0,
+  displayChrome: 'auto',
+  setDisplayChrome: () => {},
 });
 
-export function resolveAppTheme(sunlightMode: boolean): AppTheme {
+/**
+ * `blendProgress` 0 = normal dark, 1 = full sunlight palette (may ease over ~280ms in the shell).
+ */
+export function resolveAppTheme(blendProgress: number): AppTheme {
+  const t = Math.min(1, Math.max(0, blendProgress));
+  const mode: ChromeMode = t >= 0.5 ? 'sunlight' : 'normal';
   return {
-    colors: sunlightMode ? colorsSunlight : colorsDark,
+    colors: blendDarkSunChrome(t),
+    mode,
     isDark: true,
-    sunlightMode,
+    sunlightMode: mode === 'sunlight',
+    blendProgress: t,
     spacing,
     radius,
     duration,
@@ -216,13 +256,13 @@ export function resolveAppTheme(sunlightMode: boolean): AppTheme {
   };
 }
 
-/** @deprecated Use `resolveAppTheme(false)` (or `true`) in tests. */
-export function getTheme(_colorScheme?: string | null | undefined): AppTheme {
-  return resolveAppTheme(false);
+/** Baseline dark chrome (no sunlight blend). */
+export function getTheme(): AppTheme {
+  return resolveAppTheme(0);
 }
 
-/** Live theme for the dark-family shell from the user’s Appearance setting. */
+/** Live theme from {@link AdaptiveChromeContext} `blendProgress` (includes user display override). */
 export function useAppTheme(): AppTheme {
-  const { mode } = useContext(AppearanceModeContext);
-  return useMemo(() => resolveAppTheme(mode === 'sunlight'), [mode]);
+  const { blendProgress } = useContext(AdaptiveChromeContext);
+  return useMemo(() => resolveAppTheme(blendProgress), [blendProgress]);
 }

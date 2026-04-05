@@ -6,9 +6,11 @@ import {
   screenContentInnerPad,
 } from '../theme';
 
-describe('resolveAppTheme (sunlight mode)', () => {
-  it('uses standard dark tokens when sunlight is off', () => {
-    const t = resolveAppTheme(false);
+describe('resolveAppTheme (adaptive blend)', () => {
+  it('uses standard dark tokens at blend 0', () => {
+    const t = resolveAppTheme(0);
+    expect(t.blendProgress).toBe(0);
+    expect(t.mode).toBe('normal');
     expect(t.sunlightMode).toBe(false);
     expect(t.isDark).toBe(true);
     expect(t.colors.bg).toBe(colorsDark.bg);
@@ -16,8 +18,10 @@ describe('resolveAppTheme (sunlight mode)', () => {
     expect(t.colors.searchBorder).toBe(colorsDark.searchBorder);
   });
 
-  it('uses high-contrast dark tokens when sunlight is on', () => {
-    const t = resolveAppTheme(true);
+  it('uses sunlight tokens at blend 1', () => {
+    const t = resolveAppTheme(1);
+    expect(t.blendProgress).toBe(1);
+    expect(t.mode).toBe('sunlight');
     expect(t.sunlightMode).toBe(true);
     expect(t.isDark).toBe(true);
     expect(t.colors.bg).toBe(colorsSunlight.bg);
@@ -27,6 +31,17 @@ describe('resolveAppTheme (sunlight mode)', () => {
     expect(t.colors.surfaceSearch).toBe(colorsSunlight.surfaceSearch);
     expect(t.colors.searchBorder).toBe(colorsSunlight.searchBorder);
     expect(t.colors.streamDivider).toBe(colorsSunlight.streamDivider);
+  });
+
+  it('crosses sunlight mode at the blend midpoint', () => {
+    expect(resolveAppTheme(0.49).mode).toBe('normal');
+    expect(resolveAppTheme(0.5).mode).toBe('sunlight');
+  });
+
+  it('blends a color between dark and sunlight at t=0.5', () => {
+    const t = resolveAppTheme(0.5);
+    expect(t.colors.bg).not.toBe(colorsDark.bg);
+    expect(t.colors.bg).not.toBe(colorsSunlight.bg);
   });
 });
 
