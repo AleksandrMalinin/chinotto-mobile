@@ -1,11 +1,12 @@
 import Constants from 'expo-constants';
+import { useContext } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChinottoLogo, chinottoLogoLeadingOutset } from '../components/ChinottoLogo';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { SettingsSection } from '../components/settings/SettingsSection';
-import { fonts, screenContentGutter, useAppTheme } from '../theme';
+import { AppearanceModeContext, fonts, screenContentGutter, useAppTheme } from '../theme';
 
 type SettingsScreenProps = {
   onClose: () => void;
@@ -32,6 +33,7 @@ export function SettingsScreen({
   onHapticsEnabledChange,
   onOpenDevMenu,
 }: SettingsScreenProps) {
+  const { mode: appearanceMode, setMode: setAppearanceMode } = useContext(AppearanceModeContext);
   const t = useAppTheme();
   const insets = useSafeAreaInsets();
   const appVersion = Constants.expoConfig?.version ?? 'dev';
@@ -107,17 +109,34 @@ export function SettingsScreen({
                   />
                 </SettingsSection>
 
-              {canOpenAppIcon && onOpenAppIcon ? (
-                <SettingsSection title="Appearance">
+              <SettingsSection title="Appearance">
+                <SettingsRow
+                  testID="settings-appearance-default"
+                  variant="choice"
+                  label="Default"
+                  selected={appearanceMode === 'default'}
+                  onPress={() => setAppearanceMode('default')}
+                />
+                <SettingsRow
+                  testID="settings-appearance-sunlight"
+                  variant="choice"
+                  label="Sunlight mode"
+                  description="Better visibility in bright light"
+                  selected={appearanceMode === 'sunlight'}
+                  onPress={() => setAppearanceMode('sunlight')}
+                  isLast={!canOpenAppIcon || !onOpenAppIcon}
+                />
+                {canOpenAppIcon && onOpenAppIcon ? (
                   <SettingsRow
                     testID="settings-open-app-icon"
                     variant="navigation"
                     label="App icon"
                     valueLabel={appIconLabel}
                     onPress={onOpenAppIcon}
+                    isLast
                   />
-                </SettingsSection>
-              ) : null}
+                ) : null}
+              </SettingsSection>
 
               <SettingsSection title="Experience">
                 <SettingsRow

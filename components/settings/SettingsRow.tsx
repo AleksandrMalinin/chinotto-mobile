@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { fonts, useAppTheme } from '../../theme';
 
-export type SettingsRowVariant = 'navigation' | 'switch' | 'destructive' | 'info';
+export type SettingsRowVariant = 'navigation' | 'switch' | 'destructive' | 'info' | 'choice';
 
 type BaseRowProps = {
   label: string;
@@ -34,7 +34,18 @@ type InfoRowProps = BaseRowProps & {
   valueLabel?: string;
 };
 
-export type SettingsRowProps = NavigationRowProps | SwitchRowProps | DestructiveRowProps | InfoRowProps;
+type ChoiceRowProps = BaseRowProps & {
+  variant: 'choice';
+  selected: boolean;
+  onPress: () => void;
+};
+
+export type SettingsRowProps =
+  | NavigationRowProps
+  | SwitchRowProps
+  | DestructiveRowProps
+  | InfoRowProps
+  | ChoiceRowProps;
 
 export function SettingsRow(props: SettingsRowProps) {
   const t = useAppTheme();
@@ -62,6 +73,9 @@ export function SettingsRow(props: SettingsRowProps) {
             thumbColor={props.value ? 'rgba(232,236,255,0.98)' : 'rgba(245,245,250,0.92)'}
           />
         ) : null}
+        {props.variant === 'choice' && props.selected ? (
+          <Ionicons name="checkmark" size={18} color={t.colors.accent} accessibilityLabel="Selected" />
+        ) : null}
         {(props.variant === 'navigation' || props.variant === 'info') && props.valueLabel ? (
           <Text style={[styles.valueLabel, { color: t.colors.metaFg }]}>{props.valueLabel}</Text>
         ) : null}
@@ -72,11 +86,13 @@ export function SettingsRow(props: SettingsRowProps) {
     </View>
   );
 
-  if (props.variant === 'navigation' || props.variant === 'destructive') {
+  if (props.variant === 'navigation' || props.variant === 'destructive' || props.variant === 'choice') {
     return (
       <Pressable
         testID={props.testID}
         onPress={props.onPress}
+        accessibilityRole="button"
+        accessibilityState={props.variant === 'choice' ? { selected: props.selected } : undefined}
         style={({ pressed }) => [
           styles.row,
           styles.interactiveRow,
