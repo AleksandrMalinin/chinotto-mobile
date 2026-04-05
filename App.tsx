@@ -17,7 +17,9 @@ import { composeIncomingShareCaptureText } from './share/extractShareEntryTexts'
 import { startMobileFirestoreIngest } from './sync/firestoreIngest';
 import { resolvePushEntryForSync } from './sync/pushEntryForSync';
 import { startBackgroundSync } from './sync/syncEngine';
+import { useScreenshotSceneLink } from './linking/useScreenshotSceneLink';
 import { useSyncDeepLink } from './linking/useSyncDeepLink';
+import { isScreenshotMode } from './src/features/screenshotMode';
 import { initDatabase } from './storage/db';
 import { saveEntry } from './storage/entryRepository';
 import { clearWelcomeFlag, hasCompletedWelcome } from './storage/welcomeFlag';
@@ -128,6 +130,8 @@ export default function App() {
     clearSharedPayloads,
     refreshSharePayloads,
   } = useIncomingShare();
+
+  const screenshotScene = useScreenshotSceneLink();
 
   const onBrandFinished = useCallback(() => {
     setPhase(welcomeDoneRef.current ? 'main' : 'welcome');
@@ -293,6 +297,9 @@ export default function App() {
     if (!fontsLoaded || !dbReady) {
       return;
     }
+    if (isScreenshotMode()) {
+      return;
+    }
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     void (async () => {
@@ -312,6 +319,32 @@ export default function App() {
       }
     };
   }, [fontsLoaded, dbReady]);
+
+  useEffect(() => {
+    if (!fontsLoaded || !dbReady || !isScreenshotMode()) {
+      return;
+    }
+    if (screenshotScene === 'welcome') {
+      welcomeDoneRef.current = false;
+      setPhase('welcome');
+    } else {
+      welcomeDoneRef.current = true;
+      setPhase('main');
+    }
+  }, [fontsLoaded, dbReady, screenshotScene]);
+
+  /**
+   * Screenshot mode skips {@link BrandSplash}, which normally calls `SplashScreen.hideAsync()`.
+   * Without this, the native splash never dismisses.
+   */
+  useEffect(() => {
+    if (!isScreenshotMode() || !fontsLoaded || !dbReady) {
+      return;
+    }
+    if (phase === 'main' || phase === 'welcome') {
+      void SplashScreen.hideAsync();
+    }
+  }, [phase, fontsLoaded, dbReady]);
 
   if (!fontsLoaded || !dbReady || phase === 'boot') {
     return null;
@@ -340,6 +373,7 @@ export default function App() {
               onScheduleStreamHighlight={scheduleStreamHighlight}
               subscriptionHydrated={subscriptionLoaded}
               onSubscriptionUnlocked={() => setFirestoreIngestEpoch((n) => n + 1)}
+              screenshot={isScreenshotMode() ? { scene: screenshotScene } : undefined}
               {...(__DEV__ ? { onDevMenu: onDevResetWelcome } : {})}
             />
           )}

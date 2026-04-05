@@ -33,6 +33,8 @@ import { AppIconScreen } from './AppIconScreen';
 import { ManifestoScreen } from './ManifestoScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { ENABLE_APP_ICON_SWITCHER } from '../src/features/flags';
+import type { ScreenshotScene } from '../src/features/screenshotMode';
+import { SCREENSHOT_DEMO_COMPOSER_TEXT, SCREENSHOT_DEMO_ENTRIES } from '../src/screenshots/demoEntries';
 import {
   getCurrentAppIconVariantId,
   setCurrentAppIconVariantId,
@@ -87,6 +89,7 @@ const SCROLL_END_THRESHOLD_PX = 160;
 const SEARCH_DEBOUNCE_MS = 250;
 const SEARCH_MAX_RESULTS = 300;
 type SettingsRoute = 'settings' | 'manifesto' | 'app_icon';
+
 /** How often to refresh upload-queue state for the sync header while signed in. */
 const SYNC_UPLOAD_POLL_MS = 2500;
 /** Pending rows at or above this count can contribute to a “stuck” header after consecutive polls. */
@@ -95,6 +98,10 @@ const SYNC_STUCK_PENDING_MIN = 5;
 const SYNC_STUCK_CONSECUTIVE_POLLS = 3;
 /** Firebase session restore vs signed-out; avoids showing Enable sync before persistence restores. */
 export type AuthRestorePhase = SyncHeaderAuthPhase;
+
+export type CaptureScreenshotConfig = {
+  scene: ScreenshotScene;
+};
 
 export type CaptureScreenProps = {
   /** `__DEV__` only: long-press header logo opens dev menu (e.g. reset welcome). */
@@ -118,6 +125,8 @@ export type CaptureScreenProps = {
    * without recording a header “tap” for shimmer prefs.
    */
   syncEntryRequestNonce?: number;
+  /** App Store / marketing: deterministic stream + instant scene switching via deep link. */
+  screenshot?: CaptureScreenshotConfig;
 };
 
 export function CaptureScreen({
@@ -130,6 +139,7 @@ export function CaptureScreen({
   subscriptionHydrated = true,
   onSubscriptionUnlocked,
   syncEntryRequestNonce = 0,
+  screenshot,
 }: CaptureScreenProps = {}) {
   const [text, setText] = useState('');
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -168,6 +178,13 @@ export function CaptureScreen({
   const { width: windowWidth } = useWindowDimensions();
   const t = useAppTheme();
   const gutter = screenContentGutter(windowWidth);
+
+  const screenshotActive = screenshot != null;
+  const screenshotScene = screenshot?.scene;
+  const screenshotActiveRef = useRef(screenshotActive);
+  screenshotActiveRef.current = screenshotActive;
+  /** Stable “marketing” sync header while real Firebase may still be restoring. */
+  const headerAuthPhase: AuthRestorePhase = screenshotActive ? 'signed_out' : authRestorePhase;
 
   authPhaseRef.current = authRestorePhase;
 
@@ -291,18 +308,65 @@ export function CaptureScreen({
   }, []);
 
   useEffect(() => {
+    if (screenshotActive) {
+      return;
+    }
     void refreshEntries();
-  }, [refreshEntries, remoteIngestVersion, externalEntriesEpoch]);
+  }, [refreshEntries, remoteIngestVersion, externalEntriesEpoch, screenshotActive]);
 
   useEffect(() => {
-    if (!captureFocusNonce) {
+    if (!screenshotActive) {
+      return;
+    }
+    setEntries(SCREENSHOT_DEMO_ENTRIES);
+    setHasMore(false);
+    setSearchQuery('');
+    setSearchResults([]);
+    setSearchExpanded(false);
+  }, [screenshotActive]);
+
+  useEffect(() => {
+    if (!screenshotActive || screenshotScene == null) {
+      return;
+    }
+    setSettingsRoute(null);
+    setSyncModalVisible(false);
+    if (screenshotScene === 'settings') {
+      setSettingsRoute('settings');
+    }
+    if (screenshotScene === 'sync' || screenshotScene === 'sync_apple') {
+      setSyncModalVisible(true);
+    }
+  }, [screenshotActive, screenshotScene]);
+
+  useEffect(() => {
+    if (!screenshotActive) {
+      return;
+    }
+    if (screenshotScene !== 'capture') {
+      Keyboard.dismiss();
+    }
+  }, [screenshotActive, screenshotScene]);
+
+  useEffect(() => {
+    if (!screenshotActive || screenshotScene !== 'capture') {
+      return;
+    }
+    const line = SCREENSHOT_DEMO_COMPOSER_TEXT.trim();
+    if (line !== '') {
+      setText(line);
+    }
+  }, [screenshotActive, screenshotScene]);
+
+  useEffect(() => {
+    if (!captureFocusNonce || screenshotActive) {
       return;
     }
     const id = requestAnimationFrame(() => {
       inputRef.current?.focus();
     });
     return () => cancelAnimationFrame(id);
-  }, [captureFocusNonce]);
+  }, [captureFocusNonce, screenshotActive]);
 
   useEffect(
     () => () => {
@@ -335,6 +399,9 @@ export function CaptureScreen({
     }
 
     return onAuthStateChanged(auth, (user) => {
+      if (screenshotActiveRef.current) {
+        return;
+      }
       const syncEnabled = Boolean(user && !user.isAnonymous);
       const nextPhase: AuthRestorePhase = syncEnabled ? 'signed_in' : 'signed_out';
 
@@ -368,6 +435,9 @@ export function CaptureScreen({
   }, [authRestorePhase]);
 
   useEffect(() => {
+    if (screenshotActive) {
+      return;
+    }
     if (!isFirebaseSyncConfigured() || Platform.OS !== 'ios') {
       return;
     }
@@ -408,13 +478,16 @@ export function CaptureScreen({
       setUploadStuck(false);
       stuckPollsRef.current = 0;
     };
-  }, [authRestorePhase]);
+  }, [authRestorePhase, screenshotActive]);
 
   /** Optimistic UI: row disappears immediately; SQLite + tombstone outbox stay non-blocking. */
   const handleEntryDelete = useCallback((entry: Entry) => {
     setReadEntry((current) => (current?.id === entry.id ? null : current));
     setEntries((prev) => prev.filter((e) => e.id !== entry.id));
     setSearchResults((prev) => prev.filter((e) => e.id !== entry.id));
+    if (screenshotActive) {
+      return;
+    }
     void deleteEntry(entry.id)
       .then(() => {
         void flushSyncTombstoneOutbox();
@@ -426,7 +499,7 @@ export function CaptureScreen({
         }
         void refreshEntries();
       });
-  }, [refreshEntries, refreshUploadPending]);
+  }, [refreshEntries, refreshUploadPending, screenshotActive]);
 
   /**
    * One delayed shimmer after the first successful save (AsyncStorage), if the user never opened
@@ -566,6 +639,9 @@ export function CaptureScreen({
   }, []);
 
   const handleSubmit = useCallback(() => {
+    if (screenshotActive) {
+      return;
+    }
     const trimmed = text.trim();
     if (!trimmed) {
       return;
@@ -597,6 +673,7 @@ export function CaptureScreen({
     onScheduleStreamHighlight,
     refreshUploadPending,
     scheduleEnableSyncLabelShimmerAfterFirstSave,
+    screenshotActive,
   ]);
 
   /** Taller composer so capture reads clearly as the primary surface on device. */
@@ -647,11 +724,11 @@ export function CaptureScreen({
               </Pressable>
               {isFirebaseSyncConfigured() && Platform.OS === 'ios' ? (
                 <SyncHeaderStatus
-                  phase={authRestorePhase}
-                  uploadPending={authRestorePhase === 'signed_in' && uploadPending}
-                  uploadStuck={authRestorePhase === 'signed_in' && uploadStuck}
+                  phase={headerAuthPhase}
+                  uploadPending={headerAuthPhase === 'signed_in' && uploadPending}
+                  uploadStuck={headerAuthPhase === 'signed_in' && uploadStuck}
                   onPress={openSyncModalFromHeader}
-                  enableSyncLabelShimmer={enableSyncLabelShimmer}
+                  enableSyncLabelShimmer={!screenshotActive && enableSyncLabelShimmer}
                   onEnableSyncLabelShimmerComplete={onEnableSyncLabelShimmerComplete}
                   style={styles.syncAfterLogo}
                 />
@@ -817,9 +894,9 @@ export function CaptureScreen({
           }
           appIconLabel={ENABLE_APP_ICON_SWITCHER ? getAppIconVariant(appIconVariantId).name : undefined}
           syncStatusLabel={
-            authRestorePhase === 'restoring'
+            headerAuthPhase === 'restoring'
               ? 'Checking sync'
-              : authRestorePhase === 'signed_in'
+              : headerAuthPhase === 'signed_in'
                 ? uploadStuck
                   ? 'Sync paused'
                   : uploadPending
@@ -862,22 +939,30 @@ export function CaptureScreen({
         visible={syncModalVisible}
         onClose={() => setSyncModalVisible(false)}
         onEnabled={() => {
+          if (screenshotActive) {
+            setSyncModalVisible(false);
+            return;
+          }
           setAuthRestorePhase('signed_in');
           void getPendingSyncCount()
             .then((n) => setUploadPending(n > 0))
             .catch(() => {});
         }}
-        authPhase={authRestorePhase}
+        authPhase={headerAuthPhase}
         subscriptionHydrated={subscriptionHydrated}
         onSubscriptionUnlocked={onSubscriptionUnlocked}
         devPostSyncPreviewNonce={
           __DEV__ && devPostSyncPreviewNonce > 0 ? devPostSyncPreviewNonce : undefined
         }
         syncHealthNote={
-          authRestorePhase === 'signed_in' && uploadStuck
+          headerAuthPhase === 'signed_in' && uploadStuck
             ? 'Uploads are waiting—check your connection. Nothing is lost; thoughts stay on this device.'
             : null
         }
+        marketingPreviewAppleConnectStep={
+          screenshotActive && screenshotScene === 'sync_apple'
+        }
+        marketingPreviewFreezeActions={screenshotActive}
         fg={t.colors.fg}
         fgDim={t.colors.fgDim}
         muted={t.colors.muted}
