@@ -1,21 +1,102 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import Purchases, { type CustomerInfo, type PurchasesOfferings } from 'react-native-purchases';
 
 import { getPaywallDebugInfo, isPaywallEnabled } from '../monetization/paywallConfig';
 import { getCachedHasSyncEntitlement, getSyncEntitlementSourcesDebug } from '../monetization/subscriptionState';
 import {
   CHINOTTO_PACKAGE_KIND_ORDER,
+  REVENUECAT_IOS_API_KEY,
 } from '../src/services/purchases/constants';
 import { fonts, radius, spacing } from '../theme';
 import { useEnableSyncController } from './useEnableSyncController';
+
+/**
+ * TEMPORARY — delete this constant, `buildTempRcOfferingsDebugText`, the related state/effect/styles,
+ * and the paywall `ScrollView` block before App Store release. Used to diagnose TestFlight “plans unavailable”.
+ *
+ * **Not gated on `__DEV__`:** when `true`, the panel runs in **release / TestFlight** the same as in dev
+ * (only the separate paywall `console.log` above is dev-only).
+ */
+const TEMP_RC_OFFERINGS_DEBUG_UI = true;
+
+/** TEMPORARY — remove with {@link TEMP_RC_OFFERINGS_DEBUG_UI}. No full key, only shape / EAS hint. */
+function tempRcEmbeddedIosKeyHint(): string {
+  const k = REVENUECAT_IOS_API_KEY;
+  if (k == null || k.trim() === '') {
+    return 'embedded iOS SDK key: EMPTY — set EXPO_PUBLIC_REVENUECAT_IOS_API_KEY on the EAS build profile';
+  }
+  if (k.startsWith('test_')) {
+    return 'embedded iOS SDK key: starts with test_* — typical when EAS built without EXPO_PUBLIC_REVENUECAT_IOS_API_KEY (TestFlight needs public appl_* from RevenueCat)';
+  }
+  if (k.startsWith('appl_')) {
+    return 'embedded iOS SDK key: appl_* (public iOS shape). If SDK still errors, check RevenueCat ↔ bundle id ↔ App Store Connect link (see https://rev.cat/sdk-troubleshooting )';
+  }
+  return `embedded iOS SDK key: unexpected prefix "${k.slice(0, 6)}…" (expected appl_ for App Store)`;
+}
+
+/** TEMPORARY — remove with {@link TEMP_RC_OFFERINGS_DEBUG_UI}. */
+function tempRcThrownErrorDetail(e: unknown): string {
+  const base = e instanceof Error ? e.message : String(e);
+  if (e !== null && typeof e === 'object') {
+    const rec = e as Record<string, unknown>;
+    const code = rec.code;
+    const underlying = rec.underlyingErrorMessage ?? rec.readableErrorCode;
+    const extra =
+      code != null || underlying != null
+        ? `\ncode: ${code != null ? String(code) : '—'}\nunderlying: ${underlying != null ? String(underlying) : '—'}`
+        : '';
+    return `${base}${extra}`;
+  }
+  return base;
+}
+
+function buildTempRcOfferingsDebugText(
+  offerings: PurchasesOfferings,
+  customerInfo: CustomerInfo,
+): string {
+  const lines: string[] = ['[TEMP RC DEBUG]', ''];
+  const allKeys = offerings.all != null ? Object.keys(offerings.all) : [];
+  lines.push(
+    `all offering ids (${allKeys.length}): ${allKeys.length > 0 ? allKeys.join(', ') : '(none — offerings empty)'}`,
+  );
+  const cur = offerings.current;
+  if (cur == null) {
+    lines.push('current offering: NONE (empty — often explains missing plan prices)', '');
+  } else {
+    lines.push(`current offering id: ${cur.identifier}`);
+    const pkgs = cur.availablePackages ?? [];
+    if (pkgs.length === 0) {
+      lines.push('availablePackages: (empty)', '');
+    } else {
+      lines.push('packages:');
+      for (const p of pkgs) {
+        const pid =
+          typeof p.product?.identifier === 'string' && p.product.identifier !== ''
+            ? p.product.identifier
+            : '(no product identifier)';
+        lines.push(`  • ${p.identifier} → ${pid}`);
+      }
+      lines.push('');
+    }
+  }
+  lines.push('— customerInfo —');
+  lines.push(`originalAppUserId: ${customerInfo.originalAppUserId}`);
+  lines.push(`activeSubscriptions: ${JSON.stringify([...customerInfo.activeSubscriptions])}`);
+  lines.push(
+    `entitlements.active: ${JSON.stringify(Object.keys(customerInfo.entitlements.active))}`,
+  );
+  return lines.join('\n');
+}
 
 /** Web app URL for “continue on desktop” (replace when a dedicated download page exists). */
 export const CHINOTTO_DESKTOP_WEB_URL = 'https://getchinotto.app/';
@@ -39,6 +120,13 @@ export type EnableSyncModalProps = {
    * Parent should bump when opening the sheet from the dev menu.
    */
   devPostSyncPreviewNonce?: number;
+  /**
+   * Marketing / App Store screenshots: show the post-entitlement “Continue with Apple” step
+   * (skip paywall and subscription wait UI in this sheet).
+   */
+  marketingPreviewAppleConnectStep?: boolean;
+  /** When true, primary actions do not run (deterministic screenshot frames). */
+  marketingPreviewFreezeActions?: boolean;
   /** Design tokens */
   fg: string;
   fgDim: string;
@@ -56,6 +144,8 @@ export function EnableSyncModal({
   subscriptionHydrated,
   onSubscriptionUnlocked,
   devPostSyncPreviewNonce,
+  marketingPreviewAppleConnectStep = false,
+  marketingPreviewFreezeActions = false,
   fg,
   fgDim,
   muted,
@@ -124,6 +214,61 @@ export function EnableSyncModal({
     });
   }, [visible, authPhase, subscriptionHydrated, paywallPlans, selectedPackageKind]);
 
+  /** TEMPORARY — remove with {@link TEMP_RC_OFFERINGS_DEBUG_UI}. */
+  const [rcDebugLoading, setRcDebugLoading] = useState(false);
+  /** TEMPORARY — remove with {@link TEMP_RC_OFFERINGS_DEBUG_UI}. */
+  const [rcDebugText, setRcDebugText] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!TEMP_RC_OFFERINGS_DEBUG_UI || Platform.OS !== 'ios') {
+      return;
+    }
+    const showPlusPaywallDebug =
+      authPhase === 'signed_out' &&
+      isPaywallEnabled() &&
+      subscriptionHydrated &&
+      !getCachedHasSyncEntitlement();
+    if (!visible || !showPlusPaywallDebug) {
+      setRcDebugText(null);
+      setRcDebugLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setRcDebugLoading(true);
+    setRcDebugText(null);
+    void (async () => {
+      try {
+        const [offerings, customerInfo] = await Promise.all([
+          Purchases.getOfferings(),
+          Purchases.getCustomerInfo(),
+        ]);
+        if (cancelled) {
+          return;
+        }
+        const text =
+          `${buildTempRcOfferingsDebugText(offerings, customerInfo)}\n\nbuild: ${__DEV__ ? 'dev' : 'release'}\n${tempRcEmbeddedIosKeyHint()}`;
+        console.log('[EnableSyncModal][TEMP RC DEBUG]', { offerings, customerInfo });
+        setRcDebugText(text);
+      } catch (e: unknown) {
+        if (cancelled) {
+          return;
+        }
+        const msg = tempRcThrownErrorDetail(e);
+        console.log('[EnableSyncModal][TEMP RC DEBUG] error', e);
+        setRcDebugText(
+          `[TEMP RC DEBUG]\n\ngetOfferings/getCustomerInfo threw:\n${msg}\n\nbuild: ${__DEV__ ? 'dev' : 'release'}\n${tempRcEmbeddedIosKeyHint()}`,
+        );
+      } finally {
+        if (!cancelled) {
+          setRcDebugLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, authPhase, subscriptionHydrated]);
+
   const handleClose = useCallback(() => {
     if (!busy) {
       onClose();
@@ -136,9 +281,16 @@ export function EnableSyncModal({
 
   const showEnableFlow = authPhase === 'signed_out';
   const showSubscriptionWait =
-    showEnableFlow && isPaywallEnabled() && !subscriptionHydrated;
+    !marketingPreviewAppleConnectStep &&
+    showEnableFlow &&
+    isPaywallEnabled() &&
+    !subscriptionHydrated;
   const showPlusPaywall =
-    showEnableFlow && isPaywallEnabled() && subscriptionHydrated && !getCachedHasSyncEntitlement();
+    !marketingPreviewAppleConnectStep &&
+    showEnableFlow &&
+    isPaywallEnabled() &&
+    subscriptionHydrated &&
+    !getCachedHasSyncEntitlement();
   const monthlyTrialHint = useMemo(() => {
     const monthlyPlan = paywallPlans.find((p) => p.kind === 'monthly');
     if (monthlyPlan == null) {
@@ -170,6 +322,7 @@ export function EnableSyncModal({
   const showSyncTitle =
     !postSyncSuccess &&
     (authPhase !== 'signed_out' || (!showPlusPaywall && !showSubscriptionWait));
+  const interactionLocked = busy || marketingPreviewFreezeActions;
 
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={handleClose}>
@@ -203,7 +356,7 @@ export function EnableSyncModal({
                 accessibilityRole="link"
                 accessibilityLabel="Continue on desktop, copies link to clipboard"
                 accessibilityHint={`Copies ${CHINOTTO_DESKTOP_WEB_URL}`}
-                disabled={busy}
+                disabled={interactionLocked}
                 onPress={() => void handleCopyDesktopLink()}
                 style={({ pressed }) => [styles.desktopLinkWrap, { opacity: pressed ? 0.72 : 1 }]}
               >
@@ -278,6 +431,37 @@ export function EnableSyncModal({
               <Text style={[styles.body, { color: fgDim, fontFamily: fonts.regular }]}>
                 Local by default. Sync is optional.
               </Text>
+              {TEMP_RC_OFFERINGS_DEBUG_UI ? (
+                <View
+                  testID="temp-rc-offerings-debug"
+                  style={[styles.tempRcDebugWrap, { borderColor: 'rgba(255, 159, 67, 0.55)' }]}
+                >
+                  <Text
+                    style={[styles.tempRcDebugBanner, { color: 'rgb(255, 179, 102)' }]}
+                    accessibilityLabel="Temporary RevenueCat debug"
+                  >
+                    TEMP: RevenueCat debug (remove before release)
+                  </Text>
+                  {rcDebugLoading ? (
+                    <Text style={[styles.tempRcDebugBody, { color: fgDim, fontFamily: fonts.regular }]}>
+                      Loading Purchases.getOfferings / getCustomerInfo…
+                    </Text>
+                  ) : rcDebugText != null ? (
+                    <ScrollView
+                      style={styles.tempRcDebugScroll}
+                      nestedScrollEnabled
+                      keyboardShouldPersistTaps="handled"
+                    >
+                      <Text
+                        selectable
+                        style={[styles.tempRcDebugBody, { color: fgDim, fontFamily: fonts.regular }]}
+                      >
+                        {rcDebugText}
+                      </Text>
+                    </ScrollView>
+                  ) : null}
+                </View>
+              ) : null}
               {paywallPlansLoading ? (
                 <ActivityIndicator style={styles.paywallPlansSpinner} color={fg} />
               ) : null}
@@ -294,7 +478,7 @@ export function EnableSyncModal({
                       accessibilityRole="radio"
                       accessibilityState={{ selected }}
                       accessibilityLabel={a11yLabel}
-                      disabled={busy}
+                      disabled={interactionLocked}
                       onPress={() => setSelectedPackageKind(kind)}
                       style={({ pressed }) => [
                         styles.planOption,
@@ -356,7 +540,7 @@ export function EnableSyncModal({
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Enable sync with selected plan"
-                disabled={busy}
+                disabled={interactionLocked}
                 style={({ pressed }) => [
                   styles.appleButton,
                   styles.paywallPrimaryButton,
@@ -375,7 +559,7 @@ export function EnableSyncModal({
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Restore purchases"
-                disabled={busy}
+                disabled={interactionLocked}
                 onPress={() => void handleRestorePurchases()}
                 style={styles.restorePurchases}
               >
@@ -412,12 +596,16 @@ export function EnableSyncModal({
               ) : null}
 
               <Pressable
+                testID="enable-sync-continue-with-apple"
                 accessibilityRole="button"
                 accessibilityLabel="Continue with Apple"
-                disabled={busy}
+                disabled={interactionLocked}
                 style={({ pressed }) => [
                   styles.appleButton,
-                  { backgroundColor: fg, opacity: busy ? 0.5 : pressed ? 0.88 : 1 },
+                  {
+                    backgroundColor: fg,
+                    opacity: busy ? 0.5 : pressed ? 0.88 : 1,
+                  },
                 ]}
                 onPress={() => void handleApple()}
               >
@@ -463,7 +651,7 @@ export function EnableSyncModal({
                 accessibilityRole="button"
                 accessibilityLabel="Stop syncing on this device"
                 accessibilityHint="Signs out of Apple sync. Your thoughts stay on this device."
-                disabled={busy}
+                disabled={interactionLocked}
                 onPress={() => void handleStopSyncing()}
                 style={styles.stopSync}
               >
@@ -572,6 +760,29 @@ const styles = StyleSheet.create({
     fontSize: 21,
     lineHeight: 28,
     marginBottom: spacing.sm,
+  },
+  /** TEMPORARY — remove with {@link TEMP_RC_OFFERINGS_DEBUG_UI}. */
+  tempRcDebugWrap: {
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    backgroundColor: 'rgba(255, 120, 40, 0.08)',
+    maxHeight: 168,
+  },
+  tempRcDebugBanner: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  tempRcDebugScroll: {
+    maxHeight: 120,
+  },
+  tempRcDebugBody: {
+    fontSize: 11,
+    lineHeight: 15,
   },
   planList: {
     marginTop: spacing.sm,

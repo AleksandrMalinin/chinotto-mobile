@@ -188,6 +188,30 @@ describe('EnableSyncModal', () => {
     expect(getByText(/Uploads are waiting/)).toBeTruthy();
   });
 
+  it('marketing preview shows post-paywall Apple step and does not run Apple when frozen', async () => {
+    paywallGate.enabled = true;
+    mockGetEntitlement.mockReturnValue(false);
+    jest.mocked(enableAppleSyncWithFirebase).mockClear();
+
+    const { getByText, queryByText } = render(
+      <EnableSyncModal
+        visible
+        onClose={jest.fn()}
+        onEnabled={jest.fn()}
+        authPhase="signed_out"
+        marketingPreviewAppleConnectStep
+        marketingPreviewFreezeActions
+        {...baseProps}
+      />
+    );
+
+    await flushPaywallPrefetch();
+
+    expect(getByText('Use Apple to connect your devices.')).toBeTruthy();
+    expect(queryByText('Continue on another device')).toBeNull();
+    expect(enableAppleSyncWithFirebase).not.toHaveBeenCalled();
+  });
+
   it('drains sync queue and tombstone outbox after Apple sign-in succeeds, then shows desktop hint', async () => {
     const onEnabled = jest.fn();
     const onClose = jest.fn();
@@ -294,6 +318,36 @@ describe('EnableSyncModal', () => {
     expect(getByText('Local by default. Sync is optional.')).toBeTruthy();
     expect(getByLabelText('Enable sync with selected plan')).toBeTruthy();
     expect(getByLabelText('Not now')).toBeTruthy();
+  });
+
+  // Delete when TEMP_RC_OFFERINGS_DEBUG_UI is removed from EnableSyncModal.
+  it('shows temporary RevenueCat offerings debug panel on paywall', async () => {
+    paywallGate.enabled = true;
+    mockGetEntitlement.mockReturnValue(false);
+
+    const { getByTestId, getByText } = render(
+      <EnableSyncModal
+        visible
+        onClose={jest.fn()}
+        onEnabled={jest.fn()}
+        authPhase="signed_out"
+        {...baseProps}
+      />
+    );
+
+    await flushPaywallPrefetch();
+
+    await waitFor(() => {
+      expect(getByTestId('temp-rc-offerings-debug')).toBeTruthy();
+    });
+
+    await waitFor(() => {
+      expect(getByText(/\[TEMP RC DEBUG\]/)).toBeTruthy();
+      expect(getByText(/current offering: NONE/)).toBeTruthy();
+      expect(getByText(/— customerInfo —/)).toBeTruthy();
+      expect(getByText(/build: dev/)).toBeTruthy();
+      expect(getByText(/embedded iOS SDK key:/)).toBeTruthy();
+    });
   });
 
   it('runs openSyncPurchaseFlow then reveals Apple when Continue is pressed on paywall', async () => {
