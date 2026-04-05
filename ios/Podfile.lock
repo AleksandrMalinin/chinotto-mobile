@@ -2126,6 +2126,28 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - RNCMaskedView (0.3.2):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
   - RNGestureHandler (2.28.0):
     - hermes-engine
     - RCTRequired
@@ -2306,6 +2328,7 @@ DEPENDENCIES:
   - "ReactCommon/turbomodule/core (from `../node_modules/.pnpm/react-native@0.83.2_@babel+core@7.29.0_@types+react@19.2.14_react@19.2.0/node_modules/react-native/ReactCommon`)"
   - "ReactNativeDependencies (from `../node_modules/.pnpm/react-native@0.83.2_@babel+core@7.29.0_@types+react@19.2.14_react@19.2.0/node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec`)"
   - "RNCAsyncStorage (from `../node_modules/.pnpm/@react-native-async-storage+async-storage@2.2.0_react-native@0.83.2_@babel+core@7.29.0__f56b423bd6bdb1ffce5fca6d0d20774b/node_modules/@react-native-async-storage/async-storage`)"
+  - "RNCMaskedView (from `../node_modules/.pnpm/@react-native-masked-view+masked-view@0.3.2_react-native@0.83.2_@babel+core@7.29.0_@typ_372f9a311256791736dfe2b2a8ccfd7b/node_modules/@react-native-masked-view/masked-view`)"
   - "RNGestureHandler (from `../node_modules/.pnpm/react-native-gesture-handler@2.28.0_react-native@0.83.2_@babel+core@7.29.0_@types+react_39a3dec273940aea89a07e376461b2c8/node_modules/react-native-gesture-handler`)"
   - "RNPaywalls (from `../node_modules/.pnpm/react-native-purchases-ui@9.15.0_react-native-purchases@9.15.0_react-native@0.83.2_@bab_b20d81c85b4aa15aaa997918b5e7efd3/node_modules/react-native-purchases-ui`)"
   - "RNPurchases (from `../node_modules/.pnpm/react-native-purchases@9.15.0_react-native@0.83.2_@babel+core@7.29.0_@types+react@19.2.14_react@19.2.0__react@19.2.0/node_modules/react-native-purchases`)"
@@ -2527,6 +2550,8 @@ EXTERNAL SOURCES:
     :podspec: "../node_modules/.pnpm/react-native@0.83.2_@babel+core@7.29.0_@types+react@19.2.14_react@19.2.0/node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec"
   RNCAsyncStorage:
     :path: "../node_modules/.pnpm/@react-native-async-storage+async-storage@2.2.0_react-native@0.83.2_@babel+core@7.29.0__f56b423bd6bdb1ffce5fca6d0d20774b/node_modules/@react-native-async-storage/async-storage"
+  RNCMaskedView:
+    :path: "../node_modules/.pnpm/@react-native-masked-view+masked-view@0.3.2_react-native@0.83.2_@babel+core@7.29.0_@typ_372f9a311256791736dfe2b2a8ccfd7b/node_modules/@react-native-masked-view/masked-view"
   RNGestureHandler:
     :path: "../node_modules/.pnpm/react-native-gesture-handler@2.28.0_react-native@0.83.2_@babel+core@7.29.0_@types+react_39a3dec273940aea89a07e376461b2c8/node_modules/react-native-gesture-handler"
   RNPaywalls:
@@ -2646,6 +2671,7 @@ SPEC CHECKSUMS:
   RevenueCat: a3cf721ad8b1b56a930d748a40342aba16c09bbb
   RevenueCatUI: 1091be7f4e7eb6068bc0c78d470af3a2a19d3a49
   RNCAsyncStorage: 3a4f5e2777dae1688b781a487923a08569e27fe4
+  RNCMaskedView: d2578d41c59b936db122b2798ba37e4722d21035
   RNGestureHandler: b3c44a3420c74a8a45e5acbf87680092a72c72ff
   RNPaywalls: ce7defe6876f9d3952ea230b9ada67363925ec5f
   RNPurchases: f3384f8db42ad8abb7525b13c2ecb9bd2a443102

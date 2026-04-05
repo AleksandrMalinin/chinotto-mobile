@@ -18,6 +18,7 @@
     "@expo/vector-icons": "^15.1.1",
     "@firebase/auth": "1.10.8",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-masked-view/masked-view": "^0.3.2",
     "expo": "~55.0.8",
     "expo-apple-authentication": "~55.0.9",
     "expo-brightness": "^55.0.11",
