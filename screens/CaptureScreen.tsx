@@ -220,6 +220,12 @@ export function CaptureScreen({
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   }, [hapticsEnabled]);
 
+  /** After a thought is persisted and merged into local state — not on keypress or failed save. */
+  const playThoughtSavedHaptic = useCallback(async () => {
+    if (!hapticsEnabled || Platform.OS === 'web') return;
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  }, [hapticsEnabled]);
+
   const expandSearch = useCallback(() => {
     playSearchChromeHaptic();
     animateSearchLayout();
@@ -688,7 +694,7 @@ export function CaptureScreen({
     }
 
     void saveEntry(trimmed)
-      .then((entry) => {
+      .then(async (entry) => {
         setText('');
         requestAnimationFrame(() => {
           inputRef.current?.focus();
@@ -701,6 +707,7 @@ export function CaptureScreen({
         }
         void refreshUploadPending();
         scheduleEnableSyncLabelShimmerAfterFirstSave();
+        await playThoughtSavedHaptic();
       })
       .catch((err) => {
         if (__DEV__) {
@@ -714,6 +721,7 @@ export function CaptureScreen({
     refreshUploadPending,
     scheduleEnableSyncLabelShimmerAfterFirstSave,
     screenshotActive,
+    playThoughtSavedHaptic,
   ]);
 
   /** Taller composer so capture reads clearly as the primary surface on device. */

@@ -48,7 +48,13 @@ jest.mock('expo-clipboard', () => ({
   setStringAsync: jest.fn(() => Promise.resolve()),
 }));
 
+jest.mock('../../storage/settingsPrefs', () => ({
+  getHapticsEnabled: jest.fn(() => Promise.resolve(true)),
+  setHapticsEnabled: jest.fn(() => Promise.resolve()),
+}));
+
 import { CaptureScreen } from '../CaptureScreen';
+import * as settingsPrefs from '../../storage/settingsPrefs';
 
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
   __esModule: true,
@@ -96,9 +102,11 @@ describe('CaptureScreen', () => {
     mockOnAuthStateChanged.mockImplementation(() => jest.fn());
     jest.mocked(firebaseConfig.isFirebaseSyncConfigured).mockReturnValue(false);
     jest.mocked(syncHeaderShimmerPrefs.hasFirstSavedThought).mockResolvedValue(true);
+    jest.mocked(settingsPrefs.getHapticsEnabled).mockImplementation(() => Promise.resolve(true));
   });
 
   it('calls saveEntry with trimmed text on submit and clears the field after save succeeds', async () => {
+    jest.mocked(Haptics.impactAsync).mockClear();
     const { getByTestId, findByTestId } = render(
       <SafeAreaProvider initialMetrics={safeAreaMetrics}>
         <CaptureScreen />
@@ -116,6 +124,35 @@ describe('CaptureScreen', () => {
     await waitFor(() => {
       expect(getByTestId('capture-input').props.value).toBe('');
     });
+
+    await waitFor(() => {
+      expect(jest.mocked(Haptics.impactAsync)).toHaveBeenCalledWith(Haptics.ImpactFeedbackStyle.Light);
+    });
+  });
+
+  it('does not play thought-saved haptic when haptics are disabled in settings', async () => {
+    jest.mocked(settingsPrefs.getHapticsEnabled).mockImplementationOnce(() => Promise.resolve(false));
+    jest.mocked(Haptics.impactAsync).mockClear();
+
+    const { getByTestId, findByTestId } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <CaptureScreen />
+      </SafeAreaProvider>
+    );
+
+    const input = await findByTestId('capture-input');
+    fireEvent.changeText(input, '  quiet  ');
+    fireEvent(input, 'submitEditing');
+
+    await waitFor(() => {
+      expect(jest.mocked(entryRepository.saveEntry)).toHaveBeenCalledWith('quiet');
+    });
+
+    await waitFor(() => {
+      expect(getByTestId('capture-input').props.value).toBe('');
+    });
+
+    expect(jest.mocked(Haptics.impactAsync)).not.toHaveBeenCalled();
   });
 
   it('refetches recent entries when externalEntriesEpoch increments', async () => {
@@ -190,6 +227,7 @@ describe('CaptureScreen', () => {
     jest.mocked(entryRepository.saveEntry).mockRejectedValueOnce(new Error('disk full'));
 
     try {
+      jest.mocked(Haptics.impactAsync).mockClear();
       const { getByTestId, findByTestId } = render(
         <SafeAreaProvider initialMetrics={safeAreaMetrics}>
           <CaptureScreen />
@@ -207,6 +245,8 @@ describe('CaptureScreen', () => {
       await waitFor(() => {
         expect(getByTestId('capture-input').props.value).toBe('  my thought  ');
       });
+
+      expect(jest.mocked(Haptics.impactAsync)).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
     }
