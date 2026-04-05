@@ -27,6 +27,7 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSMicrophoneUsageDescription": "Chinotto uses the microphone to turn a short spoken thought into text on your device.",
+        "NSPhotoLibraryUsageDescription": "Chinotto uses your photo library when you share images or other media into the app, or when you pick an image to include in capture. Your library is not read in the background.",
         "NSSpeechRecognitionUsageDescription": "Chinotto uses speech recognition to turn what you say into text in the capture field. Audio stays on your device."
       }
     },

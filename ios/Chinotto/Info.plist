@@ -141,6 +141,8 @@
 	<string>Expo Dev Launcher uses the local network to discover and connect to development servers running on your computer.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Chinotto uses the microphone to turn a short spoken thought into text on your device.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Chinotto uses your photo library when you share images or other media into the app, or when you pick an image to include in capture. Your library is not read in the background.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Chinotto uses speech recognition to turn what you say into text in the capture field. Audio stays on your device.</string>
 	<key>NSSupportsLiveActivities</key>
