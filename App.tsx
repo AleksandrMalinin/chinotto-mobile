@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -22,11 +22,16 @@ import { useSyncDeepLink } from './linking/useSyncDeepLink';
 import { isScreenshotMode } from './src/features/screenshotMode';
 import { initDatabase } from './storage/db';
 import { saveEntry } from './storage/entryRepository';
+import {
+  getAppearanceMode,
+  setAppearanceMode as persistAppearanceMode,
+  type AppearanceMode,
+} from './storage/appearancePrefs';
 import { clearWelcomeFlag, hasCompletedWelcome } from './storage/welcomeFlag';
 import { isFirebaseSyncConfigured } from './sync/firebaseConfig';
 import { useCaptureWidgetDeepLinkFocus } from './widgets/useCaptureWidgetDeepLinkFocus';
 import { useExperimentalIosHomeWidgetRegistration } from './widgets/useExperimentalIosHomeWidget';
-import { colorsDark } from './theme';
+import { AppearanceModeContext, useAppTheme } from './theme';
 
 /** Keep native splash visible until we call hide (fonts + DB + short beat). */
 void SplashScreen.preventAutoHideAsync();
@@ -41,8 +46,14 @@ const SHARE_SAVE_DEBOUNCE_MS = 400;
 
 type AppPhase = 'boot' | 'brand' | 'welcome' | 'main';
 
+function BootPhaseShell({ children }: { children: ReactNode }) {
+  const t = useAppTheme();
+  return <View style={{ flex: 1, backgroundColor: t.colors.bg }}>{children}</View>;
+}
+
 function ShareSavedAck({ visible }: { visible: boolean }) {
   const insets = useSafeAreaInsets();
+  const t = useAppTheme();
   if (!visible) {
     return null;
   }
@@ -57,8 +68,28 @@ function ShareSavedAck({ visible }: { visible: boolean }) {
         },
       ]}
     >
-      <View style={shareAckStyles.pill}>
-        <Text style={shareAckStyles.label}>Saved from share</Text>
+      <View
+        style={[
+          shareAckStyles.pill,
+          {
+            backgroundColor: t.colors.bgElevated,
+            borderColor: t.colors.border,
+            ...Platform.select({
+              ios: {
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: t.sunlightMode ? 2 : 4 },
+                shadowOpacity: t.sunlightMode ? 0.14 : 0.22,
+                shadowRadius: t.sunlightMode ? 8 : 12,
+              },
+              android: {
+                elevation: t.sunlightMode ? 3 : 5,
+              },
+              default: {},
+            }),
+          },
+        ]}
+      >
+        <Text style={[shareAckStyles.label, { color: t.colors.fg }]}>Saved from share</Text>
       </View>
     </View>
   );
@@ -73,29 +104,13 @@ const shareAckStyles = StyleSheet.create({
   },
   /** Soft confirmation — readable on the stream, minimal glow, no hard edge. */
   pill: {
-    /** Near-opaque elevated surface; +blue vs neutral charcoal for a whisper of brand. */
-    backgroundColor: 'rgba(23, 24, 36, 0.99)',
     paddingHorizontal: 22,
     paddingVertical: 13,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
     maxWidth: '88%',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.22,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 5,
-      },
-      default: {},
-    }),
   },
   label: {
-    color: colorsDark.fg,
     fontSize: 15,
     fontFamily: 'OpenSauceOne-500',
     textAlign: 'center',
@@ -109,6 +124,8 @@ export default function App() {
     'OpenSauceOne-500': require('./assets/fonts/OpenSauceOne-Medium.ttf'),
   });
   const [dbReady, setDbReady] = useState(false);
+  const [appearanceMode, setAppearanceModeState] = useState<AppearanceMode>('default');
+  const [appearanceReady, setAppearanceReady] = useState(false);
   const [subscriptionLoaded, setSubscriptionLoaded] = useState(false);
   const [firestoreIngestEpoch, setFirestoreIngestEpoch] = useState(0);
   const [remoteIngestVersion, setRemoteIngestVersion] = useState(0);
@@ -163,6 +180,18 @@ export default function App() {
 
   useEffect(() => {
     void initDatabase().finally(() => setDbReady(true));
+  }, []);
+
+  useEffect(() => {
+    void getAppearanceMode().then((mode) => {
+      setAppearanceModeState(mode);
+      setAppearanceReady(true);
+    });
+  }, []);
+
+  const setAppearanceMode = useCallback((next: AppearanceMode) => {
+    setAppearanceModeState(next);
+    void persistAppearanceMode(next);
   }, []);
 
   useEffect(() => {
@@ -346,40 +375,42 @@ export default function App() {
     }
   }, [phase, fontsLoaded, dbReady]);
 
-  if (!fontsLoaded || !dbReady || phase === 'boot') {
+  if (!fontsLoaded || !dbReady || !appearanceReady || phase === 'boot') {
     return null;
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <View style={{ flex: 1 }}>
-          <StatusBar style="light" />
-          {phase === 'welcome' ? (
-            <View style={{ flex: 1, backgroundColor: '#0a0a0e' }}>
-              <WelcomeOnboardingScreen onComplete={onWelcomeComplete} />
-            </View>
-          ) : phase === 'brand' ? (
-            <View style={{ flex: 1, backgroundColor: '#0a0a0e' }}>
-              <BrandSplash onFinished={onBrandFinished} />
-            </View>
-          ) : (
-            <CaptureScreen
-              remoteIngestVersion={remoteIngestVersion}
-              externalEntriesEpoch={externalEntriesEpoch}
-              captureFocusNonce={captureFocusNonce}
-              syncEntryRequestNonce={syncEntryRequestNonce}
-              streamHighlightEntryId={streamHighlightEntryId}
-              onScheduleStreamHighlight={scheduleStreamHighlight}
-              subscriptionHydrated={subscriptionLoaded}
-              onSubscriptionUnlocked={() => setFirestoreIngestEpoch((n) => n + 1)}
-              screenshot={isScreenshotMode() ? { scene: screenshotScene } : undefined}
-              {...(__DEV__ ? { onDevMenu: onDevResetWelcome } : {})}
-            />
-          )}
-          <ShareSavedAck visible={shareSavedAck} />
-        </View>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+    <AppearanceModeContext.Provider value={{ mode: appearanceMode, setMode: setAppearanceMode }}>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <View style={{ flex: 1 }}>
+            <StatusBar style="light" />
+            {phase === 'welcome' ? (
+              <BootPhaseShell>
+                <WelcomeOnboardingScreen onComplete={onWelcomeComplete} />
+              </BootPhaseShell>
+            ) : phase === 'brand' ? (
+              <BootPhaseShell>
+                <BrandSplash onFinished={onBrandFinished} />
+              </BootPhaseShell>
+            ) : (
+              <CaptureScreen
+                remoteIngestVersion={remoteIngestVersion}
+                externalEntriesEpoch={externalEntriesEpoch}
+                captureFocusNonce={captureFocusNonce}
+                syncEntryRequestNonce={syncEntryRequestNonce}
+                streamHighlightEntryId={streamHighlightEntryId}
+                onScheduleStreamHighlight={scheduleStreamHighlight}
+                subscriptionHydrated={subscriptionLoaded}
+                onSubscriptionUnlocked={() => setFirestoreIngestEpoch((n) => n + 1)}
+                screenshot={isScreenshotMode() ? { scene: screenshotScene } : undefined}
+                {...(__DEV__ ? { onDevMenu: onDevResetWelcome } : {})}
+              />
+            )}
+            <ShareSavedAck visible={shareSavedAck} />
+          </View>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </AppearanceModeContext.Provider>
   );
 }
