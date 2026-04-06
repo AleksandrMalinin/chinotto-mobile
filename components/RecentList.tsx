@@ -453,6 +453,7 @@ function RecentListInner({
                   typingAccent={false}
                   useAdaptiveChrome
                   linesOnly
+                  linesOnlyDrawPacing="idle"
                 />
               </View>
               <View style={[styles.emptyHintAnchor, { marginTop: t.spacing.md }]}>

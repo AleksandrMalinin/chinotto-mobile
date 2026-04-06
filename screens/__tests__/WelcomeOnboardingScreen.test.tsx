@@ -52,6 +52,8 @@ describe('WelcomeOnboardingScreen', () => {
     renderWelcome();
     expect(await screen.findByLabelText('Write it down. No structure.')).toBeTruthy();
     expect(screen.getByLabelText('Capture')).toBeTruthy();
+    expect(screen.getByTestId('welcome-entrance-brand')).toBeTruthy();
+    expect(screen.getByText('Chinotto')).toBeTruthy();
     expect(screen.getByTestId('welcome-entrance-visual')).toBeTruthy();
     expect(screen.getByTestId('welcome-entrance-title')).toBeTruthy();
     expect(screen.getByTestId('welcome-entrance-support')).toBeTruthy();

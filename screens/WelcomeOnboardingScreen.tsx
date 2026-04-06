@@ -46,7 +46,7 @@ const CHINOTTO_HEADLINE_TEXT_GRADIENT_END = {
 const HEADLINE_TITLE_FONT_SIZE = 22;
 const HEADLINE_TITLE_LINE_HEIGHT = 30;
 
-/** Calm fade + slight lift; very slow stagger — last step finishes ~2.1s after start. */
+/** Calm fade + slight lift; staggered brand → visual → copy → CTA (~2.4s to last step start). */
 const ENTRANCE_DURATION_MS = 1100;
 const ENTRANCE_STAGGER_MS = 320;
 const ENTRANCE_Y_OFFSET = 7;
@@ -60,10 +60,10 @@ const WELCOME_CTA_SURFACE = {
   textColor: '#cfd3da',
   aura: {
     shadowColor: '#9ca3ff',
-    shadowOpacity: 0.28,
-    shadowRadius: 18,
+    shadowOpacity: 0.19,
+    shadowRadius: 14,
     shadowOffset: { width: 0, height: 0 } as const,
-    elevation: 5,
+    elevation: 4,
   },
 } as const;
 
@@ -135,8 +135,8 @@ function WelcomeHeadlineTitle({
 }
 
 /**
- * First-launch welcome: `StreamFlowPanel` matches desktop motion spec
- * (`chinotto-app/docs/stream-flow-panel-animation.md`); copy is mobile-specific.
+ * First-launch welcome: `StreamFlowPanel` (`linesOnly` + `linesOnlyBlobs` + `ambientSubdued` + welcome
+ * draw pacing) — paths and gradient blobs without glass; blobs subdued for screenshots; copy is mobile-specific.
  * Staged entrance (fade + slight lift) is disabled when reduce motion is on.
  *
  * Appearance-independent: copy and CTA always use standard dark palette; spacing/typography scale from baselines only.
@@ -146,6 +146,7 @@ export function WelcomeOnboardingScreen({ onComplete }: Props) {
   const { typography } = t;
   const [reduceMotion, setReduceMotion] = useState(false);
 
+  const entranceBrand = useRef(new Animated.Value(0)).current;
   const entranceVisual = useRef(new Animated.Value(0)).current;
   const entranceTitle = useRef(new Animated.Value(0)).current;
   const entranceSupport = useRef(new Animated.Value(0)).current;
@@ -160,6 +161,7 @@ export function WelcomeOnboardingScreen({ onComplete }: Props) {
       }
       setReduceMotion(rm);
       if (rm) {
+        entranceBrand.setValue(1);
         entranceVisual.setValue(1);
         entranceTitle.setValue(1);
         entranceSupport.setValue(1);
@@ -174,6 +176,7 @@ export function WelcomeOnboardingScreen({ onComplete }: Props) {
           useNativeDriver: true,
         });
       runningEntrance.current = Animated.stagger(ENTRANCE_STAGGER_MS, [
+        fadeUp(entranceBrand),
         fadeUp(entranceVisual),
         fadeUp(entranceTitle),
         fadeUp(entranceSupport),
@@ -224,10 +227,41 @@ export function WelcomeOnboardingScreen({ onComplete }: Props) {
           showsVerticalScrollIndicator={false}
         >
           <Animated.View
-            testID="welcome-entrance-visual"
-            style={[styles.visual, { marginBottom: t.spacing.lg }, entranceStyle(entranceVisual)]}
+            testID="welcome-entrance-brand"
+            style={[
+              styles.brandRow,
+              { marginBottom: t.spacing.sm, paddingHorizontal: t.spacing.md },
+              entranceStyle(entranceBrand),
+            ]}
           >
-            <StreamFlowPanel calm={reduceMotion} deferMotion={false} typingAccent={false} useAdaptiveChrome={false} />
+            <Text
+              style={[
+                styles.brandWordmark,
+                {
+                  color: colorsDark.metaFg,
+                  fontFamily: typography.capture.fontFamily,
+                },
+              ]}
+              accessibilityRole="text"
+            >
+              Chinotto
+            </Text>
+          </Animated.View>
+
+          <Animated.View
+            testID="welcome-entrance-visual"
+            style={[styles.visual, { marginBottom: t.spacing.md }, entranceStyle(entranceVisual)]}
+          >
+            <StreamFlowPanel
+              calm={reduceMotion}
+              deferMotion={false}
+              typingAccent={false}
+              useAdaptiveChrome={false}
+              linesOnly
+              linesOnlyBlobs
+              linesOnlyDrawPacing="welcome"
+              ambientSubdued
+            />
           </Animated.View>
 
           <View style={[styles.copyColumn, { paddingHorizontal: t.spacing.md }]}>
@@ -258,7 +292,7 @@ export function WelcomeOnboardingScreen({ onComplete }: Props) {
             style={[
               {
                 paddingHorizontal: t.spacing.md,
-                marginTop: t.spacing.xl + t.spacing.lg,
+                marginTop: t.spacing.xl,
                 marginBottom: t.spacing.xl + t.spacing.md,
                 alignItems: 'center',
               },
@@ -335,12 +369,23 @@ const styles = StyleSheet.create({
   },
   scroll: {
     flexGrow: 1,
-    paddingBottom: 40,
-    justifyContent: 'center',
+    paddingTop: 20,
+    paddingBottom: 52,
+    justifyContent: 'flex-start',
+  },
+  brandRow: {
+    alignItems: 'center',
+    alignSelf: 'stretch',
+  },
+  brandWordmark: {
+    fontSize: 15,
+    letterSpacing: 0.42,
+    lineHeight: 22,
+    textAlign: 'center',
   },
   visual: {
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 4,
   },
   /** Narrow column so centered lines read as one thought, not full-bleed UI copy. */
   copyColumn: {
