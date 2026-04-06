@@ -1,5 +1,8 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
+  Animated,
+  Easing,
   Platform,
   Pressable,
   StyleSheet,
@@ -13,6 +16,7 @@ import type { Entry } from '../types/entry';
 import { fonts, screenContentGutter, screenContentInnerPad, useAppTheme } from '../theme';
 import { replaceHttpUrlsWithCompactDisplay } from '../utils/extractHttpUrlsFromText';
 import { formatEntryTime, groupEntriesByDate } from '../utils/groupEntriesByDate';
+import { StreamFlowPanel } from './StreamFlowPanel';
 
 /**
  * Time-grouped stream — section labels (`.stream-section-title`), entry rows with
@@ -33,12 +37,30 @@ export type RecentListProps = {
   onEntryDelete?: (entry: Entry) => void;
   /** Row id for a brief leading-edge trace (e.g. just saved from capture or share). */
   highlightEntryId?: string | null;
+  /**
+   * When true and the stream is empty, show the same slow line + blob motion as welcome
+   * (`StreamFlowPanel`) above the hint — not for search-miss empty.
+   */
+  streamEmptyAmbient?: boolean;
+  /**
+   * When true, fade the empty stream illustration + copy (composer has text or voice is active).
+   */
+  streamEmptyAmbientSuppressed?: boolean;
 };
 
 const DELETE_ACTION_WIDTH = 76;
 
 /** Parent should clear `highlightEntryId` after this (full fade + small buffer). */
 export const STREAM_HIGHLIGHT_CLEAR_AFTER_MS = 0;
+
+/** Aligns with `WelcomeOnboardingScreen` staged entrance — fade + slight lift. */
+const EMPTY_HINT_ENTRANCE_MS = 1100;
+const EMPTY_HINT_STAGGER_MS = 280;
+const EMPTY_HINT_Y_OFFSET = 7;
+const EMPTY_HINT_EASING = Easing.out(Easing.cubic);
+/** Let stream illustration lead through first beats before copy fades in. */
+const EMPTY_AMBIENT_BEFORE_COPY_MS = 1150;
+const EMPTY_AMBIENT_SUPPRESS_FADE_MS = 340;
 
 /** Pressed stream row — full-bleed tint, softer than a card fill. */
 function entryPressedBackground(isDark: boolean): string {
@@ -213,6 +235,124 @@ function RecentStreamRow({
   );
 }
 
+function streamEmptyHintEntranceStyle(v: Animated.Value) {
+  return {
+    opacity: v,
+    transform: [
+      {
+        translateY: v.interpolate({
+          inputRange: [0, 1],
+          outputRange: [EMPTY_HINT_Y_OFFSET, 0],
+        }),
+      },
+    ],
+  };
+}
+
+type StreamEmptyHintProps = {
+  emptyHint: string;
+  streamGutter: number;
+  bodyFontFamily: string;
+  bodyFontSize: number;
+  bodyLineHeight: number;
+  color: string;
+  paddingTop: number;
+  entranceDelayMs?: number;
+  /** When set, lines are optically grouped with centered stream art. */
+  textAlign?: 'left' | 'center';
+};
+
+function StreamEmptyHint({
+  emptyHint,
+  streamGutter,
+  bodyFontFamily,
+  bodyFontSize,
+  bodyLineHeight,
+  color,
+  paddingTop,
+  entranceDelayMs = 0,
+  textAlign = 'left',
+}: StreamEmptyHintProps) {
+  const line0 = useRef(new Animated.Value(0)).current;
+  const line1 = useRef(new Animated.Value(0)).current;
+  const lines = useMemo(() => emptyHint.split(/\n/).map((s) => s.trim()).filter(Boolean), [emptyHint]);
+  const twoLines = lines.length >= 2;
+  const textStyle = useMemo(
+    () => ({
+      color,
+      fontFamily: bodyFontFamily,
+      fontSize: bodyFontSize,
+      lineHeight: bodyLineHeight,
+      textAlign,
+    }),
+    [bodyFontFamily, bodyFontSize, bodyLineHeight, color, textAlign]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    line0.setValue(0);
+    line1.setValue(0);
+    void AccessibilityInfo.isReduceMotionEnabled().then((rm) => {
+      if (cancelled) {
+        return;
+      }
+      if (rm) {
+        line0.setValue(1);
+        line1.setValue(1);
+        return;
+      }
+      const fadeUp = (v: Animated.Value) =>
+        Animated.timing(v, {
+          toValue: 1,
+          duration: EMPTY_HINT_ENTRANCE_MS,
+          easing: EMPTY_HINT_EASING,
+          useNativeDriver: true,
+        });
+      const delayMs = Math.max(0, entranceDelayMs);
+      if (!twoLines) {
+        Animated.sequence([Animated.delay(delayMs), fadeUp(line0)]).start();
+        line1.setValue(1);
+        return;
+      }
+      Animated.parallel([
+        Animated.sequence([Animated.delay(delayMs), fadeUp(line0)]),
+        Animated.sequence([Animated.delay(delayMs + EMPTY_HINT_STAGGER_MS), fadeUp(line1)]),
+      ]).start();
+    });
+    return () => {
+      cancelled = true;
+      line0.stopAnimation();
+      line1.stopAnimation();
+    };
+  }, [emptyHint, twoLines, entranceDelayMs]);
+
+  return (
+    <View
+      testID="recent-list-empty-hint"
+      accessible
+      accessibilityRole="text"
+      accessibilityLabel={emptyHint}
+      style={[
+        styles.emptyHint,
+        textAlign === 'center' && styles.emptyHintCentered,
+        {
+          paddingHorizontal: streamGutter,
+          paddingTop,
+        },
+      ]}
+    >
+      <Animated.Text style={[textStyle, streamEmptyHintEntranceStyle(line0)]} importantForAccessibility="no">
+        {lines[0] ?? emptyHint}
+      </Animated.Text>
+      {twoLines ? (
+        <Animated.Text style={[textStyle, streamEmptyHintEntranceStyle(line1)]} importantForAccessibility="no">
+          {lines[1]}
+        </Animated.Text>
+      ) : null}
+    </View>
+  );
+}
+
 function RecentListInner({
   entries,
   visible,
@@ -221,12 +361,43 @@ function RecentListInner({
   onEntryPress,
   onEntryDelete,
   highlightEntryId = null,
+  streamEmptyAmbient = false,
+  streamEmptyAmbientSuppressed = false,
 }: RecentListProps) {
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const streamGutter = screenContentGutter(windowWidth);
   const t = useAppTheme();
   const { colors, typography } = t;
-  const { meta } = typography;
+  const { body, meta } = typography;
+  const emptyAmbientOpacity = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (!streamEmptyAmbient) {
+      return;
+    }
+    let cancelled = false;
+    const target = streamEmptyAmbientSuppressed ? 0 : 1;
+    const timing = Animated.timing(emptyAmbientOpacity, {
+      toValue: target,
+      duration: EMPTY_AMBIENT_SUPPRESS_FADE_MS,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+    void AccessibilityInfo.isReduceMotionEnabled().then((rm) => {
+      if (cancelled) {
+        return;
+      }
+      if (rm) {
+        emptyAmbientOpacity.setValue(target);
+        return;
+      }
+      timing.start();
+    });
+    return () => {
+      cancelled = true;
+      timing.stop();
+    };
+  }, [streamEmptyAmbient, streamEmptyAmbientSuppressed, emptyAmbientOpacity]);
 
   const groups = useMemo(() => groupEntriesByDate(entries), [entries]);
   const newestShownId = groups[0]?.items[0]?.id ?? null;
@@ -239,23 +410,78 @@ function RecentListInner({
       return null;
     }
     return (
-      <View testID="recent-list" style={[styles.list, { paddingTop: t.spacing.lg }]}>
-        <Text
-          testID="recent-list-empty-hint"
-          accessibilityRole="text"
-          style={[
-            styles.emptyHint,
-            {
-              paddingHorizontal: streamGutter,
-              color: colors.muted,
-              fontFamily: meta.fontFamily,
-              fontSize: meta.fontSize,
-              lineHeight: 20,
-            },
-          ]}
-        >
-          {emptyHint}
-        </Text>
+      <View
+        testID="recent-list"
+        style={[
+          styles.list,
+          {
+            paddingTop: t.spacing.lg,
+            ...(streamEmptyAmbient
+              ? {
+                  flexGrow: 1,
+                  minHeight: Math.max(232, Math.round(windowHeight * 0.33)),
+                }
+              : {}),
+          },
+        ]}
+      >
+        {streamEmptyAmbient ? (
+          <Animated.View
+            style={{ opacity: emptyAmbientOpacity }}
+            pointerEvents={streamEmptyAmbientSuppressed ? 'none' : 'box-none'}
+            accessibilityElementsHidden={streamEmptyAmbientSuppressed}
+          >
+            <View
+              style={[
+                styles.emptyStateColumn,
+                {
+                  paddingVertical: t.spacing.md,
+                  marginTop: -t.spacing.md,
+                },
+              ]}
+            >
+              <View
+                testID="recent-list-empty-ambient"
+                style={styles.emptyAmbientCluster}
+                pointerEvents="none"
+                importantForAccessibility="no"
+                accessibilityElementsHidden
+              >
+                <StreamFlowPanel
+                  calm={false}
+                  deferMotion={false}
+                  typingAccent={false}
+                  useAdaptiveChrome
+                  linesOnly
+                />
+              </View>
+              <View style={[styles.emptyHintAnchor, { marginTop: t.spacing.md }]}>
+                <StreamEmptyHint
+                  emptyHint={emptyHint}
+                  streamGutter={streamGutter}
+                  bodyFontFamily={body.fontFamily}
+                  bodyFontSize={body.fontSize}
+                  bodyLineHeight={body.lineHeight}
+                  color={colors.fgDim}
+                  paddingTop={0}
+                  entranceDelayMs={EMPTY_AMBIENT_BEFORE_COPY_MS}
+                  textAlign="center"
+                />
+              </View>
+            </View>
+          </Animated.View>
+        ) : (
+          <StreamEmptyHint
+            emptyHint={emptyHint}
+            streamGutter={streamGutter}
+            bodyFontFamily={body.fontFamily}
+            bodyFontSize={body.fontSize}
+            bodyLineHeight={body.lineHeight}
+            color={colors.fgDim}
+            paddingTop={t.spacing.xs}
+            entranceDelayMs={0}
+          />
+        )}
       </View>
     );
   }
@@ -334,7 +560,27 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   emptyHint: {
-    paddingVertical: 4,
+    paddingBottom: 8,
+  },
+  emptyHintCentered: {
+    alignSelf: 'center',
+    maxWidth: 340,
+    width: '100%',
+  },
+  /** Lines + copy as one vertically centered unit in the stream well. */
+  emptyStateColumn: {
+    alignSelf: 'stretch',
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyAmbientCluster: {
+    alignItems: 'center',
+    alignSelf: 'center',
+  },
+  emptyHintAnchor: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
   },
   footerHint: {
     paddingVertical: 2,

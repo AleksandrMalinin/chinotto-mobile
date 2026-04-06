@@ -1,5 +1,9 @@
 import { fireEvent, render } from '@testing-library/react-native';
 
+jest.mock('../StreamFlowPanel', () => ({
+  StreamFlowPanel: () => null,
+}));
+
 import { RecentList } from '../RecentList';
 
 function entryToday(text: string): { id: string; text: string; createdAt: string } {
@@ -44,6 +48,37 @@ describe('RecentList', () => {
     expect(getByTestId('recent-list')).toBeTruthy();
     expect(getByTestId('recent-list-empty-hint')).toBeTruthy();
     expect(getByText('No matches')).toBeTruthy();
+  });
+
+  it('renders two-line stream empty hint copy', () => {
+    const hint = 'Write it down.\nIt stays.';
+    const { getByLabelText, getByText } = render(<RecentList entries={[]} visible emptyHint={hint} />);
+
+    expect(getByLabelText(hint)).toBeTruthy();
+    expect(getByText('Write it down.')).toBeTruthy();
+    expect(getByText('It stays.')).toBeTruthy();
+  });
+
+  it('shows stream empty ambient motion region when streamEmptyAmbient is set', () => {
+    const { getByTestId } = render(
+      <RecentList entries={[]} visible emptyHint="Write it down.\nIt stays." streamEmptyAmbient />
+    );
+
+    expect(getByTestId('recent-list-empty-ambient', { includeHiddenElements: true })).toBeTruthy();
+  });
+
+  it('renders stream empty ambient when composer suppression flag is set', () => {
+    const { getByTestId } = render(
+      <RecentList
+        entries={[]}
+        visible
+        emptyHint="Write it down.\nIt stays."
+        streamEmptyAmbient
+        streamEmptyAmbientSuppressed
+      />
+    );
+
+    expect(getByTestId('recent-list-empty-ambient', { includeHiddenElements: true })).toBeTruthy();
   });
 
   it('shows compact URL in row text while keeping full text in a11y label', () => {

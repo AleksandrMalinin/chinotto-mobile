@@ -84,9 +84,20 @@ jest.mock('../../storage/entryRepository', () => ({
   deleteEntry: jest.fn(() => Promise.resolve()),
 }));
 
+/** Empty stream mounts `StreamFlowPanel`; real panel schedules long animations — unsafe for Jest teardown. */
+jest.mock('../../components/StreamFlowPanel', () => ({
+  StreamFlowPanel: () => null,
+}));
+
 const safeAreaMetrics = {
   frame: { x: 0, y: 0, width: 390, height: 844 },
   insets: { top: 0, left: 0, right: 0, bottom: 0 },
+};
+
+const STREAM_SEARCH_SEED_ENTRY = {
+  id: 'search-seed',
+  text: 'seed thought',
+  createdAt: '2025-01-01T12:00:00.000Z',
 };
 
 describe('CaptureScreen', () => {
@@ -103,6 +114,7 @@ describe('CaptureScreen', () => {
     jest.mocked(firebaseConfig.isFirebaseSyncConfigured).mockReturnValue(false);
     jest.mocked(syncHeaderShimmerPrefs.hasFirstSavedThought).mockResolvedValue(true);
     jest.mocked(settingsPrefs.getHapticsEnabled).mockImplementation(() => Promise.resolve(true));
+    jest.mocked(entryRepository.getRecentEntries).mockImplementation(() => Promise.resolve([]));
   });
 
   it('calls saveEntry with trimmed text on submit and clears the field after save succeeds', async () => {
@@ -252,8 +264,22 @@ describe('CaptureScreen', () => {
     }
   });
 
+  it('hides stream search when there are no thoughts', async () => {
+    const { queryByTestId, findByTestId } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <CaptureScreen />
+      </SafeAreaProvider>
+    );
+
+    await findByTestId('capture-input');
+    expect(queryByTestId('stream-search-toggle')).toBeNull();
+  });
+
   it('shows search only after tapping the search toggle', async () => {
     jest.mocked(Haptics.impactAsync).mockClear();
+    jest
+      .mocked(entryRepository.getRecentEntries)
+      .mockImplementation(() => Promise.resolve([STREAM_SEARCH_SEED_ENTRY]));
     const { getByTestId, queryByTestId, findByTestId } = render(
       <SafeAreaProvider initialMetrics={safeAreaMetrics}>
         <CaptureScreen />
@@ -261,8 +287,10 @@ describe('CaptureScreen', () => {
     );
 
     await findByTestId('capture-input');
+    await waitFor(() => {
+      expect(getByTestId('stream-search-toggle')).toBeTruthy();
+    });
     expect(queryByTestId('stream-search-input')).toBeNull();
-    expect(getByTestId('stream-search-toggle')).toBeTruthy();
 
     fireEvent.press(getByTestId('stream-search-toggle'));
     expect(getByTestId('stream-search-input')).toBeTruthy();
@@ -273,6 +301,9 @@ describe('CaptureScreen', () => {
     jest.useFakeTimers();
     try {
       jest.mocked(entryRepository.searchEntriesForRecall).mockClear();
+      jest
+        .mocked(entryRepository.getRecentEntries)
+        .mockImplementation(() => Promise.resolve([STREAM_SEARCH_SEED_ENTRY]));
       const { getByTestId, findByTestId } = render(
         <SafeAreaProvider initialMetrics={safeAreaMetrics}>
           <CaptureScreen />
@@ -280,6 +311,9 @@ describe('CaptureScreen', () => {
       );
 
       await findByTestId('capture-input');
+      await waitFor(() => {
+        expect(getByTestId('stream-search-toggle')).toBeTruthy();
+      });
       fireEvent.press(getByTestId('stream-search-toggle'));
       fireEvent.changeText(getByTestId('stream-search-input'), 'needle');
 
@@ -302,6 +336,9 @@ describe('CaptureScreen', () => {
 
   it('collapses search and clears query when close is pressed', async () => {
     jest.mocked(Haptics.impactAsync).mockClear();
+    jest
+      .mocked(entryRepository.getRecentEntries)
+      .mockImplementation(() => Promise.resolve([STREAM_SEARCH_SEED_ENTRY]));
     const { getByTestId, queryByTestId, findByTestId } = render(
       <SafeAreaProvider initialMetrics={safeAreaMetrics}>
         <CaptureScreen />
@@ -309,6 +346,9 @@ describe('CaptureScreen', () => {
     );
 
     await findByTestId('capture-input');
+    await waitFor(() => {
+      expect(getByTestId('stream-search-toggle')).toBeTruthy();
+    });
     fireEvent.press(getByTestId('stream-search-toggle'));
     fireEvent.changeText(getByTestId('stream-search-input'), 'temp');
     jest.mocked(Haptics.impactAsync).mockClear();

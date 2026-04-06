@@ -323,6 +323,17 @@ export function CaptureScreen({
     void refreshEntries();
   }, [refreshEntries, remoteIngestVersion, externalEntriesEpoch, screenshotActive]);
 
+  /** Empty stream — nothing to recall; clear search so UI never offers find-in-stream alone. */
+  useEffect(() => {
+    if (entries.length > 0) {
+      return;
+    }
+    if (!searchExpanded && searchQuery.trim() === '') {
+      return;
+    }
+    collapseSearch();
+  }, [entries.length, searchExpanded, searchQuery, collapseSearch]);
+
   useEffect(() => {
     if (!screenshotActive) {
       return;
@@ -682,6 +693,10 @@ export function CaptureScreen({
 
   const showVoiceCapture = voiceCaptureNativeReady && !screenshotActive;
 
+  /** Empty-stream art fades while the user composes so capture stays visually primary. */
+  const streamEmptyAmbientSuppressed =
+    text.trim().length > 0 || voicePhase === 'listening';
+
   const handleSubmit = useCallback(() => {
     if (screenshotActive) {
       return;
@@ -845,107 +860,111 @@ export function CaptureScreen({
                   ) : null}
                 </View>
               </View>
-              <View style={{ marginTop: t.spacing.lg }}>
-                {searchExpanded ? (
-                  <View
-                    style={[
-                      styles.searchPill,
-                      styles.searchPillExpanded,
-                      {
-                        backgroundColor: searchSurface,
-                        borderColor: searchFocused ? searchBorderFocus : searchBorderIdle,
-                        borderWidth: searchBorderWidth,
-                      },
-                    ]}
-                  >
-                    <Ionicons name="search" size={15} color={searchIconColor} style={styles.searchPillIcon} />
-                    <TextInput
-                      ref={searchInputRef}
-                      testID="stream-search-input"
-                      value={searchQuery}
-                      onChangeText={setSearchQuery}
-                      onFocus={onSearchFocus}
-                      onBlur={onSearchBlur}
-                      placeholder="Find in stream…"
-                      placeholderTextColor={searchPlaceholderColor}
-                      accessibilityLabel="Find in stream"
+              {entries.length > 0 ? (
+                <View style={{ marginTop: t.spacing.lg }}>
+                  {searchExpanded ? (
+                    <View
                       style={[
-                        styles.searchFieldExpanded,
+                        styles.searchPill,
+                        styles.searchPillExpanded,
                         {
-                          fontFamily: fonts.regular,
-                          color: searchFieldFg,
+                          backgroundColor: searchSurface,
+                          borderColor: searchFocused ? searchBorderFocus : searchBorderIdle,
+                          borderWidth: searchBorderWidth,
                         },
                       ]}
-                      keyboardAppearance={t.isDark ? 'dark' : 'light'}
-                      returnKeyType="search"
-                      selectionColor={t.colors.accent}
-                      {...(Platform.OS === 'ios' ? { clearButtonMode: 'while-editing' as const } : {})}
-                    />
+                    >
+                      <Ionicons name="search" size={15} color={searchIconColor} style={styles.searchPillIcon} />
+                      <TextInput
+                        ref={searchInputRef}
+                        testID="stream-search-input"
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                        onFocus={onSearchFocus}
+                        onBlur={onSearchBlur}
+                        placeholder="Find in stream…"
+                        placeholderTextColor={searchPlaceholderColor}
+                        accessibilityLabel="Find in stream"
+                        style={[
+                          styles.searchFieldExpanded,
+                          {
+                            fontFamily: fonts.regular,
+                            color: searchFieldFg,
+                          },
+                        ]}
+                        keyboardAppearance={t.isDark ? 'dark' : 'light'}
+                        returnKeyType="search"
+                        selectionColor={t.colors.accent}
+                        {...(Platform.OS === 'ios' ? { clearButtonMode: 'while-editing' as const } : {})}
+                      />
+                      <Pressable
+                        testID="stream-search-collapse"
+                        accessibilityLabel="Close search"
+                        accessibilityRole="button"
+                        hitSlop={8}
+                        onPress={collapseSearch}
+                        style={({ pressed }) => [
+                          styles.searchCloseOrb,
+                          {
+                            backgroundColor: pressed ? searchPressedSurface : 'transparent',
+                          },
+                        ]}
+                      >
+                        <Ionicons name="close" size={18} color={t.colors.metaFg} />
+                      </Pressable>
+                    </View>
+                  ) : (
                     <Pressable
-                      testID="stream-search-collapse"
-                      accessibilityLabel="Close search"
+                      testID="stream-search-toggle"
+                      accessibilityLabel="Find in stream"
                       accessibilityRole="button"
-                      hitSlop={8}
-                      onPress={collapseSearch}
+                      onPress={expandSearch}
                       style={({ pressed }) => [
-                        styles.searchCloseOrb,
+                        styles.searchPill,
+                        styles.searchPillCollapsed,
                         {
-                          backgroundColor: pressed ? searchPressedSurface : 'transparent',
+                          backgroundColor: pressed ? searchPressedSurface : searchSurface,
+                          borderColor: searchBorderIdle,
+                          borderWidth: searchBorderWidth,
+                          opacity: pressed ? 0.96 : 1,
                         },
                       ]}
+                      android_ripple={{
+                        color: t.sunlightMode ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.03)',
+                        borderless: false,
+                      }}
                     >
-                      <Ionicons name="close" size={18} color={t.colors.metaFg} />
+                      <Ionicons name="search" size={15} color={searchIconColor} style={styles.searchPillIcon} />
+                      <Text
+                        style={[
+                          styles.searchPillHint,
+                          {
+                            color: searchIconColor,
+                            fontFamily: fonts.regular,
+                            fontSize: t.typography.meta.fontSize,
+                            lineHeight: 18,
+                          },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        Find in stream…
+                      </Text>
                     </Pressable>
-                  </View>
-                ) : (
-                  <Pressable
-                    testID="stream-search-toggle"
-                    accessibilityLabel="Find in stream"
-                    accessibilityRole="button"
-                    onPress={expandSearch}
-                    style={({ pressed }) => [
-                      styles.searchPill,
-                      styles.searchPillCollapsed,
-                      {
-                        backgroundColor: pressed ? searchPressedSurface : searchSurface,
-                        borderColor: searchBorderIdle,
-                        borderWidth: searchBorderWidth,
-                        opacity: pressed ? 0.96 : 1,
-                      },
-                    ]}
-                    android_ripple={{
-                      color: t.sunlightMode ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.03)',
-                      borderless: false,
-                    }}
-                  >
-                    <Ionicons name="search" size={15} color={searchIconColor} style={styles.searchPillIcon} />
-                    <Text
-                      style={[
-                        styles.searchPillHint,
-                        {
-                          color: searchIconColor,
-                          fontFamily: fonts.regular,
-                          fontSize: t.typography.meta.fontSize,
-                          lineHeight: 18,
-                        },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      Find in stream…
-                    </Text>
-                  </Pressable>
-                )}
-              </View>
+                  )}
+                </View>
+              ) : null}
             </View>
             <RecentList
               entries={searchTrimmed.length > 0 ? searchResults : entries}
               visible
+              streamEmptyAmbient={searchTrimmed.length === 0 && entries.length === 0}
+              streamEmptyAmbientSuppressed={streamEmptyAmbientSuppressed}
               highlightEntryId={searchTrimmed.length > 0 ? null : streamHighlightEntryId}
               emptyHint={
                 searchTrimmed.length > 0
                   ? 'Nothing matches that search.'
                   : entries.length === 0
-                    ? 'Nothing here yet.'
+                    ? 'Write it down.\nIt stays.'
                     : undefined
               }
               listFooterHint={
