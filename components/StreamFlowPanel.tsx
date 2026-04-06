@@ -33,6 +33,14 @@ const DUR_A_MS = 2800;
 const DUR_B_MS = 2500;
 const DUR_C_MS = 2200;
 
+/** Empty stream (`linesOnly`): slower, staged draw so first visits read clearly. */
+const LINES_ONLY_DELAY_A_MS = 900;
+const LINES_ONLY_DELAY_B_MS = 1500;
+const LINES_ONLY_DELAY_C_MS = 2100;
+const LINES_ONLY_DUR_A_MS = 6000;
+const LINES_ONLY_DUR_B_MS = 5400;
+const LINES_ONLY_DUR_C_MS = 5000;
+
 const DRAW_EASING = Easing.bezier(0.22, 1, 0.36, 1);
 
 /** Drift timings — same roles as before; fills are `IntroRadialBlobView` (desktop intro blobs). */
@@ -56,6 +64,10 @@ export type StreamFlowPanelProps = {
    * surface that shares the capture stream illustration but is not the main shell.
    */
   useAdaptiveChrome?: boolean;
+  /**
+   * Only animated stroke paths — no glass card, blobs, or outer auras. For empty stream etc.
+   */
+  linesOnly?: boolean;
 };
 
 export function StreamFlowPanel({
@@ -63,17 +75,18 @@ export function StreamFlowPanel({
   deferMotion = false,
   typingAccent = false,
   useAdaptiveChrome = true,
+  linesOnly = false,
 }: StreamFlowPanelProps) {
   const adaptive = useAppTheme();
   const fixed = useMemo(() => getTheme(), []);
   const { sunlightMode } = useAdaptiveChrome ? adaptive : fixed;
   const { width: windowWidth } = useWindowDimensions();
-  const panelW = Math.min(260, windowWidth * 0.88);
-  const panelH = (panelW * 13) / 11;
+  const panelW = linesOnly ? Math.min(windowWidth * 0.82, 318) : Math.min(260, windowWidth * 0.88);
+  const panelH = linesOnly ? (panelW * 15) / 11 : (panelW * 13) / 11;
 
-  const padT = panelH * 0.14;
-  const padH = panelW * 0.12;
-  const padB = panelH * 0.16;
+  const padT = linesOnly ? panelH * 0.065 : panelH * 0.14;
+  const padH = linesOnly ? panelW * 0.04 : panelW * 0.12;
+  const padB = linesOnly ? panelH * 0.095 : panelH * 0.16;
   const svgW = panelW - 2 * padH;
   const svgH = panelH - padT - padB;
 
@@ -120,14 +133,17 @@ export function StreamFlowPanel({
         }),
       ]);
 
-    Animated.parallel([
-      mk(offA, DUR_A_MS, DELAY_A_MS),
-      mk(offB, DUR_B_MS, DELAY_B_MS),
-      mk(offC, DUR_C_MS, DELAY_C_MS),
-    ]).start();
+    const dA = linesOnly ? LINES_ONLY_DUR_A_MS : DUR_A_MS;
+    const dB = linesOnly ? LINES_ONLY_DUR_B_MS : DUR_B_MS;
+    const dC = linesOnly ? LINES_ONLY_DUR_C_MS : DUR_C_MS;
+    const delA = linesOnly ? LINES_ONLY_DELAY_A_MS : DELAY_A_MS;
+    const delB = linesOnly ? LINES_ONLY_DELAY_B_MS : DELAY_B_MS;
+    const delC = linesOnly ? LINES_ONLY_DELAY_C_MS : DELAY_C_MS;
+
+    Animated.parallel([mk(offA, dA, delA), mk(offB, dB, delB), mk(offC, dC, delC)]).start();
 
     return undefined;
-  }, [effectiveCalm, deferMotion, offA, offB, offC]);
+  }, [effectiveCalm, deferMotion, linesOnly, offA, offB, offC]);
 
   useEffect(() => {
     if (!typingAccent) {
@@ -223,6 +239,70 @@ export function StreamFlowPanel({
     }) ?? {};
   }, [sunlightMode]);
 
+  const lineArt = (
+    <View style={[styles.svgPad, { paddingTop: padT, paddingHorizontal: padH, paddingBottom: padB }]}>
+      <Animated.View style={{ width: svgW, height: svgH, opacity: svgPulse }}>
+        <Svg width={svgW} height={svgH} viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} preserveAspectRatio="xMidYMid meet">
+          <Defs>
+            <SvgLinearGradient
+              id={gradId}
+              x1="8"
+              y1="12"
+              x2="212"
+              y2="248"
+              gradientUnits="userSpaceOnUse"
+            >
+              <Stop offset="0" stopColor="rgb(180,188,255)" stopOpacity={0.9} />
+              <Stop offset="0.42" stopColor="rgb(34,200,220)" stopOpacity={0.55} />
+              <Stop offset="1" stopColor="rgb(255,150,90)" stopOpacity={0.5} />
+            </SvgLinearGradient>
+          </Defs>
+          <AnimatedPath
+            d={PATH_A.d}
+            stroke={`url(#${gradId})`}
+            strokeWidth={PATH_A.sw}
+            strokeLinecap="round"
+            fill="none"
+            strokeDasharray={`${PATH_A.len} ${PATH_A.len}`}
+            strokeDashoffset={offA}
+          />
+          <AnimatedPath
+            d={PATH_B.d}
+            stroke={`url(#${gradId})`}
+            strokeWidth={PATH_B.sw}
+            strokeLinecap="round"
+            fill="none"
+            opacity={PATH_B.op}
+            strokeDasharray={`${PATH_B.len} ${PATH_B.len}`}
+            strokeDashoffset={offB}
+          />
+          <AnimatedPath
+            d={PATH_C.d}
+            stroke={`url(#${gradId})`}
+            strokeWidth={PATH_C.sw}
+            strokeLinecap="round"
+            fill="none"
+            opacity={PATH_C.op}
+            strokeDasharray={`${PATH_C.len} ${PATH_C.len}`}
+            strokeDashoffset={offC}
+          />
+        </Svg>
+      </Animated.View>
+    </View>
+  );
+
+  if (linesOnly) {
+    return (
+      <View
+        style={[styles.panelLinesOnly, { width: panelW, height: panelH }]}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      >
+        {lineArt}
+      </View>
+    );
+  }
+
   return (
     <View
       style={[styles.panel, panelShadowStyle, { width: panelW, height: panelH }]}
@@ -247,55 +327,7 @@ export function StreamFlowPanel({
         style={[styles.glass, glassShadowStyle, { borderColor: glassBorder }, StyleSheet.absoluteFillObject]}
       />
 
-      <View style={[styles.svgPad, { paddingTop: padT, paddingHorizontal: padH, paddingBottom: padB }]}>
-        <Animated.View style={{ width: svgW, height: svgH, opacity: svgPulse }}>
-          <Svg width={svgW} height={svgH} viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} preserveAspectRatio="xMidYMid meet">
-            <Defs>
-              <SvgLinearGradient
-                id={gradId}
-                x1="8"
-                y1="12"
-                x2="212"
-                y2="248"
-                gradientUnits="userSpaceOnUse"
-              >
-                <Stop offset="0" stopColor="rgb(180,188,255)" stopOpacity={0.9} />
-                <Stop offset="0.42" stopColor="rgb(34,200,220)" stopOpacity={0.55} />
-                <Stop offset="1" stopColor="rgb(255,150,90)" stopOpacity={0.5} />
-              </SvgLinearGradient>
-            </Defs>
-            <AnimatedPath
-              d={PATH_A.d}
-              stroke={`url(#${gradId})`}
-              strokeWidth={PATH_A.sw}
-              strokeLinecap="round"
-              fill="none"
-              strokeDasharray={`${PATH_A.len} ${PATH_A.len}`}
-              strokeDashoffset={offA}
-            />
-            <AnimatedPath
-              d={PATH_B.d}
-              stroke={`url(#${gradId})`}
-              strokeWidth={PATH_B.sw}
-              strokeLinecap="round"
-              fill="none"
-              opacity={PATH_B.op}
-              strokeDasharray={`${PATH_B.len} ${PATH_B.len}`}
-              strokeDashoffset={offB}
-            />
-            <AnimatedPath
-              d={PATH_C.d}
-              stroke={`url(#${gradId})`}
-              strokeWidth={PATH_C.sw}
-              strokeLinecap="round"
-              fill="none"
-              opacity={PATH_C.op}
-              strokeDasharray={`${PATH_C.len} ${PATH_C.len}`}
-              strokeDashoffset={offC}
-            />
-          </Svg>
-        </Animated.View>
-      </View>
+      {lineArt}
     </View>
   );
 }
@@ -457,6 +489,12 @@ function DriftRadialBlob({
 }
 
 const styles = StyleSheet.create({
+  panelLinesOnly: {
+    position: 'relative',
+    alignSelf: 'center',
+    backgroundColor: 'transparent',
+    overflow: 'visible',
+  },
   panel: {
     position: 'relative',
     borderRadius: 22,
