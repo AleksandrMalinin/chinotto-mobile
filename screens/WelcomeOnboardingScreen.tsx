@@ -17,7 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AmbientBackground } from '../components/AmbientBackground';
 import { StreamFlowPanel } from '../components/StreamFlowPanel';
 import { setWelcomeCompleted } from '../storage/welcomeFlag';
-import { getTheme } from '../theme';
+import { colorsDark, getTheme } from '../theme';
 
 /**
  * Desktop `chinotto-app/src/index.css` — `--chinotto-headline-text-gradient`
@@ -51,6 +51,21 @@ const ENTRANCE_DURATION_MS = 1100;
 const ENTRANCE_STAGGER_MS = 320;
 const ENTRANCE_Y_OFFSET = 7;
 const ENTRANCE_EASING = Easing.out(Easing.cubic);
+
+/** Fixed welcome CTA — not tied to shell appearance (always standard dark look). */
+const WELCOME_CTA_SURFACE = {
+  gradient: ['#23283A', '#1C2133'] as const,
+  pressedGradient: ['#1a1f30', '#151928'] as const,
+  borderColor: 'rgba(160,170,255,0.14)',
+  textColor: '#cfd3da',
+  aura: {
+    shadowColor: '#9ca3ff',
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 0 } as const,
+    elevation: 5,
+  },
+} as const;
 
 type Props = {
   onComplete: () => void;
@@ -123,11 +138,12 @@ function WelcomeHeadlineTitle({
  * First-launch welcome: `StreamFlowPanel` matches desktop motion spec
  * (`chinotto-app/docs/stream-flow-panel-animation.md`); copy is mobile-specific.
  * Staged entrance (fade + slight lift) is disabled when reduce motion is on.
+ *
+ * Appearance-independent: copy and CTA always use standard dark palette; spacing/typography scale from baselines only.
  */
 export function WelcomeOnboardingScreen({ onComplete }: Props) {
-  /** Standard dark chrome only — do not follow adaptive Sunlight (headline SVG / panel tint stay aligned). */
   const t = useMemo(() => getTheme(), []);
-  const { colors, typography } = t;
+  const { typography } = t;
   const [reduceMotion, setReduceMotion] = useState(false);
 
   const entranceVisual = useRef(new Animated.Value(0)).current;
@@ -191,46 +207,6 @@ export function WelcomeOnboardingScreen({ onComplete }: Props) {
     []
   );
 
-  const ctaSurface = useMemo(() => {
-    if (t.sunlightMode) {
-      return {
-        gradient: [
-          'rgba(120,130,188,0.42)',
-          'rgba(105,115,175,0.38)',
-          'rgba(95,105,165,0.36)',
-        ] as const,
-        shadowColor: 'rgba(80, 90, 140, 0.45)',
-        borderColor: 'rgba(160,170,220,0.45)',
-        borderTopColor: 'rgba(190,198,240,0.5)',
-        textColor: colors.fg,
-      };
-    }
-    if (t.isDark) {
-      return {
-        gradient: [
-          'rgba(160,170,255,0.24)',
-          'rgba(136,150,230,0.2)',
-          'rgba(110,124,202,0.16)',
-        ] as const,
-        shadowColor: '#a0aaff',
-        borderColor: 'rgba(160,170,255,0.34)',
-        borderTopColor: 'rgba(188,196,255,0.5)',
-        textColor: colors.fg,
-      };
-    }
-    return {
-      gradient: [
-        'rgba(125, 138, 210, 0.18)',
-        'rgba(98, 112, 185, 0.13)',
-        'rgba(88, 102, 175, 0.1)',
-      ] as const,
-      shadowColor: '#8890c8',
-      borderColor: 'rgba(125, 138, 210, 0.28)',
-      borderTopColor: 'rgba(155, 166, 232, 0.45)',
-      textColor: colors.entryBody,
-    };
-  }, [t.isDark, t.sunlightMode, colors.entryBody, colors.fg]);
-
   const handleContinue = useCallback(() => {
     void (async () => {
       await setWelcomeCompleted();
@@ -256,14 +232,14 @@ export function WelcomeOnboardingScreen({ onComplete }: Props) {
 
           <View style={[styles.copyColumn, { paddingHorizontal: t.spacing.md }]}>
             <Animated.View testID="welcome-entrance-title" style={entranceStyle(entranceTitle)}>
-              <WelcomeHeadlineTitle colorsFg={colors.fg} fontFamily={typography.capture.fontFamily} />
+              <WelcomeHeadlineTitle colorsFg={colorsDark.fg} fontFamily={typography.capture.fontFamily} />
             </Animated.View>
             <Animated.View testID="welcome-entrance-support" style={entranceStyle(entranceSupport)}>
               <Text
                 style={[
                   styles.lead,
                   {
-                    color: colors.fgDim,
+                    color: colorsDark.fgDim,
                     fontFamily: typography.body.fontFamily,
                     fontSize: typography.body.fontSize,
                     lineHeight: 26,
@@ -294,37 +270,43 @@ export function WelcomeOnboardingScreen({ onComplete }: Props) {
               accessibilityRole="button"
               accessibilityLabel="Capture"
               onPress={handleContinue}
-              style={({ pressed }) => [styles.ctaPressable, { opacity: pressed ? 0.9 : 1 }]}
+              style={styles.ctaPressable}
             >
-              <View
-                style={[
-                  styles.ctaShadow,
-                  Platform.OS === 'ios'
-                    ? {
-                        shadowColor: ctaSurface.shadowColor,
-                        shadowOffset: { width: 0, height: 0 },
-                        shadowOpacity: t.sunlightMode ? 0.12 : 0.22,
-                        shadowRadius: t.sunlightMode ? 6 : 14,
-                      }
-                    : { elevation: t.sunlightMode ? 2 : 4 },
-                ]}
-              >
+              {({ pressed }) => (
                 <LinearGradient
-                  colors={[...ctaSurface.gradient]}
-                  locations={[0, 0.42, 1]}
+                  colors={[...(pressed ? WELCOME_CTA_SURFACE.pressedGradient : WELCOME_CTA_SURFACE.gradient)]}
+                  locations={[0, 1]}
                   start={{ x: 0.5, y: 0 }}
                   end={{ x: 0.5, y: 1 }}
                   style={[
-                    styles.ctaGradient,
+                    styles.ctaSurface,
                     {
-                      borderColor: ctaSurface.borderColor,
-                      borderTopColor: ctaSurface.borderTopColor,
+                      borderColor: WELCOME_CTA_SURFACE.borderColor,
+                      transform: [{ scale: pressed ? 0.99 : 1 }],
+                      ...Platform.select({
+                        ios: {
+                          shadowColor: WELCOME_CTA_SURFACE.aura.shadowColor,
+                          shadowOffset: WELCOME_CTA_SURFACE.aura.shadowOffset,
+                          shadowOpacity: pressed
+                            ? WELCOME_CTA_SURFACE.aura.shadowOpacity * 0.75
+                            : WELCOME_CTA_SURFACE.aura.shadowOpacity,
+                          shadowRadius: pressed
+                            ? WELCOME_CTA_SURFACE.aura.shadowRadius * 0.85
+                            : WELCOME_CTA_SURFACE.aura.shadowRadius,
+                        },
+                        android: {
+                          elevation: pressed
+                            ? Math.max(1, WELCOME_CTA_SURFACE.aura.elevation - 1)
+                            : WELCOME_CTA_SURFACE.aura.elevation,
+                        },
+                        default: {},
+                      }),
                     },
                   ]}
                 >
                   <Text
                     style={{
-                      color: ctaSurface.textColor,
+                      color: WELCOME_CTA_SURFACE.textColor,
                       fontFamily: typography.body.fontFamily,
                       fontSize: 16,
                       letterSpacing: 0.07,
@@ -333,7 +315,7 @@ export function WelcomeOnboardingScreen({ onComplete }: Props) {
                     Capture
                   </Text>
                 </LinearGradient>
-              </View>
+              )}
             </Pressable>
           </Animated.View>
         </ScrollView>
@@ -391,16 +373,14 @@ const styles = StyleSheet.create({
     maxWidth: 300,
     minWidth: 200,
   },
-  ctaShadow: {
+  ctaSurface: {
     width: '100%',
-    borderRadius: 999,
-  },
-  ctaGradient: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 14,
     paddingHorizontal: 28,
     borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'visible',
   },
 });
