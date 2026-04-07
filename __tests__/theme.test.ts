@@ -1,4 +1,5 @@
 import {
+  chinottoHeadlineTextGradient,
   colorsDark,
   colorsSunlight,
   resolveAppTheme,
@@ -55,5 +56,14 @@ describe('screenContentGutter', () => {
 describe('screenContentInnerPad', () => {
   it('insets capture composer (and stream rows); search stays on gutter line', () => {
     expect(screenContentInnerPad).toBe(12);
+  });
+});
+
+describe('chinottoHeadlineTextGradient', () => {
+  it('mirrors desktop --chinotto-headline-text-gradient stops', () => {
+    expect(chinottoHeadlineTextGradient.colors).toHaveLength(4);
+    expect(chinottoHeadlineTextGradient.locations).toHaveLength(4);
+    expect(chinottoHeadlineTextGradient.start).toEqual({ x: 0.12, y: 0 });
+    expect(chinottoHeadlineTextGradient.end).toEqual({ x: 0.88, y: 1 });
   });
 });
