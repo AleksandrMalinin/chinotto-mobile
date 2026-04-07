@@ -2,6 +2,7 @@ import Purchases, { type CustomerInfo, type PurchasesOfferings } from 'react-nat
 
 import { syncEntitlementCacheFromCustomerInfo } from './entitlementCache';
 import { warnIfActiveSubscriptionButMissingChinottoProEntitlement } from './entitlements';
+import { isRevenueCatQuietMode } from './revenueCatQuiet';
 
 /**
  * **`__DEV__` only.** Refreshes RevenueCat + {@link entitlementCache} so gating matches **current** StoreKit receipts.
@@ -29,7 +30,9 @@ export async function devRevenueCatLogOutAndRefreshEntitlementCache(): Promise<v
     syncEntitlementCacheFromCustomerInfo(info);
     warnIfActiveSubscriptionButMissingChinottoProEntitlement(info);
   } catch (e) {
-    console.warn('[RevenueCat] devRevenueCatLogOutAndRefreshEntitlementCache failed', e);
+    if (!isRevenueCatQuietMode()) {
+      console.warn('[RevenueCat] devRevenueCatLogOutAndRefreshEntitlementCache failed', e);
+    }
   }
 }
 

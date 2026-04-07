@@ -1,6 +1,7 @@
 import type { CustomerInfo } from 'react-native-purchases';
 
 import { CHINOTTO_PRO_ENTITLEMENT_ID } from './constants';
+import { isRevenueCatQuietMode } from './revenueCatQuiet';
 
 /**
  * RevenueCat: use **entitlements** as source of truth — not raw product ids.
@@ -24,7 +25,7 @@ export function hasChinottoPro(customerInfo: CustomerInfo | null): boolean {
  * Usually means products are not attached to the **Chinotto Pro** entitlement in the RevenueCat dashboard.
  */
 export function warnIfActiveSubscriptionButMissingChinottoProEntitlement(info: CustomerInfo | null): void {
-  if (!__DEV__ || info == null) {
+  if (!__DEV__ || isRevenueCatQuietMode() || info == null) {
     return;
   }
   if (hasChinottoPro(info)) {

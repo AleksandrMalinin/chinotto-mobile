@@ -84,6 +84,7 @@ jest.mock('react-native-purchases', () => {
   };
   const Purchases = {
     configure: jest.fn(),
+    setLogHandler: jest.fn(),
     setLogLevel: jest.fn(),
     STOREKIT_VERSION: {
       STOREKIT_1: 'STOREKIT_1',

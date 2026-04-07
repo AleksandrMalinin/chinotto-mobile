@@ -20,6 +20,7 @@ function iosStoreKitVersionFromEnv():
 import { REVENUECAT_IOS_API_KEY } from './constants';
 import { syncEntitlementCacheFromCustomerInfo } from './entitlementCache';
 import { warnIfActiveSubscriptionButMissingChinottoProEntitlement } from './entitlements';
+import { isRevenueCatQuietMode } from './revenueCatQuiet';
 import { mirrorChinottoSyncAccessToFirestore } from '../../../sync/firestoreSyncAccessMirror';
 import { logRevenueCatSubscriptionsAndProducts } from './revenueCatDebugLog';
 import { refreshEntitlementCacheFromRevenueCat } from './revenueCat';
@@ -33,7 +34,8 @@ let didConfigure = false;
  * Avoid stacking a second listener for the same job (see `useSubscription` — prefer refresh helpers until consolidated).
  *
  * Configures the native Purchases SDK **once** per JS runtime.
- * - Verbose logs in development, minimal in production (RevenueCat still logs errors).
+ * - Verbose logs in development unless `EXPO_PUBLIC_REVENUECAT_QUIET` — then a no-op log handler is set
+ *   **before** `configure` so the SDK does not attach the default `console.*` bridge (avoids LogBox banners).
  * - iOS: uses {@link REVENUECAT_IOS_API_KEY}.
  * - Android: configures only if `EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY` is set (optional).
  * - Web / unsupported: no-op.
@@ -48,11 +50,26 @@ export function initRevenueCat(): void {
     return;
   }
 
+  const quiet = isRevenueCatQuietMode();
+
   try {
-    Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.DEBUG : LOG_LEVEL.ERROR);
+    if (quiet) {
+      // Default handler is installed inside `configure` only when no handler exists; it maps ERROR →
+      // `console.error`, which triggers React Native LogBox (red bottom banner). Swallow everything.
+      Purchases.setLogHandler(() => {});
+    }
+
+    void Purchases.setLogLevel(
+      quiet ? LOG_LEVEL.ERROR : __DEV__ ? LOG_LEVEL.DEBUG : LOG_LEVEL.ERROR
+    );
 
     if (Platform.OS === 'ios') {
-      if (!__DEV__ && isPaywallEnabled() && REVENUECAT_IOS_API_KEY.startsWith('test_')) {
+      if (
+        !quiet &&
+        !__DEV__ &&
+        isPaywallEnabled() &&
+        REVENUECAT_IOS_API_KEY.startsWith('test_')
+      ) {
         console.error(
           '[RevenueCat] Paywall is on but the embedded iOS key is test_* — set EXPO_PUBLIC_REVENUECAT_IOS_API_KEY (appl_…) on EAS and rebuild. Purchases will not work in this binary.',
         );
@@ -65,7 +82,7 @@ export function initRevenueCat(): void {
     } else if (Platform.OS === 'android') {
       const androidKey = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY;
       if (androidKey == null || androidKey === '') {
-        if (__DEV__) {
+        if (__DEV__ && !quiet) {
           console.warn(
             '[RevenueCat] Android: set EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY to enable Purchases on Android.'
           );
@@ -87,7 +104,7 @@ export function initRevenueCat(): void {
     };
     Purchases.addCustomerInfoUpdateListener(onCustomerInfoUpdated);
   } catch (err) {
-    if (__DEV__) {
+    if (__DEV__ && !quiet) {
       console.warn('[RevenueCat] initRevenueCat failed', err);
     }
   }

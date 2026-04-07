@@ -1,6 +1,7 @@
 import type { CustomerInfo, PurchasesOfferings } from 'react-native-purchases';
 
 import { warnIfActiveSubscriptionButMissingChinottoProEntitlement } from './entitlements';
+import { isRevenueCatQuietMode } from './revenueCatQuiet';
 import { getCustomerInfo, getOfferings } from './revenueCat';
 
 export type RevenueCatDebugSnapshot = {
@@ -66,7 +67,7 @@ export async function logRevenueCatSubscriptionsAndProducts(
   customerInfo?: CustomerInfo | null,
   context?: string
 ): Promise<void> {
-  if (!__DEV__) {
+  if (!__DEV__ || isRevenueCatQuietMode()) {
     return;
   }
 
