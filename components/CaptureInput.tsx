@@ -14,6 +14,8 @@ export type CaptureInputProps = {
   placeholderTextColor?: string;
   onFocus?: () => void;
   onBlur?: () => void;
+  /** Default true; set false while a full-screen overlay (e.g. brand splash) is visible. */
+  autoFocus?: boolean;
 };
 
 export const CaptureInput = forwardRef<TextInput, CaptureInputProps>(
@@ -28,6 +30,7 @@ export const CaptureInput = forwardRef<TextInput, CaptureInputProps>(
       placeholderTextColor,
       onFocus,
       onBlur,
+      autoFocus = true,
     },
     ref
   ) {
@@ -65,7 +68,7 @@ export const CaptureInput = forwardRef<TextInput, CaptureInputProps>(
         onFocus={onFocus}
         onBlur={onBlur}
         multiline
-        autoFocus
+        autoFocus={autoFocus}
         autoCorrect
         autoCapitalize="sentences"
         returnKeyType="done"

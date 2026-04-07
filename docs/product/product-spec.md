@@ -14,7 +14,7 @@ It is a **capture layer and lightweight recall surface**.
 ## Philosophy
 
 - **Capture instantly, reflect later**
-- No friction at the moment of thought (**after** a one-time first-run welcome; see `AGENTS.md`)
+- No friction at the moment of thought (after a brief brand splash; see `AGENTS.md`)
 - No organization on mobile
 - Desktop is for depth, mobile is for immediacy
 
@@ -87,8 +87,8 @@ All improvements must preserve:
 
 ### 1. Capture (primary)
 
-- **After first-run welcome:** open app → input is focused as soon as practical (same session: immediately after leaving the welcome screen)
-- First install: one-time welcome, then capture — never repeated unless app data reset
+- **After brand splash:** open app → input is focused as soon as practical
+- First install: same steady state — brand splash, then capture
 - Keyboard is open
 - User starts typing instantly
 - Press Enter / Done → entry is created
@@ -145,9 +145,9 @@ Everything else is secondary.
 
 ### 2. Zero friction
 
-- No loading states before typing (steady state after welcome)
+- No loading states before typing (steady state after brand splash)
 - No UI decisions required at capture time
-- No **recurring** interruptions before input (one-time welcome excepted)
+- No **recurring** interruptions before input
 
 ---
 
@@ -186,8 +186,8 @@ No additional structure.
 
 - Folders / tags
 - Complex editing
-- Multi-step flows **for routine use** (beyond the **one-time** welcome on first launch)
-- Repeatable onboarding, product tours, or tutorial series (the **single** welcome screen is allowed; see `AGENTS.md`)
+- Multi-step flows **for routine use** (beyond brand splash → capture)
+- Repeatable onboarding, product tours, or tutorial series (see `AGENTS.md`)
 - Tutorials **as an ongoing product pattern**
 - AI chat
 - Feed / recommendations

@@ -82,7 +82,7 @@ resolve_udid() {
 UDID="$(resolve_udid)" || exit 1
 echo "Using simulator UDID: ${UDID}" >&2
 
-scenes=(capture settings sync sync_apple welcome)
+scenes=(capture settings sync sync_apple)
 i=1
 for scene in "${scenes[@]}"; do
   xcrun simctl openurl "$UDID" "chinotto://screenshot?scene=${scene}"

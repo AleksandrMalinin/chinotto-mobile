@@ -1,18 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useIncomingShare } from 'expo-sharing';
-import { AccessibilityInfo, Platform, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, LogBox, Platform, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BrandSplash } from './components/BrandSplash';
 import { STREAM_HIGHLIGHT_CLEAR_AFTER_MS } from './components/RecentList';
 import { CaptureScreen } from './screens/CaptureScreen';
-import { WelcomeOnboardingScreen } from './screens/WelcomeOnboardingScreen';
 import { loadSubscriptionState } from './monetization/subscriptionState';
 import { bootstrapRevenueCat } from './src/services/purchases/initRevenueCat';
+import { isRevenueCatQuietMode } from './src/services/purchases/revenueCatQuiet';
 import { composeIncomingShareCaptureText } from './share/extractShareEntryTexts';
 import { startMobileFirestoreIngest } from './sync/firestoreIngest';
 import { resolvePushEntryForSync } from './sync/pushEntryForSync';
@@ -28,14 +28,17 @@ import {
 } from './storage/displayChromePrefs';
 import { saveEntry } from './storage/entryRepository';
 import { useAdaptiveChromeBlend } from './hooks/useAdaptiveChromeBlend';
-import { clearWelcomeFlag, hasCompletedWelcome } from './storage/welcomeFlag';
 import { isFirebaseSyncConfigured } from './sync/firebaseConfig';
 import { useCaptureWidgetDeepLinkFocus } from './widgets/useCaptureWidgetDeepLinkFocus';
 import { useExperimentalIosHomeWidgetRegistration } from './widgets/useExperimentalIosHomeWidget';
-import { AdaptiveChromeContext, getTheme, useAppTheme } from './theme';
+import { AdaptiveChromeContext, useAppTheme } from './theme';
 
 /** Keep native splash visible until we call hide (fonts + DB + short beat). */
 void SplashScreen.preventAutoHideAsync();
+
+if (__DEV__ && isRevenueCatQuietMode()) {
+  LogBox.ignoreLogs([/\[RevenueCat\]/, /RevenueCat/]);
+}
 
 /**
  * Delay before mounting BrandSplash. Native splash stays up until BrandSplash’s first
@@ -45,12 +48,7 @@ const NATIVE_SPLASH_BEAT_MS = 400;
 /** Wait for expo-sharing to finish resolving multi-part payloads before one save. */
 const SHARE_SAVE_DEBOUNCE_MS = 400;
 
-type AppPhase = 'boot' | 'brand' | 'welcome' | 'main';
-
-function BootPhaseShell({ children }: { children: ReactNode }) {
-  const bg = useMemo(() => getTheme().colors.bg, []);
-  return <View style={{ flex: 1, backgroundColor: bg }}>{children}</View>;
-}
+type AppPhase = 'boot' | 'brand' | 'main';
 
 function ShareSavedAck({ visible }: { visible: boolean }) {
   const insets = useSafeAreaInsets();
@@ -154,8 +152,6 @@ export default function App() {
   const [firestoreIngestEpoch, setFirestoreIngestEpoch] = useState(0);
   const [remoteIngestVersion, setRemoteIngestVersion] = useState(0);
   const [phase, setPhase] = useState<AppPhase>('boot');
-  /** Snapshot after `hasCompletedWelcome()` — drives brand → welcome vs main. */
-  const welcomeDoneRef = useRef(true);
   /** Bumps each time we start handling a non-empty share — avoids stale async after re-renders. */
   const shareSaveSessionRef = useRef(0);
   const [shareSavedAck, setShareSavedAck] = useState(false);
@@ -175,20 +171,7 @@ export default function App() {
   const screenshotScene = useScreenshotSceneLink();
 
   const onBrandFinished = useCallback(() => {
-    setPhase(welcomeDoneRef.current ? 'main' : 'welcome');
-  }, []);
-
-  const onWelcomeComplete = useCallback(() => {
-    welcomeDoneRef.current = true;
     setPhase('main');
-  }, []);
-
-  const onDevResetWelcome = useCallback(() => {
-    void (async () => {
-      await clearWelcomeFlag();
-      welcomeDoneRef.current = false;
-      setPhase('brand');
-    })();
   }, []);
 
   const scheduleStreamHighlight = useCallback((entryId: string) => {
@@ -344,11 +327,9 @@ export default function App() {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     void (async () => {
-      const seen = await hasCompletedWelcome();
       if (cancelled) {
         return;
       }
-      welcomeDoneRef.current = seen;
       timer = setTimeout(() => {
         setPhase('brand');
       }, NATIVE_SPLASH_BEAT_MS);
@@ -365,13 +346,7 @@ export default function App() {
     if (!fontsLoaded || !dbReady || !isScreenshotMode()) {
       return;
     }
-    if (screenshotScene === 'welcome') {
-      welcomeDoneRef.current = false;
-      setPhase('welcome');
-    } else {
-      welcomeDoneRef.current = true;
-      setPhase('main');
-    }
+    setPhase('main');
   }, [fontsLoaded, dbReady, screenshotScene]);
 
   /**
@@ -382,7 +357,7 @@ export default function App() {
     if (!isScreenshotMode() || !fontsLoaded || !dbReady) {
       return;
     }
-    if (phase === 'main' || phase === 'welcome') {
+    if (phase === 'main') {
       void SplashScreen.hideAsync();
     }
   }, [phase, fontsLoaded, dbReady]);
@@ -397,28 +372,19 @@ export default function App() {
         <SafeAreaProvider>
           <View style={{ flex: 1 }}>
             <StatusBar style="light" />
-            {phase === 'welcome' ? (
-              <BootPhaseShell>
-                <WelcomeOnboardingScreen onComplete={onWelcomeComplete} />
-              </BootPhaseShell>
-            ) : phase === 'brand' ? (
-              <BootPhaseShell>
-                <BrandSplash onFinished={onBrandFinished} />
-              </BootPhaseShell>
-            ) : (
-              <CaptureScreen
-                remoteIngestVersion={remoteIngestVersion}
-                externalEntriesEpoch={externalEntriesEpoch}
-                captureFocusNonce={captureFocusNonce}
-                syncEntryRequestNonce={syncEntryRequestNonce}
-                streamHighlightEntryId={streamHighlightEntryId}
-                onScheduleStreamHighlight={scheduleStreamHighlight}
-                subscriptionHydrated={subscriptionLoaded}
-                onSubscriptionUnlocked={() => setFirestoreIngestEpoch((n) => n + 1)}
-                screenshot={isScreenshotMode() ? { scene: screenshotScene } : undefined}
-                {...(__DEV__ ? { onDevMenu: onDevResetWelcome } : {})}
-              />
-            )}
+            <CaptureScreen
+              allowCaptureFocus={phase === 'main'}
+              remoteIngestVersion={remoteIngestVersion}
+              externalEntriesEpoch={externalEntriesEpoch}
+              captureFocusNonce={captureFocusNonce}
+              syncEntryRequestNonce={syncEntryRequestNonce}
+              streamHighlightEntryId={streamHighlightEntryId}
+              onScheduleStreamHighlight={scheduleStreamHighlight}
+              subscriptionHydrated={subscriptionLoaded}
+              onSubscriptionUnlocked={() => setFirestoreIngestEpoch((n) => n + 1)}
+              screenshot={isScreenshotMode() ? { scene: screenshotScene } : undefined}
+            />
+            {phase === 'brand' ? <BrandSplash onFinished={onBrandFinished} /> : null}
             <ShareSavedAck visible={shareSavedAck} />
           </View>
         </SafeAreaProvider>

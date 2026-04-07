@@ -4,7 +4,7 @@ import * as Linking from 'expo-linking';
 import { stashDesktopSyncSessionFromUrlIfPresent } from './desktopSyncSessionStash';
 import { isSyncDeepLinkUrl } from './syncDeepLink';
 
-export type AppMainPhase = 'boot' | 'brand' | 'welcome' | 'main';
+export type AppMainPhase = 'boot' | 'brand' | 'main';
 
 /**
  * Listens for sync entry URLs (universal link or `chinotto://sync`). If the app is not on capture

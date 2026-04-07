@@ -117,6 +117,17 @@ describe('CaptureScreen', () => {
     jest.mocked(entryRepository.getRecentEntries).mockImplementation(() => Promise.resolve([]));
   });
 
+  it('disables composer autoFocus while allowCaptureFocus is false', async () => {
+    const { findByTestId } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <CaptureScreen allowCaptureFocus={false} />
+      </SafeAreaProvider>
+    );
+
+    const input = await findByTestId('capture-input');
+    expect(input.props.autoFocus).toBe(false);
+  });
+
   it('calls saveEntry with trimmed text on submit and clears the field after save succeeds', async () => {
     jest.mocked(Haptics.impactAsync).mockClear();
     const { getByTestId, findByTestId } = render(
@@ -378,20 +389,26 @@ describe('CaptureScreen', () => {
   });
 
   it('opens dev menu from Settings instead of the main header', async () => {
-    const onDevMenu = jest.fn();
+    const RN = require('react-native');
+    const prevOs = RN.Platform.OS;
+    RN.Platform.OS = 'ios';
     jest.mocked(devMenuModule.showDevMenu).mockClear();
 
-    const { findByTestId, getByTestId } = render(
-      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
-        <CaptureScreen onDevMenu={onDevMenu} />
-      </SafeAreaProvider>
-    );
+    try {
+      const { findByTestId, getByTestId } = render(
+        <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+          <CaptureScreen />
+        </SafeAreaProvider>
+      );
 
-    await findByTestId('capture-input');
-    fireEvent.press(getByTestId('header-logo'));
-    fireEvent.press(getByTestId('settings-open-dev-menu'));
+      await findByTestId('capture-input');
+      fireEvent.press(getByTestId('header-logo'));
+      fireEvent.press(getByTestId('settings-open-dev-menu'));
 
-    expect(jest.mocked(devMenuModule.showDevMenu)).toHaveBeenCalledTimes(1);
+      expect(jest.mocked(devMenuModule.showDevMenu)).toHaveBeenCalledTimes(1);
+    } finally {
+      RN.Platform.OS = prevOs;
+    }
   });
 
   it('opens manifesto from Settings and closes back to Settings', async () => {

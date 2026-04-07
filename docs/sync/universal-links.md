@@ -40,4 +40,4 @@ No pairing tokens or backend are implied by this URL.
 
 - **Custom scheme:** `npx uri-scheme open chinotto://sync --ios` (or Safari/Notes) to verify JS without AASA.
 - **Universal link:** After AASA + install, long-press or open in Safari; the banner should offer the app. If it always opens Safari, check AASA, entitlements rebuild, and that the link is **https** on the **exact** associated host.
-- **Deferred open:** Complete welcome/brand if needed; the pending intent fires when capture is ready.
+- **Deferred open:** Complete brand splash if needed; the pending intent fires when capture is ready.

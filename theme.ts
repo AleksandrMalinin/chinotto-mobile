@@ -5,7 +5,7 @@
  * - **Open Sauce One** weights **400** and **500** for almost all UI after shell load
  *   (body, capture, stream, search, buttons, settings — same as `index.css` on web).
  * - **Inter** weight **300** is used on desktop **only** for first-run intro copy
- *   (`.intro-screen-copy`). Mobile uses **Open Sauce One** for the one-time welcome as well; Inter is not loaded on mobile.
+ *   (`.intro-screen-copy`). Mobile uses **Open Sauce One** for capture and stream copy; Inter is not loaded on mobile.
  *   Nunito / Outfit / Plus Jakarta in `index.html` are unused on web.
  *
  * Font files: `assets/fonts/OpenSauceOne-{Regular,Medium}.ttf` (SIL OFL; keys `OpenSauceOne-400` / `500`).
@@ -135,6 +135,22 @@ function blendDarkSunChrome(progress: number): ThemeColors {
 export const fonts = {
   regular: 'OpenSauceOne-400',
   medium: 'OpenSauceOne-500',
+} as const;
+
+/**
+ * Matches `chinotto-app` `index.css` `--chinotto-headline-text-gradient` (`.stream-empty-title`, intro lines).
+ * Used with `MaskedView` + `LinearGradient` on RN (no `background-clip: text`).
+ */
+export const chinottoHeadlineTextGradient = {
+  colors: [
+    'rgba(255, 255, 255, 0.96)',
+    'rgba(198, 206, 255, 0.92)',
+    'rgba(255, 255, 255, 0.9)',
+    'rgba(255, 220, 200, 0.82)',
+  ],
+  locations: [0, 0.38, 0.72, 1] as const,
+  start: { x: 0.12, y: 0 } as const,
+  end: { x: 0.88, y: 1 } as const,
 } as const;
 
 /** 8px grid; aligns with design-system.md “Spacing scale” (1rem ≈ 16px, 32px rhythm). */

@@ -7,9 +7,9 @@ function envFlag(value: string | undefined): boolean {
   return TRUE_VALUES.has(value.trim().toLowerCase());
 }
 
-export type ScreenshotScene = 'capture' | 'welcome' | 'settings' | 'sync' | 'sync_apple';
+export type ScreenshotScene = 'capture' | 'settings' | 'sync' | 'sync_apple';
 
-const SCENES = new Set<ScreenshotScene>(['capture', 'welcome', 'settings', 'sync', 'sync_apple']);
+const SCENES = new Set<ScreenshotScene>(['capture', 'settings', 'sync', 'sync_apple']);
 
 /**
  * App Store screenshot automation (demo stream, `chinotto://screenshot?scene=…`, `scripts/store-screenshots.sh`).

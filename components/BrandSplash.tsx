@@ -89,7 +89,8 @@ export function BrandSplash({ onFinished }: Props) {
   return (
     <Animated.View
       style={[styles.root, { opacity }]}
-      pointerEvents="none"
+      /** Block taps until the overlay unmounts; capture may already be mounted underneath. */
+      pointerEvents="auto"
       onLayout={onRootLayout}
     >
       <BrandSplashAmbient />

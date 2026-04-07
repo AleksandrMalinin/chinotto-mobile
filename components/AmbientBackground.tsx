@@ -20,7 +20,7 @@ const PULSE_MS = 20000;
  * {@link AppTheme.blendProgress} crossfades the rich default stack toward the near-flat sunlight
  * wash so gradients ease with adaptive brightness (no layout or remount).
  *
- * `fixedChrome`: always use standard dark shell (welcome + other one-shot surfaces must not follow
+ * `fixedChrome`: always use standard dark shell (one-shot surfaces must not follow
  * adaptive sunlight so copy/gradients stay predictable).
  */
 export function AmbientBackground({ fixedChrome = false }: { fixedChrome?: boolean }) {

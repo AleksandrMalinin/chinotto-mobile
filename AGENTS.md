@@ -12,8 +12,6 @@ Core principles:
 - No folders, tags, or categories
 - **Minimal friction** — No repeated teaching, no tip-of-the-day, no mandatory tours, and no extra decisions at the moment of capture.
 
-**First run (explicit exception):** A **short, one-time welcome** (`WelcomeOnboardingScreen`, persisted flag) is intentional. It orients the user once; after the user proceeds to capture from that screen, capture is the default forever (until reinstall or dev reset). This is **not** a violation of instant capture — instant capture applies to **steady state** after that first completion.
-
 Mobile app role:
 - Capture-first
 - Input is the primary UI
@@ -26,7 +24,7 @@ Mobile app role:
 Golden rule:
 > If a feature slows down capturing a thought → do not implement it.
 
-Interpretation for agents: judge **recurring** friction (every open, every new thought). A one-time, non-blocking welcome before first capture is acceptable; anything that **persists** as friction after first use is not.
+Interpretation for agents: judge **recurring** friction (every open, every new thought). After a brief brand splash, capture is immediate; avoid anything that **regularly** delays input.
 
 ---
 
@@ -142,16 +140,16 @@ Avoid:
 
 **Onboarding (precise):**
 
-- **In bounds:** One-time welcome: single short surface, persisted “seen” flag, then never shown again in normal use. Must hand off to capture immediately after dismiss.
-- **Out of bounds:** Repeatable onboarding on launch, multi-screen product tours, version tip carousels, “complete setup” wizards before capture, or any pattern that **regularly** delays input after first-run welcome.
+- **In bounds:** Optional one-time **brand splash** only; then straight to capture. Empty stream can show light copy / motion (same shell as capture), not a separate onboarding flow.
+- **Out of bounds:** Repeatable onboarding on launch, multi-screen product tours, version tip carousels, “complete setup” wizards before capture, or any pattern that **regularly** delays input.
 
 **Still avoid:**
 
 - Tutorial series, feature walkthroughs, or progressive disclosure that fires on every session
-- Multi-step UX for **routine** capture (not the one-time welcome)
+- Multi-step UX for **routine** capture
 - Unnecessary buttons
 
-**Input (on capture screen, including after welcome):**
+**Input (on capture screen):**
 
 - Immediately focused on open
 - No avoidable delay before typing
@@ -194,7 +192,7 @@ If you are about to implement:
 
 - Navigation stacks
 - Complex global state
-- Multiple screens for simple flows (beyond the **single** one-time welcome already shipped)
+- Multiple screens for simple flows (beyond brand splash → capture)
 - Heavy UI components
 
 → STOP and propose a simpler alternative

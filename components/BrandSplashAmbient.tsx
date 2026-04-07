@@ -16,7 +16,7 @@ const PULSE_MS = 20000;
 /**
  * Splash shell: same gradient stack + smooth transitions as before; values tuned **darker**
  * globally (muted neon + slightly heavier vignette). Does **not** follow adaptive sunlight — same
- * rationale as welcome: one short surface, stable look while `CaptureScreen` picks up appearance.
+ * One short surface, stable look while `CaptureScreen` picks up appearance.
  */
 export function BrandSplashAmbient() {
   const t = useMemo(() => getTheme(), []);

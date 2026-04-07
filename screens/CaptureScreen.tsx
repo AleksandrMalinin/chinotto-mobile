@@ -107,8 +107,6 @@ export type CaptureScreenshotConfig = {
 };
 
 export type CaptureScreenProps = {
-  /** `__DEV__` only: long-press header logo opens dev menu (e.g. reset welcome). */
-  onDevMenu?: () => void;
   /** Increment when Firestore ingest applies remote changes (desktop → mobile). */
   remoteIngestVersion?: number;
   /** Increment when entries change outside this screen (e.g. system share). */
@@ -130,10 +128,14 @@ export type CaptureScreenProps = {
   syncEntryRequestNonce?: number;
   /** App Store / marketing: deterministic stream + instant scene switching via deep link. */
   screenshot?: CaptureScreenshotConfig;
+  /**
+   * When false, the composer does not auto-focus (e.g. while the brand splash fades over capture).
+   * App sets this to true once the splash overlay is removed.
+   */
+  allowCaptureFocus?: boolean;
 };
 
 export function CaptureScreen({
-  onDevMenu,
   remoteIngestVersion = 0,
   externalEntriesEpoch = 0,
   captureFocusNonce = 0,
@@ -143,6 +145,7 @@ export function CaptureScreen({
   onSubscriptionUnlocked,
   syncEntryRequestNonce = 0,
   screenshot,
+  allowCaptureFocus = true,
 }: CaptureScreenProps = {}) {
   const [text, setText] = useState('');
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -388,6 +391,16 @@ export function CaptureScreen({
     return () => cancelAnimationFrame(id);
   }, [captureFocusNonce, screenshotActive]);
 
+  useEffect(() => {
+    if (!allowCaptureFocus || screenshotActive) {
+      return;
+    }
+    const id = requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [allowCaptureFocus, screenshotActive]);
+
   useEffect(
     () => () => {
       if (enableSyncShimmerTimerRef.current) {
@@ -580,24 +593,19 @@ export function CaptureScreen({
   }, []);
 
   const openDevMenuFromSettings = useCallback(() => {
-    if (onDevMenu == null) {
+    if (!__DEV__ || Platform.OS !== 'ios') {
       return;
     }
     showDevMenu({
-      onResetWelcome: onDevMenu,
-      ...(__DEV__ && Platform.OS === 'ios'
-        ? {
-            onClearLocalSyncPaywallFlags: () => void clearLocalSyncPaywallFlags(),
-            onRevenueCatLogOut: () => void devRevenueCatLogOutAndRefreshEntitlementCache(),
-            onResetPaywallForPurchaseTesting: () => void resetPaywallForPurchaseTesting(),
-            onPreviewSyncEnabledSheet: () => {
-              setDevPostSyncPreviewNonce((n) => n + 1);
-              setSyncModalVisible(true);
-            },
-          }
-        : {}),
+      onClearLocalSyncPaywallFlags: () => void clearLocalSyncPaywallFlags(),
+      onRevenueCatLogOut: () => void devRevenueCatLogOutAndRefreshEntitlementCache(),
+      onResetPaywallForPurchaseTesting: () => void resetPaywallForPurchaseTesting(),
+      onPreviewSyncEnabledSheet: () => {
+        setDevPostSyncPreviewNonce((n) => n + 1);
+        setSyncModalVisible(true);
+      },
     });
-  }, [onDevMenu]);
+  }, []);
 
   useEffect(() => {
     if (syncEntryRequestNonce <= lastSyncEntryNonceRef.current) {
@@ -842,6 +850,7 @@ export function CaptureScreen({
                       maxHeight={composerMaxHeight}
                       placeholder="Jot a thought…"
                       placeholderTextColor={capturePlaceholderColor}
+                      autoFocus={allowCaptureFocus && !screenshotActive}
                     />
                   </View>
                   {showVoiceCapture ? (
@@ -957,6 +966,7 @@ export function CaptureScreen({
             <RecentList
               entries={searchTrimmed.length > 0 ? searchResults : entries}
               visible
+              deferEmptyStreamMotion={!allowCaptureFocus}
               streamEmptyAmbient={searchTrimmed.length === 0 && entries.length === 0}
               streamEmptyAmbientSuppressed={streamEmptyAmbientSuppressed}
               highlightEntryId={searchTrimmed.length > 0 ? null : streamHighlightEntryId}
@@ -1008,7 +1018,7 @@ export function CaptureScreen({
           }
           hapticsEnabled={hapticsEnabled}
           onHapticsEnabledChange={persistHapticsEnabled}
-          onOpenDevMenu={onDevMenu != null ? openDevMenuFromSettings : undefined}
+          onOpenDevMenu={__DEV__ && Platform.OS === 'ios' ? openDevMenuFromSettings : undefined}
         />
       ) : null}
       {settingsRoute === 'manifesto' ? (

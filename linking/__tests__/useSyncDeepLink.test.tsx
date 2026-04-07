@@ -23,7 +23,7 @@ describe('useSyncDeepLink', () => {
     });
 
     const { rerender } = renderHook(
-      (props: { phase: 'boot' | 'brand' | 'welcome' | 'main'; db: boolean; sub: boolean }) =>
+      (props: { phase: 'boot' | 'brand' | 'main'; db: boolean; sub: boolean }) =>
         useSyncDeepLink({
           enabled: true,
           phase: props.phase,
@@ -31,7 +31,7 @@ describe('useSyncDeepLink', () => {
           subscriptionLoaded: props.sub,
           onSyncDeepLink,
         }),
-      { initialProps: { phase: 'welcome' as const, db: true, sub: true } }
+      { initialProps: { phase: 'brand' as const, db: true, sub: true } }
     );
 
     act(() => {
@@ -39,7 +39,7 @@ describe('useSyncDeepLink', () => {
     });
     expect(onSyncDeepLink).not.toHaveBeenCalled();
 
-    rerender({ phase: 'welcome', db: true, sub: true });
+    rerender({ phase: 'brand', db: true, sub: true });
     expect(onSyncDeepLink).not.toHaveBeenCalled();
 
     act(() => {

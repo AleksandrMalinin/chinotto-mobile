@@ -27,7 +27,7 @@ Do not assume desktop and mobile share a single checkout surface unless you add 
 
 **Website / Apple:** Universal links require **AASA** on `getchinotto.app` and an **iOS build** with `associatedDomains`. Details: [`universal-links.md`](./universal-links.md).
 
-**Cold start:** Mobile queues the intent until capture is ready (welcome/brand done, DB + subscription hydration). Intent is not dropped.
+**Cold start:** Mobile queues the intent until capture is ready (brand splash done, DB + subscription loaded). Intent is not dropped.
 
 ---
 

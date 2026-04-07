@@ -2,7 +2,7 @@ import * as Linking from 'expo-linking';
 
 import type { ScreenshotScene } from '../src/features/screenshotMode';
 
-const SCENES = new Set<ScreenshotScene>(['capture', 'welcome', 'settings', 'sync', 'sync_apple']);
+const SCENES = new Set<ScreenshotScene>(['capture', 'settings', 'sync', 'sync_apple']);
 
 /**
  * Accepts `chinotto://screenshot?scene=capture` (and the same query on https hosts).

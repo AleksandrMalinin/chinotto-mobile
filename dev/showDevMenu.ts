@@ -1,7 +1,6 @@
 import { Alert, type AlertButton } from 'react-native';
 
 export type DevMenuOptions = {
-  onResetWelcome: () => void;
   /** Clears local trial + legacy “subscribed” AsyncStorage flags so the sync paywall can show again (device-only, not Apple ID). */
   onClearLocalSyncPaywallFlags?: () => void | Promise<void>;
   /**
@@ -16,18 +15,13 @@ export type DevMenuOptions = {
 
 /**
  * Extensible dev-only actions (development builds / `__DEV__` only).
- * Trigger from a hidden gesture (e.g. long-press header logo on capture).
+ * Trigger from Settings (iOS dev builds) after opening via header logo.
  */
 export function showDevMenu(options: DevMenuOptions): void {
   if (!__DEV__) {
     return;
   }
-  const buttons: AlertButton[] = [
-    {
-      text: 'Reset welcome onboarding',
-      onPress: options.onResetWelcome,
-    },
-  ];
+  const buttons: AlertButton[] = [];
   if (options.onClearLocalSyncPaywallFlags != null) {
     buttons.push({
       text: 'Clear local sync paywall flags',

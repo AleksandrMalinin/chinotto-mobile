@@ -1,10 +1,12 @@
 import { fireEvent, render } from '@testing-library/react-native';
 
 jest.mock('../StreamFlowPanel', () => ({
-  StreamFlowPanel: () => null,
+  __esModule: true,
+  StreamFlowPanel: jest.fn(() => null),
 }));
 
 import { RecentList } from '../RecentList';
+import { StreamFlowPanel } from '../StreamFlowPanel';
 
 function entryToday(text: string): { id: string; text: string; createdAt: string } {
   const d = new Date();
@@ -16,6 +18,10 @@ function entryToday(text: string): { id: string; text: string; createdAt: string
 }
 
 describe('RecentList', () => {
+  beforeEach(() => {
+    jest.mocked(StreamFlowPanel).mockClear();
+  });
+
   it('renders entry text when visible', () => {
     const { getByText, getByTestId } = render(<RecentList entries={[entryToday('hello')]} visible />);
 
@@ -65,6 +71,21 @@ describe('RecentList', () => {
     );
 
     expect(getByTestId('recent-list-empty-ambient', { includeHiddenElements: true })).toBeTruthy();
+    expect(jest.mocked(StreamFlowPanel).mock.calls[0]?.[0]).toMatchObject({ deferMotion: false });
+  });
+
+  it('defers StreamFlowPanel motion when deferEmptyStreamMotion is set', () => {
+    render(
+      <RecentList
+        entries={[]}
+        visible
+        emptyHint="Write it down.\nIt stays."
+        streamEmptyAmbient
+        deferEmptyStreamMotion
+      />
+    );
+
+    expect(jest.mocked(StreamFlowPanel).mock.calls[0]?.[0]).toMatchObject({ deferMotion: true });
   });
 
   it('renders stream empty ambient when composer suppression flag is set', () => {

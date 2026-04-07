@@ -5,7 +5,6 @@ describe('parseScreenshotSceneFromUrl', () => {
     expect(parseScreenshotSceneFromUrl('chinotto://screenshot?scene=settings')).toBe('settings');
     expect(parseScreenshotSceneFromUrl('chinotto://foo?scene=capture')).toBe('capture');
     expect(parseScreenshotSceneFromUrl('chinotto://foo?scene=sync')).toBe('sync');
-    expect(parseScreenshotSceneFromUrl('chinotto://foo?scene=welcome')).toBe('welcome');
     expect(parseScreenshotSceneFromUrl('chinotto://foo?scene=sync_apple')).toBe('sync_apple');
   });
 

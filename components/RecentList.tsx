@@ -10,10 +10,18 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import MaskedView from '@react-native-masked-view/masked-view';
+import { LinearGradient } from 'expo-linear-gradient';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 
 import type { Entry } from '../types/entry';
-import { fonts, screenContentGutter, screenContentInnerPad, useAppTheme } from '../theme';
+import {
+  chinottoHeadlineTextGradient,
+  fonts,
+  screenContentGutter,
+  screenContentInnerPad,
+  useAppTheme,
+} from '../theme';
 import { replaceHttpUrlsWithCompactDisplay } from '../utils/extractHttpUrlsFromText';
 import { formatEntryTime, groupEntriesByDate } from '../utils/groupEntriesByDate';
 import { StreamFlowPanel } from './StreamFlowPanel';
@@ -38,7 +46,7 @@ export type RecentListProps = {
   /** Row id for a brief leading-edge trace (e.g. just saved from capture or share). */
   highlightEntryId?: string | null;
   /**
-   * When true and the stream is empty, show the same slow line + blob motion as welcome
+   * When true and the stream is empty, show slow line art (`StreamFlowPanel` linesOnly)
    * (`StreamFlowPanel`) above the hint — not for search-miss empty.
    */
   streamEmptyAmbient?: boolean;
@@ -46,6 +54,10 @@ export type RecentListProps = {
    * When true, fade the empty stream illustration + copy (composer has text or voice is active).
    */
   streamEmptyAmbientSuppressed?: boolean;
+  /**
+   * When true, hold line-draw and empty-hint entrance until visible (e.g. full-screen splash over capture).
+   */
+  deferEmptyStreamMotion?: boolean;
 };
 
 const DELETE_ACTION_WIDTH = 76;
@@ -53,7 +65,7 @@ const DELETE_ACTION_WIDTH = 76;
 /** Parent should clear `highlightEntryId` after this (full fade + small buffer). */
 export const STREAM_HIGHLIGHT_CLEAR_AFTER_MS = 0;
 
-/** Aligns with `WelcomeOnboardingScreen` staged entrance — fade + slight lift. */
+/** Staged empty-hint entrance — fade + slight lift. */
 const EMPTY_HINT_ENTRANCE_MS = 1100;
 const EMPTY_HINT_STAGGER_MS = 280;
 const EMPTY_HINT_Y_OFFSET = 7;
@@ -61,6 +73,11 @@ const EMPTY_HINT_EASING = Easing.out(Easing.cubic);
 /** Let stream illustration lead through first beats before copy fades in. */
 const EMPTY_AMBIENT_BEFORE_COPY_MS = 1150;
 const EMPTY_AMBIENT_SUPPRESS_FADE_MS = 340;
+
+/** Empty-stream headline — step up from body; pairs with desktop `.stream-empty-title` gradient. */
+const EMPTY_STREAM_HEADLINE_FONT_SIZE = 19;
+const EMPTY_STREAM_HEADLINE_LINE_HEIGHT = 27;
+const EMPTY_STREAM_HEADLINE_LETTER_SPACING = -0.38;
 
 /** Pressed stream row — full-bleed tint, softer than a card fill. */
 function entryPressedBackground(isDark: boolean): string {
@@ -249,6 +266,45 @@ function streamEmptyHintEntranceStyle(v: Animated.Value) {
   };
 }
 
+function GradientHeadlineLine({
+  text,
+  textAlign,
+  entrance,
+}: {
+  text: string;
+  textAlign: 'left' | 'center';
+  entrance: Animated.Value;
+}) {
+  const headlineTextStyle = useMemo(
+    () => ({
+      fontFamily: fonts.medium,
+      fontSize: EMPTY_STREAM_HEADLINE_FONT_SIZE,
+      lineHeight: EMPTY_STREAM_HEADLINE_LINE_HEIGHT,
+      letterSpacing: EMPTY_STREAM_HEADLINE_LETTER_SPACING,
+      textAlign,
+    }),
+    [textAlign]
+  );
+  const g = chinottoHeadlineTextGradient;
+  return (
+    <Animated.View style={streamEmptyHintEntranceStyle(entrance)}>
+      <MaskedView
+        style={textAlign === 'center' ? { alignSelf: 'center' } : { alignSelf: 'flex-start' }}
+        maskElement={<Text style={[headlineTextStyle, { color: '#000000' }]}>{text}</Text>}
+      >
+        <LinearGradient
+          colors={[...g.colors]}
+          locations={[...g.locations]}
+          start={g.start}
+          end={g.end}
+        >
+          <Text style={[headlineTextStyle, { opacity: 0 }]}>{text}</Text>
+        </LinearGradient>
+      </MaskedView>
+    </Animated.View>
+  );
+}
+
 type StreamEmptyHintProps = {
   emptyHint: string;
   streamGutter: number;
@@ -260,6 +316,12 @@ type StreamEmptyHintProps = {
   entranceDelayMs?: number;
   /** When set, lines are optically grouped with centered stream art. */
   textAlign?: 'left' | 'center';
+  /** When true, keep lines invisible until false (sync with empty-stream line art `deferMotion`). */
+  deferEntrance?: boolean;
+  /** When set, use desktop-aligned headline gradient (empty capture stream + ambient art only). */
+  headlineGradient?: boolean;
+  /** Solid color when `headlineGradient` and reduce motion. */
+  headlineFlatColor?: string;
 };
 
 function StreamEmptyHint({
@@ -272,7 +334,11 @@ function StreamEmptyHint({
   paddingTop,
   entranceDelayMs = 0,
   textAlign = 'left',
+  deferEntrance = false,
+  headlineGradient = false,
+  headlineFlatColor,
 }: StreamEmptyHintProps) {
+  const [reduceMotion, setReduceMotion] = useState(false);
   const line0 = useRef(new Animated.Value(0)).current;
   const line1 = useRef(new Animated.Value(0)).current;
   const lines = useMemo(() => emptyHint.split(/\n/).map((s) => s.trim()).filter(Boolean), [emptyHint]);
@@ -287,8 +353,30 @@ function StreamEmptyHint({
     }),
     [bodyFontFamily, bodyFontSize, bodyLineHeight, color, textAlign]
   );
+  const headlineTextStyle = useMemo(
+    () => ({
+      fontFamily: fonts.medium,
+      fontSize: EMPTY_STREAM_HEADLINE_FONT_SIZE,
+      lineHeight: EMPTY_STREAM_HEADLINE_LINE_HEIGHT,
+      letterSpacing: EMPTY_STREAM_HEADLINE_LETTER_SPACING,
+      textAlign,
+    }),
+    [textAlign]
+  );
 
   useEffect(() => {
+    void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+  }, []);
+
+  useEffect(() => {
+    if (deferEntrance) {
+      line0.setValue(0);
+      line1.setValue(0);
+      return () => {
+        line0.stopAnimation();
+        line1.stopAnimation();
+      };
+    }
     let cancelled = false;
     line0.setValue(0);
     line1.setValue(0);
@@ -324,7 +412,9 @@ function StreamEmptyHint({
       line0.stopAnimation();
       line1.stopAnimation();
     };
-  }, [emptyHint, twoLines, entranceDelayMs]);
+  }, [deferEntrance, emptyHint, twoLines, entranceDelayMs, line0, line1]);
+
+  const flatHeadlineColor = headlineFlatColor ?? color;
 
   return (
     <View
@@ -341,14 +431,40 @@ function StreamEmptyHint({
         },
       ]}
     >
-      <Animated.Text style={[textStyle, streamEmptyHintEntranceStyle(line0)]} importantForAccessibility="no">
-        {lines[0] ?? emptyHint}
-      </Animated.Text>
-      {twoLines ? (
-        <Animated.Text style={[textStyle, streamEmptyHintEntranceStyle(line1)]} importantForAccessibility="no">
-          {lines[1]}
-        </Animated.Text>
-      ) : null}
+      {headlineGradient && !reduceMotion ? (
+        <>
+          <GradientHeadlineLine text={lines[0] ?? emptyHint} textAlign={textAlign} entrance={line0} />
+          {twoLines ? <GradientHeadlineLine text={lines[1]} textAlign={textAlign} entrance={line1} /> : null}
+        </>
+      ) : headlineGradient && reduceMotion ? (
+        <>
+          <Animated.Text
+            style={[headlineTextStyle, { color: flatHeadlineColor }, streamEmptyHintEntranceStyle(line0)]}
+            importantForAccessibility="no"
+          >
+            {lines[0] ?? emptyHint}
+          </Animated.Text>
+          {twoLines ? (
+            <Animated.Text
+              style={[headlineTextStyle, { color: flatHeadlineColor }, streamEmptyHintEntranceStyle(line1)]}
+              importantForAccessibility="no"
+            >
+              {lines[1]}
+            </Animated.Text>
+          ) : null}
+        </>
+      ) : (
+        <>
+          <Animated.Text style={[textStyle, streamEmptyHintEntranceStyle(line0)]} importantForAccessibility="no">
+            {lines[0] ?? emptyHint}
+          </Animated.Text>
+          {twoLines ? (
+            <Animated.Text style={[textStyle, streamEmptyHintEntranceStyle(line1)]} importantForAccessibility="no">
+              {lines[1]}
+            </Animated.Text>
+          ) : null}
+        </>
+      )}
     </View>
   );
 }
@@ -363,6 +479,7 @@ function RecentListInner({
   highlightEntryId = null,
   streamEmptyAmbient = false,
   streamEmptyAmbientSuppressed = false,
+  deferEmptyStreamMotion = false,
 }: RecentListProps) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const streamGutter = screenContentGutter(windowWidth);
@@ -449,11 +566,10 @@ function RecentListInner({
               >
                 <StreamFlowPanel
                   calm={false}
-                  deferMotion={false}
+                  deferMotion={deferEmptyStreamMotion}
                   typingAccent={false}
                   useAdaptiveChrome
                   linesOnly
-                  linesOnlyDrawPacing="idle"
                 />
               </View>
               <View style={[styles.emptyHintAnchor, { marginTop: t.spacing.md }]}>
@@ -467,6 +583,9 @@ function RecentListInner({
                   paddingTop={0}
                   entranceDelayMs={EMPTY_AMBIENT_BEFORE_COPY_MS}
                   textAlign="center"
+                  deferEntrance={deferEmptyStreamMotion}
+                  headlineGradient
+                  headlineFlatColor={colors.fg}
                 />
               </View>
             </View>
@@ -481,6 +600,7 @@ function RecentListInner({
             color={colors.fgDim}
             paddingTop={t.spacing.xs}
             entranceDelayMs={0}
+            deferEntrance={deferEmptyStreamMotion}
           />
         )}
       </View>

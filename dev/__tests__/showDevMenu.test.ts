@@ -8,7 +8,6 @@ describe('showDevMenu', () => {
     const onPreview = jest.fn();
 
     showDevMenu({
-      onResetWelcome: jest.fn(),
       onPreviewSyncEnabledSheet: onPreview,
     });
 
@@ -23,7 +22,6 @@ describe('showDevMenu', () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 
     showDevMenu({
-      onResetWelcome: jest.fn(),
       onClearLocalSyncPaywallFlags: jest.fn(),
     });
 
@@ -37,7 +35,6 @@ describe('showDevMenu', () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 
     showDevMenu({
-      onResetWelcome: jest.fn(),
       onRevenueCatLogOut: jest.fn(),
     });
 
@@ -51,7 +48,6 @@ describe('showDevMenu', () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 
     showDevMenu({
-      onResetWelcome: jest.fn(),
       onResetPaywallForPurchaseTesting: jest.fn(),
     });
 
@@ -64,7 +60,9 @@ describe('showDevMenu', () => {
   it('omits preview action when callback not provided', () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 
-    showDevMenu({ onResetWelcome: jest.fn() });
+    showDevMenu({
+      onClearLocalSyncPaywallFlags: jest.fn(),
+    });
 
     const buttons = alertSpy.mock.calls[0][2] as { text: string }[];
     expect(buttons.some((b) => b.text.includes('Sync enabled'))).toBe(false);

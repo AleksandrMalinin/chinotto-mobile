@@ -55,34 +55,19 @@ const AnimatedPath = Animated.createAnimatedComponent(Path);
 export type StreamFlowPanelProps = {
   /** No drift / path draw — final state (reduce motion). */
   calm?: boolean;
-  /** Paths hidden + blobs static until cleared (not used on welcome). */
+  /** Paths hidden + blobs static until cleared. */
   deferMotion?: boolean;
   /** One-shot SVG opacity pulse (desktop typing accent). */
   typingAccent?: boolean;
   /**
-   * When false, use standard dark chrome only (welcome). Avoids adaptive sunlight tint on a
-   * surface that shares the capture stream illustration but is not the main shell.
+   * When false, use standard dark chrome only. Avoids adaptive sunlight tint on a surface that
+   * shares the capture stream illustration but is not the main shell.
    */
   useAdaptiveChrome?: boolean;
   /**
-   * Only animated stroke paths — no glass card, blobs, or outer auras. For empty stream etc.
+   * Only animated stroke paths — no glass card, blobs, or outer auras. For empty capture stream.
    */
   linesOnly?: boolean;
-  /**
-   * When set with `linesOnly`, show gradient blobs (same as full panel) behind paths, still no
-   * glass frame — e.g. welcome.
-   */
-  linesOnlyBlobs?: boolean;
-  /**
-   * When `linesOnly`, path draw pacing: `welcome` matches full-panel timing (intro); `idle` is
-   * slower (empty capture stream). Defaults to `idle` when `linesOnly` is set.
-   */
-  linesOnlyDrawPacing?: 'welcome' | 'idle';
-  /**
-   * Weaker blobs only (no `vivid` mist, lower layer opacity). Stroke gradient unchanged.
-   * For surfaces shown in screenshots (e.g. welcome).
-   */
-  ambientSubdued?: boolean;
 };
 
 export function StreamFlowPanel({
@@ -91,9 +76,6 @@ export function StreamFlowPanel({
   typingAccent = false,
   useAdaptiveChrome = true,
   linesOnly = false,
-  linesOnlyBlobs = false,
-  linesOnlyDrawPacing = 'idle',
-  ambientSubdued = false,
 }: StreamFlowPanelProps) {
   const adaptive = useAppTheme();
   const fixed = useMemo(() => getTheme(), []);
@@ -151,7 +133,7 @@ export function StreamFlowPanel({
         }),
       ]);
 
-    const slowLines = linesOnly && linesOnlyDrawPacing === 'idle';
+    const slowLines = linesOnly;
     const dA = slowLines ? LINES_ONLY_DUR_A_MS : DUR_A_MS;
     const dB = slowLines ? LINES_ONLY_DUR_B_MS : DUR_B_MS;
     const dC = slowLines ? LINES_ONLY_DUR_C_MS : DUR_C_MS;
@@ -162,7 +144,7 @@ export function StreamFlowPanel({
     Animated.parallel([mk(offA, dA, delA), mk(offB, dB, delB), mk(offC, dC, delC)]).start();
 
     return undefined;
-  }, [effectiveCalm, deferMotion, linesOnly, linesOnlyDrawPacing, offA, offB, offC]);
+  }, [effectiveCalm, deferMotion, linesOnly, offA, offB, offC]);
 
   useEffect(() => {
     if (!typingAccent) {
@@ -317,15 +299,6 @@ export function StreamFlowPanel({
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
       >
-        {linesOnlyBlobs ? (
-          <BlobField
-            panelW={panelW}
-            panelH={panelH}
-            calm={effectiveCalm}
-            deferMotion={deferMotion}
-            subdued={ambientSubdued}
-          />
-        ) : null}
         {lineArt}
       </View>
     );
@@ -365,10 +338,9 @@ type BlobFieldProps = {
   panelH: number;
   calm: boolean;
   deferMotion: boolean;
-  subdued?: boolean;
 };
 
-function BlobField({ panelW, panelH, calm, deferMotion, subdued = false }: BlobFieldProps) {
+function BlobField({ panelW, panelH, calm, deferMotion }: BlobFieldProps) {
   const bfW = panelW * 1.24;
   const bfH = panelH * 1.24;
   const driftX = bfW * 0.06;
@@ -404,8 +376,6 @@ function BlobField({ panelW, panelH, calm, deferMotion, subdued = false }: BlobF
         driftX={driftX}
         driftY={driftY}
         enabled={enabled}
-        vivid={!subdued}
-        layerOpacity={subdued ? 0.76 : 0.92}
       />
       <DriftRadialBlob
         size={sCyan}
@@ -417,8 +387,6 @@ function BlobField({ panelW, panelH, calm, deferMotion, subdued = false }: BlobF
         driftX={driftX}
         driftY={driftY}
         enabled={enabled}
-        vivid={!subdued}
-        layerOpacity={subdued ? 0.76 : 0.92}
       />
       <DriftRadialBlob
         size={sViolet}
@@ -430,8 +398,6 @@ function BlobField({ panelW, panelH, calm, deferMotion, subdued = false }: BlobF
         driftX={driftX}
         driftY={driftY}
         enabled={enabled}
-        vivid={!subdued}
-        layerOpacity={subdued ? 0.76 : 0.92}
       />
     </View>
   );
@@ -447,9 +413,6 @@ type DriftRadialBlobProps = {
   driftX: number;
   driftY: number;
   enabled: boolean;
-  /** Stronger radial stops — default on full panel. */
-  vivid?: boolean;
-  layerOpacity?: number;
 };
 
 function DriftRadialBlob({
@@ -462,8 +425,6 @@ function DriftRadialBlob({
   driftX,
   driftY,
   enabled,
-  vivid = true,
-  layerOpacity = 0.92,
 }: DriftRadialBlobProps) {
   const t = useRef(new Animated.Value(0)).current;
 
@@ -518,12 +479,12 @@ function DriftRadialBlob({
         {
           width: size,
           height: size,
-          opacity: layerOpacity,
+          opacity: 0.92,
           transform: [{ translateX }, { translateY }, { scale }],
         },
       ]}
     >
-      <IntroRadialBlobView size={size} profile={profile} gradientId={gradientId} vivid={vivid} />
+      <IntroRadialBlobView size={size} profile={profile} gradientId={gradientId} vivid />
     </Animated.View>
   );
 }
