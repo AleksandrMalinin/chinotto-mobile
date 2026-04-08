@@ -22,12 +22,11 @@ import { useEnableSyncController } from './useEnableSyncController';
 
 /**
  * TEMPORARY — delete this constant, `buildTempRcOfferingsDebugText`, the related state/effect/styles,
- * and the paywall `ScrollView` block before App Store release. Used to diagnose TestFlight “plans unavailable”.
+ * and the paywall `ScrollView` block when the paywall is stable. Used to diagnose “plans unavailable” locally.
  *
- * **Not gated on `__DEV__`:** when `true`, the panel runs in **release / TestFlight** the same as in dev
- * (only the separate paywall `console.log` above is dev-only).
+ * **`__DEV__` only:** no RevenueCat debug panel or extra RC fetch in release / TestFlight.
  */
-const TEMP_RC_OFFERINGS_DEBUG_UI = true;
+const TEMP_RC_OFFERINGS_DEBUG_UI = __DEV__;
 
 /** TEMPORARY — remove with {@link TEMP_RC_OFFERINGS_DEBUG_UI}. No full key, only shape / EAS hint. */
 function tempRcEmbeddedIosKeyHint(): string {

@@ -320,8 +320,8 @@ describe('EnableSyncModal', () => {
     expect(getByLabelText('Not now')).toBeTruthy();
   });
 
-  // Delete when TEMP_RC_OFFERINGS_DEBUG_UI is removed from EnableSyncModal.
-  it('shows temporary RevenueCat offerings debug panel on paywall', async () => {
+  // TEMP_RC_OFFERINGS_DEBUG_UI follows __DEV__ (true under Jest).
+  it('shows RevenueCat offerings debug panel on paywall in dev', async () => {
     paywallGate.enabled = true;
     mockGetEntitlement.mockReturnValue(false);
 
