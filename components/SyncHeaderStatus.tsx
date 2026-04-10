@@ -182,7 +182,7 @@ export function SyncHeaderStatus({
           ? 'Sync paused'
           : uploadPending
             ? 'Syncing…'
-            : 'Synced'
+            : 'Sync on'
         : 'Enable sync';
 
   /** Intentionally quiet — sync is optional; never compete with capture. */
@@ -205,7 +205,7 @@ export function SyncHeaderStatus({
         ? 'Sync paused, open for details'
         : uploadPending
           ? 'Syncing to cloud'
-          : 'Synced'
+          : 'Cloud sync on'
       : phase === 'restoring'
         ? 'Checking sync'
         : 'Enable sync with Apple';

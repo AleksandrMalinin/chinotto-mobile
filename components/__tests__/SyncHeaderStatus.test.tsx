@@ -12,12 +12,12 @@ describe('SyncHeaderStatus', () => {
     expect(getByTestId('sync-header-dot')).toBeTruthy();
   });
 
-  it('shows Synced and a stable dot when signed in with no upload pending', () => {
+  it('shows Sync on and a stable dot when signed in with no upload pending', () => {
     const { getByText, getByTestId } = render(
       <SyncHeaderStatus phase="signed_in" uploadPending={false} onPress={jest.fn()} />
     );
 
-    expect(getByText('Synced')).toBeTruthy();
+    expect(getByText('Sync on')).toBeTruthy();
     expect(getByTestId('sync-header-dot')).toBeTruthy();
   });
 
