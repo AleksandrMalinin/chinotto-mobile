@@ -403,23 +403,26 @@ export function EnableSyncModal({
                 onPress={() => void handleCopyDesktopLink()}
                 style={({ pressed }) => [styles.desktopLinkWrap, { opacity: pressed ? 0.72 : 1 }]}
               >
-                <Text
-                  style={[
-                    styles.desktopLinkText,
-                    { color: fg, fontFamily: fonts.regular, textDecorationColor: fg },
-                  ]}
-                >
-                  Continue on desktop.
+                <Text style={[styles.desktopLinkRow, { color: fg, fontFamily: fonts.regular }]}>
+                  <Text
+                    style={[
+                      styles.desktopLinkUnderline,
+                      { color: fg, textDecorationColor: fg, fontFamily: fonts.regular },
+                    ]}
+                  >
+                    Continue on desktop.
+                  </Text>
+                  {desktopLinkCopied ? (
+                    <Text
+                      style={[styles.copiedInline, { color: muted, fontFamily: fonts.regular }]}
+                      accessibilityLiveRegion="polite"
+                    >
+                      {' '}
+                      Copied
+                    </Text>
+                  ) : null}
                 </Text>
               </Pressable>
-              {desktopLinkCopied ? (
-                <Text
-                  style={[styles.copiedHint, { color: muted, fontFamily: fonts.regular }]}
-                  accessibilityLiveRegion="polite"
-                >
-                  Copied
-                </Text>
-              ) : null}
             </>
           ) : null}
 
@@ -442,8 +445,8 @@ export function EnableSyncModal({
                 You're signed in with Apple. New thoughts sync in the background.
               </Text>
               <Text style={[styles.note, { color: muted, fontFamily: fonts.regular }]}>
-                Older thoughts from other devices load in the background; the stream shows recent items
-                first.
+                If you also use Chinotto on another device, older thoughts from there load in the background.
+                The stream shows recent items first.
               </Text>
               {syncHealthNote != null && syncHealthNote !== '' ? (
                 <Text
@@ -790,15 +793,18 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     paddingVertical: 4,
   },
-  desktopLinkText: {
+  /** Single line with optional inline “Copied” avoids layout jump from a second row. */
+  desktopLinkRow: {
     fontSize: 16,
     lineHeight: 22,
+  },
+  desktopLinkUnderline: {
     textDecorationLine: 'underline',
   },
-  copiedHint: {
+  copiedInline: {
     fontSize: 13,
-    lineHeight: 18,
-    marginTop: spacing.xs,
+    lineHeight: 22,
+    textDecorationLine: 'none',
   },
   paywallTitle: {
     fontSize: 21,

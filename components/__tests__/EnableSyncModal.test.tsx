@@ -78,9 +78,12 @@ import { enableAppleSyncWithFirebase } from '../../auth/enableAppleSync';
 import { getCachedHasSyncEntitlement } from '../../monetization/subscriptionState';
 import { openSyncPurchaseFlow } from '../../monetization/syncPurchaseFlow';
 import { loadCurrentChinottoOffering } from '../../src/services/purchases/offerings';
+import { mirrorChinottoSyncAccessToFirestore } from '../../sync/firestoreSyncAccessMirror';
 import { processSyncQueue } from '../../sync/syncEngine';
 import { flushSyncTombstoneOutbox } from '../../sync/tombstoneFlush';
 import { CHINOTTO_DESKTOP_WEB_URL, EnableSyncModal } from '../EnableSyncModal';
+
+const mockMirrorChinottoSyncAccess = jest.mocked(mirrorChinottoSyncAccessToFirestore);
 
 /** Let paywall prefetch `useEffect` finish (avoids act() warnings on setState after `loadCurrentChinottoOffering`). */
 async function flushPaywallPrefetch() {
@@ -109,6 +112,7 @@ describe('EnableSyncModal', () => {
     });
     jest.mocked(processSyncQueue).mockClear();
     jest.mocked(flushSyncTombstoneOutbox).mockClear();
+    mockMirrorChinottoSyncAccess.mockClear();
   });
 
   afterEach(() => {
@@ -124,10 +128,10 @@ describe('EnableSyncModal', () => {
     subscriptionHydrated: true,
   } as const;
 
-  it('calls signOut and closes when Stop syncing is pressed while signed in', async () => {
+  it('mirrors inactive to Firestore then calls signOut and closes when Stop syncing is pressed while signed in', async () => {
     const onClose = jest.fn();
 
-    const { getByLabelText, getByText } = render(
+    const { getByLabelText } = render(
       <EnableSyncModal
         visible
         onClose={onClose}
@@ -140,8 +144,14 @@ describe('EnableSyncModal', () => {
     fireEvent.press(getByLabelText('Stop syncing on this device'));
 
     await waitFor(() => {
+      expect(mockMirrorChinottoSyncAccess).toHaveBeenCalledWith({ forceInactive: true });
+    });
+    await waitFor(() => {
       expect(mockSignOut).toHaveBeenCalledWith({ mockAuth: true });
     });
+    expect(mockMirrorChinottoSyncAccess.mock.invocationCallOrder[0]).toBeLessThan(
+      mockSignOut.mock.invocationCallOrder[0]!
+    );
     await waitFor(() => {
       expect(onClose).toHaveBeenCalled();
     });
@@ -318,36 +328,6 @@ describe('EnableSyncModal', () => {
     expect(getByText('Local by default. Sync is optional.')).toBeTruthy();
     expect(getByLabelText('Enable sync with selected plan')).toBeTruthy();
     expect(getByLabelText('Not now')).toBeTruthy();
-  });
-
-  // TEMP_RC_OFFERINGS_DEBUG_UI follows __DEV__ (true under Jest).
-  it('shows RevenueCat offerings debug panel on paywall in dev', async () => {
-    paywallGate.enabled = true;
-    mockGetEntitlement.mockReturnValue(false);
-
-    const { getByTestId, getByText } = render(
-      <EnableSyncModal
-        visible
-        onClose={jest.fn()}
-        onEnabled={jest.fn()}
-        authPhase="signed_out"
-        {...baseProps}
-      />
-    );
-
-    await flushPaywallPrefetch();
-
-    await waitFor(() => {
-      expect(getByTestId('temp-rc-offerings-debug')).toBeTruthy();
-    });
-
-    await waitFor(() => {
-      expect(getByText(/\[TEMP RC DEBUG\]/)).toBeTruthy();
-      expect(getByText(/current offering: NONE/)).toBeTruthy();
-      expect(getByText(/— customerInfo —/)).toBeTruthy();
-      expect(getByText(/build: dev/)).toBeTruthy();
-      expect(getByText(/embedded iOS SDK key:/)).toBeTruthy();
-    });
   });
 
   it('runs openSyncPurchaseFlow then reveals Apple when Continue is pressed on paywall', async () => {
