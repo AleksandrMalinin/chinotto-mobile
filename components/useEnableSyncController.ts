@@ -228,6 +228,7 @@ export function useEnableSyncController(params: {
     setErrorMessage(null);
     setBusy(true);
     try {
+      await mirrorChinottoSyncAccessToFirestore({ forceInactive: true });
       await signOut(getOrInitAuth());
       onClose();
     } catch (err: unknown) {
