@@ -57,6 +57,19 @@ describe('showDevMenu', () => {
     alertSpy.mockRestore();
   });
 
+  it('includes Reset first-launch empty capture when onResetFirstLaunchEmptyCaptureReveal is set', () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+    showDevMenu({
+      onResetFirstLaunchEmptyCaptureReveal: jest.fn(),
+    });
+
+    const buttons = alertSpy.mock.calls[0][2] as { text: string }[];
+    expect(buttons.some((b) => b.text.includes('Reset first-launch empty capture'))).toBe(true);
+
+    alertSpy.mockRestore();
+  });
+
   it('omits preview action when callback not provided', () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 

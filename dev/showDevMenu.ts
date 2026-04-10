@@ -11,6 +11,8 @@ export type DevMenuOptions = {
   onResetPaywallForPurchaseTesting?: () => void | Promise<void>;
   /** iOS: re-open sync modal on the post–“Sync enabled” / desktop link step (QA, repeatable). */
   onPreviewSyncEnabledSheet?: () => void;
+  /** Clear first-launch empty capture reveal flag so delayed keyboard + art show again (dev builds). */
+  onResetFirstLaunchEmptyCaptureReveal?: () => void | Promise<void>;
 };
 
 /**
@@ -44,6 +46,12 @@ export function showDevMenu(options: DevMenuOptions): void {
     buttons.push({
       text: 'Preview “Sync enabled” sheet',
       onPress: options.onPreviewSyncEnabledSheet,
+    });
+  }
+  if (options.onResetFirstLaunchEmptyCaptureReveal != null) {
+    buttons.push({
+      text: 'Reset first-launch empty capture',
+      onPress: () => void options.onResetFirstLaunchEmptyCaptureReveal?.(),
     });
   }
   buttons.push({ text: 'Cancel', style: 'cancel' });
