@@ -8,6 +8,7 @@ import * as syncHeaderShimmerPrefs from '../../storage/syncHeaderShimmerPrefs';
 import * as firebaseAuthModule from '../../sync/firebaseAuth';
 import * as firebaseConfig from '../../sync/firebaseConfig';
 import * as syncQueueModule from '../../sync/syncQueue';
+import * as firestoreMirror from '../../sync/firestoreSyncAccessMirror';
 import * as devMenuModule from '../../dev/showDevMenu';
 
 const mockOnAuthStateChanged = jest.fn();
@@ -53,8 +54,17 @@ jest.mock('../../storage/settingsPrefs', () => ({
   setHapticsEnabled: jest.fn(() => Promise.resolve()),
 }));
 
+jest.mock('../../storage/firstLaunchCapturePrefs', () => ({
+  getFirstLaunchEmptyCaptureRevealDone: jest.fn(() => Promise.resolve(true)),
+  getFirstLaunchComposerHasFocused: jest.fn(() => Promise.resolve(true)),
+  setFirstLaunchEmptyCaptureRevealDone: jest.fn(() => Promise.resolve()),
+  setFirstLaunchComposerHasFocused: jest.fn(() => Promise.resolve()),
+  clearFirstLaunchEmptyCaptureRevealDone: jest.fn(() => Promise.resolve()),
+}));
+
 import { CaptureScreen } from '../CaptureScreen';
 import * as settingsPrefs from '../../storage/settingsPrefs';
+import * as firstLaunchCapturePrefs from '../../storage/firstLaunchCapturePrefs';
 
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
   __esModule: true,
@@ -115,6 +125,27 @@ describe('CaptureScreen', () => {
     jest.mocked(syncHeaderShimmerPrefs.hasFirstSavedThought).mockResolvedValue(true);
     jest.mocked(settingsPrefs.getHapticsEnabled).mockImplementation(() => Promise.resolve(true));
     jest.mocked(entryRepository.getRecentEntries).mockImplementation(() => Promise.resolve([]));
+    jest.mocked(firstLaunchCapturePrefs.getFirstLaunchEmptyCaptureRevealDone).mockImplementation(() =>
+      Promise.resolve(true)
+    );
+    jest.mocked(firstLaunchCapturePrefs.getFirstLaunchComposerHasFocused).mockImplementation(() =>
+      Promise.resolve(true)
+    );
+  });
+
+  it('disables composer autoFocus on first launch until empty-stream reveal flag is set', async () => {
+    jest.mocked(firstLaunchCapturePrefs.getFirstLaunchEmptyCaptureRevealDone).mockImplementationOnce(() =>
+      Promise.resolve(false)
+    );
+
+    const { findByTestId } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <CaptureScreen />
+      </SafeAreaProvider>
+    );
+
+    const input = await findByTestId('capture-input');
+    expect(input.props.autoFocus).toBe(false);
   });
 
   it('disables composer autoFocus while allowCaptureFocus is false', async () => {
@@ -411,6 +442,48 @@ describe('CaptureScreen', () => {
     }
   });
 
+  it('does not let a late mount prefs read overwrite dev reset of first-launch reveal', async () => {
+    const RN = require('react-native');
+    const prevOs = RN.Platform.OS;
+    RN.Platform.OS = 'ios';
+    jest.mocked(devMenuModule.showDevMenu).mockClear();
+
+    let resolveGet: ((value: boolean) => void) | undefined;
+    jest.mocked(firstLaunchCapturePrefs.getFirstLaunchEmptyCaptureRevealDone).mockImplementation(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveGet = resolve;
+        })
+    );
+
+    try {
+      const { findByTestId, getByTestId } = render(
+        <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+          <CaptureScreen />
+        </SafeAreaProvider>
+      );
+
+      await findByTestId('capture-input');
+      fireEvent.press(getByTestId('header-logo'));
+      fireEvent.press(getByTestId('settings-open-dev-menu'));
+
+      const opts = jest.mocked(devMenuModule.showDevMenu).mock.calls[0][0];
+      await act(async () => {
+        opts.onResetFirstLaunchEmptyCaptureReveal?.();
+      });
+
+      await act(async () => {
+        resolveGet?.(true);
+      });
+
+      await waitFor(() => {
+        expect(getByTestId('capture-input').props.autoFocus).toBe(false);
+      });
+    } finally {
+      RN.Platform.OS = prevOs;
+    }
+  });
+
   it('opens manifesto from Settings and closes back to Settings', async () => {
     const { findByTestId, getByTestId, queryByTestId } = render(
       <SafeAreaProvider initialMetrics={safeAreaMetrics}>
@@ -588,7 +661,53 @@ describe('CaptureScreen sync auth restore', () => {
     expect(getByText('Checking sync')).toBeTruthy();
   });
 
-  it('shows Synced in header when onAuthStateChanged fires with a non-anonymous user', async () => {
+  it('mirrors chinottoSyncAccess to Firestore when subscription hydrates after user is signed in', async () => {
+    const RN = require('react-native');
+    const prevOs = RN.Platform.OS;
+    RN.Platform.OS = 'ios';
+    const mirror = jest.mocked(firestoreMirror.mirrorChinottoSyncAccessToFirestore);
+    mirror.mockClear();
+
+    let listener: ((user: unknown) => void) | undefined;
+    mockOnAuthStateChanged.mockImplementation((_auth, cb) => {
+      listener = cb;
+      return jest.fn();
+    });
+
+    try {
+      const { findByTestId, rerender } = render(
+        <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+          <CaptureScreen subscriptionHydrated={false} />
+        </SafeAreaProvider>
+      );
+
+      await findByTestId('capture-input');
+      expect(mirror).not.toHaveBeenCalled();
+
+      await act(async () => {
+        listener?.({
+          uid: 'firebase-uid-mirror',
+          isAnonymous: false,
+          providerData: [{ providerId: 'apple.com' }],
+        });
+      });
+      mirror.mockClear();
+
+      await act(async () => {
+        rerender(
+          <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+            <CaptureScreen subscriptionHydrated={true} />
+          </SafeAreaProvider>
+        );
+      });
+
+      expect(mirror).toHaveBeenCalledTimes(1);
+    } finally {
+      RN.Platform.OS = prevOs;
+    }
+  });
+
+  it('shows Sync on in header when onAuthStateChanged fires with a non-anonymous user', async () => {
     let listener: ((user: unknown) => void) | undefined;
     mockOnAuthStateChanged.mockImplementation((_auth, cb) => {
       listener = cb;
@@ -613,7 +732,7 @@ describe('CaptureScreen sync auth restore', () => {
     });
 
     expect(getByTestId('sync-header-cta')).toBeTruthy();
-    expect(getByText('Synced')).toBeTruthy();
+    expect(getByText('Sync on')).toBeTruthy();
   });
 
   it('shows Syncing… when signed in and upload queue has pending rows', async () => {

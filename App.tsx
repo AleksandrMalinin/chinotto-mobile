@@ -14,7 +14,12 @@ import { loadSubscriptionState } from './monetization/subscriptionState';
 import { bootstrapRevenueCat } from './src/services/purchases/initRevenueCat';
 import { isRevenueCatQuietMode } from './src/services/purchases/revenueCatQuiet';
 import { composeIncomingShareCaptureText } from './share/extractShareEntryTexts';
+import { shouldRunMobileFirestoreIngest } from './sync/ingestGate';
 import { startMobileFirestoreIngest } from './sync/firestoreIngest';
+import {
+  createDebouncedRemoteIngestNotifier,
+  REMOTE_INGEST_AFTER_SYNC_MODAL_MS,
+} from './sync/remoteIngestStreamNotify';
 import { resolvePushEntryForSync } from './sync/pushEntryForSync';
 import { startBackgroundSync } from './sync/syncEngine';
 import { useScreenshotSceneLink } from './linking/useScreenshotSceneLink';
@@ -29,6 +34,7 @@ import {
 import { saveEntry } from './storage/entryRepository';
 import { useAdaptiveChromeBlend } from './hooks/useAdaptiveChromeBlend';
 import { isFirebaseSyncConfigured } from './sync/firebaseConfig';
+import { mirrorChinottoSyncAccessToFirestore } from './sync/firestoreSyncAccessMirror';
 import { useCaptureWidgetDeepLinkFocus } from './widgets/useCaptureWidgetDeepLinkFocus';
 import { useExperimentalIosHomeWidgetRegistration } from './widgets/useExperimentalIosHomeWidget';
 import { AdaptiveChromeContext, useAppTheme } from './theme';
@@ -160,6 +166,16 @@ export default function App() {
   const [streamHighlightEntryId, setStreamHighlightEntryId] = useState<string | null>(null);
   const streamHighlightClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [syncEntryRequestNonce, setSyncEntryRequestNonce] = useState(0);
+  const [syncModalVisible, setSyncModalVisible] = useState(false);
+  const syncModalWasOpenRef = useRef(false);
+  const remoteIngestNotifyRef = useRef<ReturnType<typeof createDebouncedRemoteIngestNotifier> | null>(
+    null
+  );
+  if (remoteIngestNotifyRef.current == null) {
+    remoteIngestNotifyRef.current = createDebouncedRemoteIngestNotifier(() => {
+      setRemoteIngestVersion((v) => v + 1);
+    });
+  }
   const {
     resolvedSharedPayloads,
     sharedPayloads,
@@ -193,6 +209,10 @@ export default function App() {
     void (async () => {
       await bootstrapRevenueCat();
       await loadSubscriptionState();
+      /** After RC + AsyncStorage hydration, `hasSyncAccess()` is accurate for mirror (paywall on). */
+      if (Platform.OS === 'ios' && isFirebaseSyncConfigured()) {
+        void mirrorChinottoSyncAccessToFirestore();
+      }
       setSubscriptionLoaded(true);
     })();
   }, []);
@@ -308,14 +328,43 @@ export default function App() {
   }, [dbReady, subscriptionLoaded]);
 
   useEffect(() => {
-    if (!dbReady || !subscriptionLoaded) {
-      return;
+    if (!shouldRunMobileFirestoreIngest({ dbReady, subscriptionLoaded, syncModalVisible })) {
+      syncModalWasOpenRef.current = syncModalVisible;
+      return undefined;
     }
-    const stopIngest = startMobileFirestoreIngest(() => {
-      setRemoteIngestVersion((v) => v + 1);
-    });
-    return stopIngest;
-  }, [dbReady, subscriptionLoaded, firestoreIngestEpoch]);
+
+    const resumeAfterSyncModal = syncModalWasOpenRef.current && !syncModalVisible;
+    syncModalWasOpenRef.current = syncModalVisible;
+
+    let cancelled = false;
+    let stopIngest: (() => void) | undefined;
+    let startTimer: ReturnType<typeof setTimeout> | undefined;
+    const notify = remoteIngestNotifyRef.current!;
+
+    const runStart = () => {
+      if (cancelled) {
+        return;
+      }
+      stopIngest = startMobileFirestoreIngest(() => {
+        notify.notify();
+      });
+    };
+
+    if (resumeAfterSyncModal) {
+      startTimer = setTimeout(runStart, REMOTE_INGEST_AFTER_SYNC_MODAL_MS);
+    } else {
+      runStart();
+    }
+
+    return () => {
+      cancelled = true;
+      if (startTimer !== undefined) {
+        clearTimeout(startTimer);
+      }
+      notify.flush();
+      stopIngest?.();
+    };
+  }, [dbReady, subscriptionLoaded, firestoreIngestEpoch, syncModalVisible]);
 
   useEffect(() => {
     if (!fontsLoaded || !dbReady) {
@@ -383,6 +432,8 @@ export default function App() {
               subscriptionHydrated={subscriptionLoaded}
               onSubscriptionUnlocked={() => setFirestoreIngestEpoch((n) => n + 1)}
               screenshot={isScreenshotMode() ? { scene: screenshotScene } : undefined}
+              syncModalVisible={syncModalVisible}
+              onSyncModalVisibleChange={setSyncModalVisible}
             />
             {phase === 'brand' ? <BrandSplash onFinished={onBrandFinished} /> : null}
             <ShareSavedAck visible={shareSavedAck} />

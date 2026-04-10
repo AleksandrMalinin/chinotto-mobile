@@ -48,6 +48,13 @@ import type { Entry } from '../types/entry';
 import { resetPaywallForPurchaseTesting } from '../dev/resetPaywallForPurchaseTesting';
 import { showDevMenu } from '../dev/showDevMenu';
 import {
+  clearFirstLaunchEmptyCaptureRevealDone,
+  getFirstLaunchComposerHasFocused,
+  getFirstLaunchEmptyCaptureRevealDone,
+  setFirstLaunchComposerHasFocused,
+  setFirstLaunchEmptyCaptureRevealDone,
+} from '../storage/firstLaunchCapturePrefs';
+import {
   deleteEntry,
   getEntriesOlderThan,
   getRecentEntries,
@@ -133,6 +140,12 @@ export type CaptureScreenProps = {
    * App sets this to true once the splash overlay is removed.
    */
   allowCaptureFocus?: boolean;
+  /**
+   * When set with {@link onSyncModalVisibleChange}, the Enable sync sheet is controlled by the parent
+   * so Firestore ingest can pause while the sheet is open.
+   */
+  syncModalVisible?: boolean;
+  onSyncModalVisibleChange?: (visible: boolean) => void;
 };
 
 export function CaptureScreen({
@@ -146,11 +159,25 @@ export function CaptureScreen({
   syncEntryRequestNonce = 0,
   screenshot,
   allowCaptureFocus = true,
+  syncModalVisible: syncModalVisibleProp,
+  onSyncModalVisibleChange,
 }: CaptureScreenProps = {}) {
   const [text, setText] = useState('');
   const [entries, setEntries] = useState<Entry[]>([]);
   const [hasMore, setHasMore] = useState(true);
-  const [syncModalVisible, setSyncModalVisible] = useState(false);
+  const [syncModalVisibleInternal, setSyncModalVisibleInternal] = useState(false);
+  const syncModalControlled = onSyncModalVisibleChange != null;
+  const syncModalVisible = syncModalControlled ? Boolean(syncModalVisibleProp) : syncModalVisibleInternal;
+  const setSyncModalVisible = useCallback(
+    (next: boolean) => {
+      if (syncModalControlled) {
+        onSyncModalVisibleChange!(next);
+      } else {
+        setSyncModalVisibleInternal(next);
+      }
+    },
+    [syncModalControlled, onSyncModalVisibleChange]
+  );
   const [readEntry, setReadEntry] = useState<Entry | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Entry[]>([]);
@@ -183,6 +210,17 @@ export function CaptureScreen({
   const searchActiveRef = useRef(false);
   /** Composer snapshot when mic starts; partials/final merge with this so live text does not stack. */
   const voiceCaptureBaseRef = useRef('');
+  /** `null` until AsyncStorage resolves; drives one-time empty-stream reveal + keyboard policy. */
+  const [firstLaunchRevealDone, setFirstLaunchRevealDone] = useState<boolean | null>(null);
+  /** `null` until prefs load; when false, empty stream never auto-opens keyboard until user taps composer. */
+  const [composerHasFocusedOnce, setComposerHasFocusedOnce] = useState<boolean | null>(null);
+  /** __DEV__: incremented when dev menu clears first-launch flag so focus effect re-runs without app restart. */
+  const [firstLaunchRevealDevResetNonce, setFirstLaunchRevealDevResetNonce] = useState(0);
+  /** When true, splash handoff has not yet applied composer focus for this `allowCaptureFocus` session. */
+  const splashFocusPendingRef = useRef(true);
+  const firstLaunchFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Bumps on dev reset so a late resolve from the mount-time prefs read cannot overwrite cleared state. */
+  const firstLaunchPrefsLoadGenerationRef = useRef(0);
   const { width: windowWidth } = useWindowDimensions();
   const t = useAppTheme();
   const gutter = screenContentGutter(windowWidth);
@@ -382,9 +420,32 @@ export function CaptureScreen({
   }, [screenshotActive, screenshotScene]);
 
   useEffect(() => {
+    const gen = firstLaunchPrefsLoadGenerationRef.current;
+    void Promise.all([
+      getFirstLaunchEmptyCaptureRevealDone(),
+      getFirstLaunchComposerHasFocused(),
+    ]).then(([revealDone, composerFocused]) => {
+      if (firstLaunchPrefsLoadGenerationRef.current !== gen) {
+        return;
+      }
+      setFirstLaunchRevealDone(revealDone);
+      setComposerHasFocusedOnce((prev) => (prev === true ? true : composerFocused));
+    });
+  }, []);
+
+  useEffect(() => {
     if (!captureFocusNonce || screenshotActive) {
       return;
     }
+    if (firstLaunchFocusTimerRef.current) {
+      clearTimeout(firstLaunchFocusTimerRef.current);
+      firstLaunchFocusTimerRef.current = null;
+    }
+    splashFocusPendingRef.current = false;
+    void setFirstLaunchEmptyCaptureRevealDone();
+    void setFirstLaunchComposerHasFocused();
+    setFirstLaunchRevealDone(true);
+    setComposerHasFocusedOnce(true);
     const id = requestAnimationFrame(() => {
       inputRef.current?.focus();
     });
@@ -393,13 +454,58 @@ export function CaptureScreen({
 
   useEffect(() => {
     if (!allowCaptureFocus || screenshotActive) {
+      if (firstLaunchFocusTimerRef.current) {
+        clearTimeout(firstLaunchFocusTimerRef.current);
+        firstLaunchFocusTimerRef.current = null;
+      }
+      splashFocusPendingRef.current = true;
       return;
     }
-    const id = requestAnimationFrame(() => {
-      inputRef.current?.focus();
-    });
-    return () => cancelAnimationFrame(id);
-  }, [allowCaptureFocus, screenshotActive]);
+    if (firstLaunchRevealDone === null) {
+      return;
+    }
+    if (!splashFocusPendingRef.current) {
+      return;
+    }
+
+    const finishSplashFocus = () => {
+      splashFocusPendingRef.current = false;
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+      });
+    };
+
+    const shouldDeferEmptyKeyboard =
+      entries.length === 0 &&
+      (firstLaunchRevealDone !== true || !composerHasFocusedOnce);
+
+    if (firstLaunchRevealDone === true) {
+      if (shouldDeferEmptyKeyboard) {
+        splashFocusPendingRef.current = false;
+        return;
+      }
+      finishSplashFocus();
+      return;
+    }
+
+    if (entries.length > 0) {
+      void setFirstLaunchEmptyCaptureRevealDone();
+      setFirstLaunchRevealDone(true);
+      finishSplashFocus();
+      return;
+    }
+
+    void setFirstLaunchEmptyCaptureRevealDone();
+    setFirstLaunchRevealDone(true);
+    splashFocusPendingRef.current = false;
+  }, [
+    allowCaptureFocus,
+    screenshotActive,
+    firstLaunchRevealDone,
+    composerHasFocusedOnce,
+    entries.length,
+    firstLaunchRevealDevResetNonce,
+  ]);
 
   useEffect(
     () => () => {
@@ -454,6 +560,23 @@ export function CaptureScreen({
       void mirrorChinottoSyncAccessToFirestore();
     });
   }, []);
+
+  /**
+   * After {@link loadSubscriptionState} (RevenueCat + AsyncStorage), `hasSyncAccess()` can flip from
+   * false → true while Firebase auth is unchanged. The auth listener does not re-fire, but desktop
+   * reads `users/{uid}.chinottoSyncAccess` — re-mirror so we do not leave `active: false` from an
+   * early boot race (auth callback before subscription hydration when paywall is on).
+   * Require `signed_in` so we do not rely on ordering vs {@link App} post-hydration mirror alone.
+   */
+  useEffect(() => {
+    if (!isFirebaseSyncConfigured() || Platform.OS !== 'ios') {
+      return;
+    }
+    if (!subscriptionHydrated || authRestorePhase !== 'signed_in') {
+      return;
+    }
+    void mirrorChinottoSyncAccessToFirestore();
+  }, [subscriptionHydrated, authRestorePhase]);
 
   const refreshUploadPending = useCallback(async () => {
     if (!isFirebaseSyncConfigured() || Platform.OS !== 'ios' || authRestorePhase !== 'signed_in') {
@@ -604,6 +727,21 @@ export function CaptureScreen({
         setDevPostSyncPreviewNonce((n) => n + 1);
         setSyncModalVisible(true);
       },
+      onResetFirstLaunchEmptyCaptureReveal: () => {
+        Keyboard.dismiss();
+        if (firstLaunchFocusTimerRef.current) {
+          clearTimeout(firstLaunchFocusTimerRef.current);
+          firstLaunchFocusTimerRef.current = null;
+        }
+        firstLaunchPrefsLoadGenerationRef.current += 1;
+        splashFocusPendingRef.current = true;
+        void (async () => {
+          await clearFirstLaunchEmptyCaptureRevealDone();
+          setFirstLaunchRevealDone(false);
+          setComposerHasFocusedOnce(false);
+          setFirstLaunchRevealDevResetNonce((n) => n + 1);
+        })();
+      },
     });
   }, []);
 
@@ -704,6 +842,21 @@ export function CaptureScreen({
   /** Empty-stream art fades while the user composes so capture stays visually primary. */
   const streamEmptyAmbientSuppressed =
     text.trim().length > 0 || voicePhase === 'listening';
+
+  /**
+   * Empty stream: no auto keyboard until reveal prefs allow it and the user has focused the composer once
+   * (first install stays tap-to-type; later opens can be capture-first).
+   */
+  const deferKeyboardForFirstLaunchReveal =
+    entries.length === 0 && (firstLaunchRevealDone !== true || !composerHasFocusedOnce);
+
+  const onCaptureComposerFocus = useCallback(() => {
+    if (composerHasFocusedOnce) {
+      return;
+    }
+    void setFirstLaunchComposerHasFocused();
+    setComposerHasFocusedOnce(true);
+  }, [composerHasFocusedOnce]);
 
   const handleSubmit = useCallback(() => {
     if (screenshotActive) {
@@ -845,12 +998,15 @@ export function CaptureScreen({
                       ref={inputRef}
                       value={text}
                       onChangeText={setText}
+                      onFocus={onCaptureComposerFocus}
                       onSubmit={handleSubmit}
                       minHeight={composerMinHeight}
                       maxHeight={composerMaxHeight}
                       placeholder="Jot a thought…"
                       placeholderTextColor={capturePlaceholderColor}
-                      autoFocus={allowCaptureFocus && !screenshotActive}
+                      autoFocus={
+                        allowCaptureFocus && !screenshotActive && !deferKeyboardForFirstLaunchReveal
+                      }
                     />
                   </View>
                   {showVoiceCapture ? (
@@ -1013,7 +1169,7 @@ export function CaptureScreen({
                   ? 'Sync paused'
                   : uploadPending
                     ? 'Syncing…'
-                    : 'Synced'
+                    : 'Sync on'
                 : 'Off'
           }
           hapticsEnabled={hapticsEnabled}
