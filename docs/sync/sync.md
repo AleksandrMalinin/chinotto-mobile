@@ -113,6 +113,8 @@ service cloud.firestore {
 }
 ```
 
+**Troubleshooting — `permission-denied` (desktop):** If the desktop app logs `permission-denied` when polling `sync_desktop_sessions` or `users/{uid}`, the rules deployed in Firebase Console do not match the block above (e.g. missing `sync_desktop_sessions` read, or no rule for the parent `users/{userId}` document). **Publish** the full rules from this section; partial rules that only cover `users/{userId}/entries/...` without the parent `match /users/{userId}` block will block reads of `chinottoSyncAccess` on the user document.
+
 **Indexes:**
 
 - `orderBy('createdAt')` on `entries` (ingest listener) — often auto-created; add a composite if the console requests it (e.g. mixed `createdAt` types).
@@ -319,6 +321,7 @@ Record **implementation** and cross-repo **alignment** changes for **mobile** he
 
 | Date | Change |
 |------|--------|
+| 2026-04-10 | **Mobile:** `startMobileFirestoreIngest` does not run while the Enable sync sheet is open; remote thoughts apply after the sheet closes (capture visible again). **Desktop (`chinotto-app`):** `startDesktopFirestoreIngest` pauses while `SyncModal` is open. **Smoothing:** ~200ms delay after closing the sync sheet before ingest starts; ingest-driven list refreshes are debounced (~120ms) so backfill does not stutter the stream. |
 | 2026-04-02 | Cross-device **unlock** mirror + desktop `SyncModal` gating (§3). Doc: [`cross-device-sync-unlock-flow.md`](./cross-device-sync-unlock-flow.md). Mirror clears stashed `ds` after a successful `sync_desktop_sessions` write. |
 | 2026-03-29 | Docs: unified release checklist with desktop; removed `desktop-alignment.md` and `desktop-sync-implementation.md`; desktop ingest/ops in Chinotto [`docs/sync.md`](https://github.com/AleksandrMalinin/chinotto/blob/main/docs/sync.md) + `sync-deletion-v2.md`; this file remains wire contract. |
 

@@ -14,7 +14,7 @@
 |--------|---------|----------------|
 | **Sync unlocked** (product) | User has **entitlement** to use cloud sync: RevenueCat **Chinotto Pro** (or paywall disabled in dev/shipped config). | Mobile: StoreKit + RevenueCat + local cache. **Durable cross-device flag:** `users/{uid}.chinottoSyncAccess.active === true` in Firestore (written by mobile). |
 | **Desktop connected** | This Mac has completed **Firebase Sign in with Apple** (non-anonymous `User`). | Desktop: Firebase Auth session only. **Does not** imply paid sync or “Sync is on” UI by itself. |
-| **Sync is on** (desktop UI) | Desktop shows success in **Enable sync** modal: user is **connected** **and** Firestore confirms **sync unlocked** for that `uid`. | Desktop: `stable && chinottoSyncAccess.active === true` (see §D state 4). |
+| **Sync is on** (desktop UI) | Desktop shows success in **Enable sync** modal: user is **connected** **and** `users/{uid}.chinottoSyncAccess.active === true`. | Desktop: `stable && chinottoSyncAccess.active === true` (read from Firestore after Sign in with Apple). |
 
 **Important ordering:**
 
