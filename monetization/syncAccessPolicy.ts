@@ -19,3 +19,20 @@ export function hasSyncAccess(): boolean {
 export function isSyncAccessBlocked(): boolean {
   return isPaywallEnabled() && !hasSyncAccess();
 }
+
+/**
+ * **`__DEV__` / diagnostics:** why {@link hasSyncAccess} may be false (mirror writes `active: false`).
+ */
+export function getSyncAccessPolicyDebug(): {
+  paywallEnabled: boolean;
+  subscriptionHydrated: boolean;
+  hasEntitlement: boolean;
+  hasSyncAccess: boolean;
+} {
+  return {
+    paywallEnabled: isPaywallEnabled(),
+    subscriptionHydrated: isSubscriptionHydrated(),
+    hasEntitlement: getCachedHasSyncEntitlement(),
+    hasSyncAccess: hasSyncAccess(),
+  };
+}

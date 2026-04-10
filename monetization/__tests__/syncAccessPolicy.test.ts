@@ -7,7 +7,7 @@ import {
   resetSubscriptionStateForTests,
   stubCompleteChinottoPlusPurchase,
 } from '../subscriptionState';
-import { hasSyncAccess, isSyncAccessBlocked } from '../syncAccessPolicy';
+import { getSyncAccessPolicyDebug, hasSyncAccess, isSyncAccessBlocked } from '../syncAccessPolicy';
 
 jest.mock('../paywallConfig', () => ({
   isPaywallEnabled: jest.fn(() => false),
@@ -29,6 +29,12 @@ describe('syncAccessPolicy', () => {
   it('treats everyone as having sync access when paywall is off', () => {
     expect(hasSyncAccess()).toBe(true);
     expect(isSyncAccessBlocked()).toBe(false);
+    expect(getSyncAccessPolicyDebug()).toEqual({
+      paywallEnabled: false,
+      subscriptionHydrated: true,
+      hasEntitlement: false,
+      hasSyncAccess: true,
+    });
   });
 
   it('blocks sync when paywall is on and user is not entitled after hydration', async () => {
