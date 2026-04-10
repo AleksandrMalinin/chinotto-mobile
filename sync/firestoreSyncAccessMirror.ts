@@ -1,6 +1,6 @@
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 
-import { hasSyncAccess } from '../monetization/syncAccessPolicy';
+import { getSyncAccessPolicyDebug, hasSyncAccess } from '../monetization/syncAccessPolicy';
 import { isValidDesktopSyncSessionId } from '../linking/syncDeepLink';
 import { clearDesktopSyncSessionId, peekDesktopSyncSessionId } from '../linking/desktopSyncSessionStash';
 
@@ -19,6 +19,11 @@ import { getOrInitFirestore } from './firebaseSync';
  */
 export async function mirrorChinottoSyncAccessToFirestore(options?: {
   desktopSessionId?: string | null;
+  /**
+   * Before Firebase **sign-out** (e.g. user taps **Stop syncing**): write `active: false` even if
+   * entitlement is still true, so desktop can show “not synced” without waiting for subscription loss.
+   */
+  forceInactive?: boolean;
 }): Promise<void> {
   if (!isFirebaseSyncConfigured()) {
     return;
@@ -28,7 +33,13 @@ export async function mirrorChinottoSyncAccessToFirestore(options?: {
   if (!user || user.isAnonymous) {
     return;
   }
-  const active = hasSyncAccess();
+  const active = options?.forceInactive === true ? false : hasSyncAccess();
+  if (__DEV__ && !active && !options?.forceInactive) {
+    console.warn('[chinotto sync] mirror: hasSyncAccess() is false — check paywall + subscription hydration + entitlement', {
+      ...getSyncAccessPolicyDebug(),
+      uid: user.uid,
+    });
+  }
   const db = getOrInitFirestore();
   const uid = user.uid;
 
