@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'react';
 
 import { track, type SyncModalSurface } from '../analytics/analytics';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -226,6 +226,10 @@ export function CaptureScreen({
   const [enableSyncLabelShimmer, setEnableSyncLabelShimmer] = useState(false);
   /** Bumps when engagement signals change so contextual sync highlight can re-evaluate. */
   const [syncHighlightTick, setSyncHighlightTick] = useState(0);
+  /** Scroll position + viewport height for stream viewport-driven row emphasis (RecentList). */
+  const [streamScrollY, setStreamScrollY] = useState(0);
+  const [streamViewportHeight, setStreamViewportHeight] = useState(0);
+  const streamScrollViewRef = useRef<ComponentRef<typeof ScrollView>>(null);
   /** __DEV__: incremented from dev menu to re-show “Sync enabled” / desktop link sheet. */
   const [devPostSyncPreviewNonce, setDevPostSyncPreviewNonce] = useState(0);
   const stuckPollsRef = useRef(0);
@@ -916,6 +920,8 @@ export function CaptureScreen({
 
   const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;
+    setStreamScrollY(contentOffset.y);
+    setStreamViewportHeight(layoutMeasurement.height);
 
     if (!deepScrollRecordedRef.current && contentOffset.y >= SYNC_HIGHLIGHT_STREAM_SCROLL_DEPTH_PX) {
       deepScrollRecordedRef.current = true;
@@ -1131,12 +1137,14 @@ export function CaptureScreen({
             </View>
           </View>
           <ScrollView
+            ref={streamScrollViewRef}
             style={styles.scrollFlex}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
             nestedScrollEnabled
             scrollEventThrottle={16}
             onScroll={handleScroll}
+            onLayout={(e) => setStreamViewportHeight(e.nativeEvent.layout.height)}
             contentContainerStyle={[
               styles.scrollContent,
               {
@@ -1282,6 +1290,12 @@ export function CaptureScreen({
               deferEmptyStreamMotion={!allowCaptureFocus}
               streamEmptyAmbient={searchTrimmed.length === 0 && entries.length === 0}
               streamEmptyAmbientSuppressed={streamEmptyAmbientSuppressed}
+              streamScrollY={streamScrollY}
+              streamViewportHeight={streamViewportHeight}
+              streamScrollViewRef={streamScrollViewRef}
+              streamViewportFocusEnabled={
+                searchTrimmed.length > 0 ? searchResults.length > 0 : entries.length > 0
+              }
               highlightEntryId={searchTrimmed.length > 0 ? null : streamHighlightEntryId}
               emptyHint={
                 searchTrimmed.length > 0

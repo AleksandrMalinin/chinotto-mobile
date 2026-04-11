@@ -150,8 +150,13 @@ describe('CaptureScreen', () => {
   });
 
   it('disables composer autoFocus on first launch until empty-stream reveal flag is set', async () => {
-    jest.mocked(firstLaunchCapturePrefs.getFirstLaunchEmptyCaptureRevealDone).mockImplementationOnce(() =>
-      Promise.resolve(false)
+    /** Defer resolve so prefs stay pending while `firstLaunchRevealDone` is null (defer keyboard). */
+    let resolveReveal!: (v: boolean) => void;
+    const revealPending = new Promise<boolean>((resolve) => {
+      resolveReveal = resolve;
+    });
+    jest.mocked(firstLaunchCapturePrefs.getFirstLaunchEmptyCaptureRevealDone).mockImplementation(() =>
+      revealPending
     );
 
     const { findByTestId } = render(
@@ -162,6 +167,9 @@ describe('CaptureScreen', () => {
 
     const input = await findByTestId('capture-input');
     expect(input.props.autoFocus).toBe(false);
+    await act(async () => {
+      resolveReveal(false);
+    });
   });
 
   it('disables composer autoFocus while allowCaptureFocus is false', async () => {

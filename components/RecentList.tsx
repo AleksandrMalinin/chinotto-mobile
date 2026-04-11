@@ -1,8 +1,18 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from 'react';
 import {
   AccessibilityInfo,
   Animated,
   Easing,
+  type LayoutChangeEvent,
   Platform,
   Pressable,
   StyleSheet,
@@ -24,6 +34,13 @@ import {
 } from '../theme';
 import { replaceHttpUrlsWithCompactDisplay } from '../utils/extractHttpUrlsFromText';
 import { formatEntryTime, groupEntriesByDate } from '../utils/groupEntriesByDate';
+import {
+  findActiveFlatIndex,
+  findActiveFlatIndexFromWindowMeasurements,
+  streamFocusBodyOpacityBelowActive,
+  streamFocusTimeOpacityBelowActive,
+  type StreamFocusWindowBox,
+} from '../utils/streamFocusTier';
 import { StreamFlowPanel } from './StreamFlowPanel';
 
 /**
@@ -58,9 +75,29 @@ export type RecentListProps = {
    * When true, hold line-draw and empty-hint entrance until visible (e.g. full-screen splash over capture).
    */
   deferEmptyStreamMotion?: boolean;
+  /** Scroll content offset Y — only used to pick which row is “active” (top visible); styling is index-based. */
+  streamScrollY?: number;
+  /** Measured scroll viewport height — do not substitute window height; used only for active-row detection. */
+  streamViewportHeight?: number;
+  /** When true, emphasis follows the active row (moving focus); opacity is distance-from-active, not screen Y. */
+  streamViewportFocusEnabled?: boolean;
+  /**
+   * When set, the active row is chosen with `measureInWindow` on this scroll view vs each row
+   * (true on-screen visibility). Falls back to scroll-space geometry when unset (e.g. tests).
+   */
+  streamScrollViewRef?: RefObject<View | null>;
 };
 
 const DELETE_ACTION_WIDTH = 76;
+
+function measureInWindowPromise(view: View | null): Promise<StreamFocusWindowBox | null> {
+  if (!view) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    view.measureInWindow((x, y, w, h) => {
+      resolve({ x, y, width: w, height: h });
+    });
+  });
+}
 
 /** Parent should clear `highlightEntryId` after this (full fade + small buffer). */
 export const STREAM_HIGHLIGHT_CLEAR_AFTER_MS = 0;
@@ -79,25 +116,66 @@ const EMPTY_STREAM_HEADLINE_FONT_SIZE = 19;
 const EMPTY_STREAM_HEADLINE_LINE_HEIGHT = 27;
 const EMPTY_STREAM_HEADLINE_LETTER_SPACING = -0.38;
 
+/** Cross-fade when viewport highlight moves (ms); 0 when reduce-motion. */
+const STREAM_FOCUS_OPACITY_DURATION_MS = 200;
+
 /** Pressed stream row — full-bleed tint, softer than a card fill. */
 function entryPressedBackground(isDark: boolean): string {
   return isDark ? 'rgba(128, 138, 188, 0.085)' : 'rgba(100, 110, 180, 0.072)';
+}
+
+function streamFocusBodyTargetOpacity(
+  viewportFocus: boolean,
+  streamFocusDelta: number | undefined,
+  showNewest: boolean,
+  sunlightMode: boolean,
+  reduceMotion: boolean,
+): number {
+  if (!viewportFocus) {
+    return sunlightMode ? 1 : showNewest ? 1 : 0.84;
+  }
+  if (streamFocusDelta == null) {
+    return sunlightMode ? 1 : showNewest ? 1 : 0.84;
+  }
+  if (streamFocusDelta < 0) {
+    return sunlightMode ? 1 : 0.84;
+  }
+  if (streamFocusDelta === 0) {
+    return 1;
+  }
+  return streamFocusBodyOpacityBelowActive(streamFocusDelta, sunlightMode, reduceMotion);
+}
+
+function streamFocusTimeTargetOpacity(
+  viewportFocus: boolean,
+  streamFocusDelta: number | undefined,
+  reduceMotion: boolean,
+): number {
+  if (!viewportFocus || streamFocusDelta == null || streamFocusDelta < 1) {
+    return 1;
+  }
+  return streamFocusTimeOpacityBelowActive(streamFocusDelta, reduceMotion);
 }
 
 type StreamRowProps = {
   item: Entry;
   isLastInSection: boolean;
   isNewest: boolean;
+  /** Viewport highlight: flatIndex - activeIndex (opacity); typography stays `isNewest`-driven. */
+  streamFocusDelta?: number;
+  streamFocusReduceMotion?: boolean;
   /** Matches `CaptureScreen` scroll `paddingHorizontal` so rows can full-bleed under press/trace. */
   streamGutter: number;
   onEntryPress?: (entry: Entry) => void;
   onEntryDelete?: (entry: Entry) => void;
 };
 
-function RecentStreamRow({
+const RecentStreamRow = memo(function RecentStreamRowInner({
   item,
   isLastInSection,
   isNewest,
+  streamFocusDelta,
+  streamFocusReduceMotion = false,
   streamGutter,
   onEntryPress,
   onEntryDelete,
@@ -107,6 +185,55 @@ function RecentStreamRow({
   const { colors, typography, isDark } = t;
   const { body } = typography;
   const lineDisplay = replaceHttpUrlsWithCompactDisplay(item.text);
+  const viewportFocus = streamFocusDelta !== undefined;
+  /** List order only: first / newest stays the large type; scroll only changes opacity (highlight). */
+  const showNewest = isNewest;
+
+  const targetBodyOpacity = useMemo(
+    () =>
+      streamFocusBodyTargetOpacity(
+        viewportFocus,
+        streamFocusDelta,
+        showNewest,
+        t.sunlightMode,
+        streamFocusReduceMotion,
+      ),
+    [viewportFocus, streamFocusDelta, showNewest, t.sunlightMode, streamFocusReduceMotion],
+  );
+  const targetTimeOpacity = useMemo(
+    () => streamFocusTimeTargetOpacity(viewportFocus, streamFocusDelta, streamFocusReduceMotion),
+    [viewportFocus, streamFocusDelta, streamFocusReduceMotion],
+  );
+
+  const bodyOpacityAnim = useRef<Animated.Value | null>(null);
+  const timeOpacityAnim = useRef<Animated.Value | null>(null);
+  if (bodyOpacityAnim.current == null) {
+    bodyOpacityAnim.current = new Animated.Value(targetBodyOpacity);
+  }
+  if (timeOpacityAnim.current == null) {
+    timeOpacityAnim.current = new Animated.Value(targetTimeOpacity);
+  }
+
+  useEffect(() => {
+    const duration = streamFocusReduceMotion ? 0 : STREAM_FOCUS_OPACITY_DURATION_MS;
+    const easing = Easing.out(Easing.cubic);
+    const anim = Animated.parallel([
+      Animated.timing(bodyOpacityAnim.current!, {
+        toValue: targetBodyOpacity,
+        duration,
+        easing,
+        useNativeDriver: true,
+      }),
+      Animated.timing(timeOpacityAnim.current!, {
+        toValue: targetTimeOpacity,
+        duration,
+        easing,
+        useNativeDriver: true,
+      }),
+    ]);
+    anim.start();
+    return () => anim.stop();
+  }, [targetBodyOpacity, targetTimeOpacity, streamFocusReduceMotion]);
 
   const onPressIn = useCallback(() => {
     setPressed(true);
@@ -172,29 +299,29 @@ function RecentStreamRow({
               { paddingHorizontal: streamGutter + screenContentInnerPad },
             ]}
           >
-            <Text
+            <Animated.Text
               style={[
                 styles.line,
                 {
                   flex: 1,
                   color: t.sunlightMode
-                    ? isNewest
+                    ? showNewest || (viewportFocus && streamFocusDelta === 0)
                       ? colors.entryBody
                       : colors.fgDim
                     : colors.entryBody,
-                  fontFamily: isNewest ? fonts.medium : body.fontFamily,
-                  fontSize: isNewest ? 17 : body.fontSize,
-                  lineHeight: isNewest ? 26 : body.lineHeight,
-                  letterSpacing: isNewest ? 0.17 : 0.16,
+                  fontFamily: showNewest ? fonts.medium : body.fontFamily,
+                  fontSize: showNewest ? 17 : body.fontSize,
+                  lineHeight: showNewest ? 26 : body.lineHeight,
+                  letterSpacing: showNewest ? 0.17 : 0.16,
                   marginRight: t.spacing.sm,
-                  opacity: t.sunlightMode ? 1 : isNewest ? 1 : 0.84,
+                  opacity: bodyOpacityAnim.current!,
                 },
               ]}
               numberOfLines={4}
             >
               {lineDisplay}
-            </Text>
-            <Text
+            </Animated.Text>
+            <Animated.Text
               style={[
                 styles.time,
                 {
@@ -202,11 +329,12 @@ function RecentStreamRow({
                   fontFamily: t.sunlightMode ? fonts.medium : fonts.regular,
                   fontSize: 11,
                   lineHeight: 15,
+                  opacity: timeOpacityAnim.current!,
                 },
               ]}
             >
               {formatEntryTime(item.createdAt)}
-            </Text>
+            </Animated.Text>
           </View>
         </View>
       </Pressable>
@@ -250,7 +378,7 @@ function RecentStreamRow({
       {rowContent}
     </Swipeable>
   );
-}
+});
 
 function streamEmptyHintEntranceStyle(v: Animated.Value) {
   return {
@@ -480,6 +608,10 @@ function RecentListInner({
   streamEmptyAmbient = false,
   streamEmptyAmbientSuppressed = false,
   deferEmptyStreamMotion = false,
+  streamScrollY = 0,
+  streamViewportHeight = 0,
+  streamViewportFocusEnabled = false,
+  streamScrollViewRef,
 }: RecentListProps) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const streamGutter = screenContentGutter(windowWidth);
@@ -487,6 +619,27 @@ function RecentListInner({
   const { colors, typography } = t;
   const { body, meta } = typography;
   const emptyAmbientOpacity = useRef(new Animated.Value(1)).current;
+  const [listOffsetY, setListOffsetY] = useState(0);
+  const [layoutVersion, setLayoutVersion] = useState(0);
+  const [windowActiveIndex, setWindowActiveIndex] = useState(-1);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const framesRef = useRef<Map<string, { top: number; height: number }>>(new Map());
+  const rowRefs = useRef<Map<string, View | null>>(new Map());
+  const setRowRef = useCallback((id: string) => {
+    return (node: View | null) => {
+      if (node) {
+        rowRefs.current.set(id, node);
+      } else {
+        rowRefs.current.delete(id);
+      }
+    };
+  }, []);
+  /** Matches list root `paddingTop` — row `onLayout` `y` is measured below this inset. */
+  const listPaddingTop = t.spacing.lg;
+
+  useEffect(() => {
+    void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+  }, []);
 
   useEffect(() => {
     if (!streamEmptyAmbient) {
@@ -518,6 +671,141 @@ function RecentListInner({
 
   const groups = useMemo(() => groupEntriesByDate(entries), [entries]);
   const newestShownId = groups[0]?.items[0]?.id ?? null;
+  const orderedIds = useMemo(() => groups.flatMap((g) => g.items.map((e) => e.id)), [groups]);
+  const flatItems = useMemo(() => {
+    const out: Array<
+      | { kind: 'header'; label: string; sectionIndex: number; key: string }
+      | { kind: 'entry'; entry: Entry; flatIndex: number; key: string }
+    > = [];
+    let globalFlatIndex = 0;
+    for (let s = 0; s < groups.length; s++) {
+      const section = groups[s];
+      out.push({
+        kind: 'header',
+        label: section.label,
+        sectionIndex: s,
+        key: `h-${section.label}-${s}`,
+      });
+      for (const row of section.items) {
+        out.push({
+          kind: 'entry',
+          entry: row,
+          flatIndex: globalFlatIndex,
+          key: row.id,
+        });
+        globalFlatIndex += 1;
+      }
+    }
+    return out;
+  }, [groups]);
+
+  useLayoutEffect(() => {
+    if (!streamViewportFocusEnabled) {
+      return;
+    }
+    const ids = new Set(orderedIds);
+    for (const key of [...framesRef.current.keys()]) {
+      if (!ids.has(key)) {
+        framesRef.current.delete(key);
+      }
+    }
+    setLayoutVersion((v) => v + 1);
+  }, [orderedIds, streamViewportFocusEnabled]);
+
+  const onListLayout = useCallback(
+    (e: LayoutChangeEvent) => {
+      if (!streamViewportFocusEnabled) {
+        return;
+      }
+      setListOffsetY(e.nativeEvent.layout.y);
+    },
+    [streamViewportFocusEnabled],
+  );
+
+  const onEntryRowLayout = useCallback(
+    (id: string) => {
+      return (e: LayoutChangeEvent) => {
+        if (!streamViewportFocusEnabled) {
+          return;
+        }
+        const { y, height } = e.nativeEvent.layout;
+        framesRef.current.set(id, { top: y, height });
+        setLayoutVersion((v) => v + 1);
+      };
+    },
+    [streamViewportFocusEnabled],
+  );
+
+  const geometryActiveIndex = useMemo(() => {
+    if (!streamViewportFocusEnabled) {
+      return -1;
+    }
+    const viewportH =
+      streamViewportHeight > 0 ? streamViewportHeight : Math.max(1, Math.round(windowHeight * 0.55));
+    return findActiveFlatIndex(
+      orderedIds,
+      framesRef.current,
+      streamScrollY,
+      viewportH,
+      listOffsetY,
+      listPaddingTop,
+    );
+  }, [
+    streamViewportFocusEnabled,
+    streamScrollY,
+    streamViewportHeight,
+    listOffsetY,
+    listPaddingTop,
+    layoutVersion,
+    orderedIds,
+    windowHeight,
+  ]);
+
+  useLayoutEffect(() => {
+    if (!streamViewportFocusEnabled || streamScrollViewRef == null) {
+      return;
+    }
+    if (streamScrollViewRef.current == null) {
+      setWindowActiveIndex(-1);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const sv = streamScrollViewRef.current;
+      if (!sv) {
+        return;
+      }
+      const scrollBox = await measureInWindowPromise(sv);
+      if (!scrollBox || cancelled) {
+        return;
+      }
+      const measurements = await Promise.all(
+        orderedIds.map(async (id, i) => ({
+          flatIndex: i,
+          box: await measureInWindowPromise(rowRefs.current.get(id) ?? null),
+        })),
+      );
+      if (cancelled) {
+        return;
+      }
+      const idx = findActiveFlatIndexFromWindowMeasurements(scrollBox, measurements);
+      setWindowActiveIndex(idx);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    streamViewportFocusEnabled,
+    streamScrollViewRef,
+    streamScrollY,
+    streamViewportHeight,
+    layoutVersion,
+    orderedIds,
+  ]);
+
+  const activeFlatIndex =
+    streamScrollViewRef != null && windowActiveIndex >= 0 ? windowActiveIndex : geometryActiveIndex;
+
   if (!visible) {
     return null;
   }
@@ -608,48 +896,65 @@ function RecentListInner({
   }
 
   return (
-    <View testID="recent-list" style={[styles.list, { paddingTop: t.spacing.lg }]}>
-      {groups.map((section, sIndex) => (
-        <View
-          key={section.label + String(sIndex)}
-          style={[
-            styles.section,
-            sIndex > 0 && { marginTop: t.spacing.sm },
-          ]}
-        >
-          <Text
-            accessibilityRole="header"
-            style={[
-              styles.sectionLabel,
-              {
-                paddingHorizontal: streamGutter,
-                color: colors.sectionFg,
-                fontFamily: meta.fontFamily,
-                fontSize: meta.fontSize,
-                lineHeight: 18,
-                letterSpacing: 0.22,
-                marginBottom: 6,
-              },
-            ]}
+    <View
+      testID="recent-list"
+      style={[styles.list, { paddingTop: listPaddingTop }]}
+      onLayout={streamViewportFocusEnabled ? onListLayout : undefined}
+    >
+      {flatItems.map((item, index) => {
+        if (item.kind === 'header') {
+          return (
+            <View
+              key={item.key}
+              style={item.sectionIndex > 0 ? { marginTop: t.spacing.sm } : undefined}
+            >
+              <Text
+                accessibilityRole="header"
+                style={[
+                  styles.sectionLabel,
+                  {
+                    paddingHorizontal: streamGutter,
+                    color: colors.sectionFg,
+                    fontFamily: meta.fontFamily,
+                    fontSize: meta.fontSize,
+                    lineHeight: 18,
+                    letterSpacing: 0.22,
+                    marginBottom: 6,
+                  },
+                ]}
+              >
+                {item.label}
+              </Text>
+            </View>
+          );
+        }
+        const isLastInSection =
+          flatItems[index + 1]?.kind === 'header' || flatItems[index + 1] == null;
+        const streamFocusDelta =
+          streamViewportFocusEnabled && activeFlatIndex >= 0
+            ? item.flatIndex - activeFlatIndex
+            : undefined;
+        return (
+          <View
+            key={item.key}
+            ref={streamViewportFocusEnabled && streamScrollViewRef != null ? setRowRef(item.entry.id) : undefined}
+            style={styles.rowMeasureWrap}
+            collapsable={Platform.OS === 'android' ? false : undefined}
+            onLayout={streamViewportFocusEnabled ? onEntryRowLayout(item.entry.id) : undefined}
           >
-            {section.label}
-          </Text>
-          {section.items.map((item, index) => {
-            const isLastInSection = index === section.items.length - 1;
-            return (
-              <RecentStreamRow
-                key={item.id}
-                item={item}
-                isLastInSection={isLastInSection}
-                isNewest={item.id === newestShownId}
-                streamGutter={streamGutter}
-                onEntryPress={onEntryPress}
-                onEntryDelete={onEntryDelete}
-              />
-            );
-          })}
-        </View>
-      ))}
+            <RecentStreamRow
+              item={item.entry}
+              isLastInSection={isLastInSection}
+              isNewest={item.entry.id === newestShownId}
+              streamFocusDelta={streamFocusDelta}
+              streamFocusReduceMotion={reduceMotion}
+              streamGutter={streamGutter}
+              onEntryPress={onEntryPress}
+              onEntryDelete={onEntryDelete}
+            />
+          </View>
+        );
+      })}
       {listFooterHint != null && listFooterHint !== '' ? (
         <Text
           testID="recent-list-footer-hint"
@@ -706,7 +1011,8 @@ const styles = StyleSheet.create({
   footerHint: {
     paddingVertical: 2,
   },
-  section: {
+  /** Wraps each stream row for layout Y relative to the list root (viewport focus). */
+  rowMeasureWrap: {
     width: '100%',
   },
   sectionLabel: {},
