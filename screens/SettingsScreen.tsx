@@ -6,31 +6,32 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChinottoLogo, chinottoLogoLeadingOutset } from '../components/ChinottoLogo';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { SettingsSection } from '../components/settings/SettingsSection';
-import { AdaptiveChromeContext, fonts, screenContentGutter, useAppTheme } from '../theme';
+import { AdaptiveChromeContext, fonts, screenContentGutter, spacing, useAppTheme } from '../theme';
 
 type SettingsScreenProps = {
   onClose: () => void;
   onOpenSync: () => void;
+  /** Anonymous Umami analytics; off until the user opts in. */
+  analyticsEnabled?: boolean;
+  onAnalyticsOptInChange?: (enabled: boolean) => void;
   onOpenManifesto: () => void;
   canOpenAppIcon?: boolean;
   onOpenAppIcon?: () => void;
   appIconLabel?: string;
   syncStatusLabel: string;
-  hapticsEnabled: boolean;
-  onHapticsEnabledChange: (next: boolean) => void;
   onOpenDevMenu?: () => void;
 };
 
 export function SettingsScreen({
   onClose,
   onOpenSync,
+  analyticsEnabled = false,
+  onAnalyticsOptInChange,
   onOpenManifesto,
   canOpenAppIcon = false,
   onOpenAppIcon,
   appIconLabel = 'Default',
   syncStatusLabel,
-  hapticsEnabled,
-  onHapticsEnabledChange,
   onOpenDevMenu,
 }: SettingsScreenProps) {
   const { displayChrome, setDisplayChrome } = useContext(AdaptiveChromeContext);
@@ -147,23 +148,23 @@ export function SettingsScreen({
                 ) : null}
               </SettingsSection>
 
-              <SettingsSection title="Experience">
-                <SettingsRow
-                  variant="switch"
-                  label="Haptic feedback"
-                  description="Subtle taps for key controls."
-                  value={hapticsEnabled}
-                  onValueChange={onHapticsEnabledChange}
-                />
-              </SettingsSection>
-
               <SettingsSection title="Privacy">
                 <SettingsRow
                   variant="info"
                   label="Your thoughts stay local first"
                   description="Sync is optional and never blocks capture."
-                  isLast
+                  isLast={onAnalyticsOptInChange == null}
                 />
+                {onAnalyticsOptInChange ? (
+                  <SettingsRow
+                    variant="switch"
+                    label="Anonymous usage analytics"
+                    description="No thoughts. Nothing personal."
+                    value={analyticsEnabled}
+                    onValueChange={onAnalyticsOptInChange}
+                    isLast
+                  />
+                ) : null}
               </SettingsSection>
 
               <SettingsSection title="Manifesto">
@@ -245,7 +246,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   headerTitleInline: {
-    marginLeft: 8,
+    marginLeft: spacing.xs,
     fontFamily: fonts.medium,
     fontSize: 18,
     lineHeight: 24,

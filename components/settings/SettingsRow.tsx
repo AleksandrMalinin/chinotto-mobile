@@ -73,8 +73,15 @@ export function SettingsRow(props: SettingsRowProps) {
             thumbColor={props.value ? 'rgba(232,236,255,0.98)' : 'rgba(245,245,250,0.92)'}
           />
         ) : null}
-        {props.variant === 'choice' && props.selected ? (
-          <Ionicons name="checkmark" size={18} color={t.colors.accent} accessibilityLabel="Selected" />
+        {props.variant === 'choice' ? (
+          <View
+            style={styles.choiceIndicatorSlot}
+            accessibilityLabel={props.selected ? 'Selected' : 'Not selected'}
+          >
+            {props.selected ? (
+              <View style={[styles.choiceDotFilled, { backgroundColor: t.colors.metaFg }]} />
+            ) : null}
+          </View>
         ) : null}
         {(props.variant === 'navigation' || props.variant === 'info') && props.valueLabel ? (
           <Text style={[styles.valueLabel, { color: t.colors.metaFg }]}>{props.valueLabel}</Text>
@@ -165,5 +172,18 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: 12,
     lineHeight: 17,
+  },
+  /** Same width as prior checkmark (~18) — stable row layout for single-choice rows. */
+  choiceIndicatorSlot: {
+    width: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  /** Same token as navigation chevron (`metaFg`). */
+  choiceDotFilled: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
 });

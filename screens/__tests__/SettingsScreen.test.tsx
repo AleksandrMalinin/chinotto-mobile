@@ -48,8 +48,6 @@ function renderSettings(
           onOpenSync={jest.fn()}
           onOpenManifesto={jest.fn()}
           syncStatusLabel="Off"
-          hapticsEnabled
-          onHapticsEnabledChange={jest.fn()}
           {...props}
         />
       </SafeAreaProvider>
@@ -66,7 +64,8 @@ describe('SettingsScreen', () => {
     expect(screen.getByTestId('settings-chrome-auto')).toBeTruthy();
     expect(screen.getByTestId('settings-chrome-normal')).toBeTruthy();
     expect(screen.getByTestId('settings-chrome-sunlight')).toBeTruthy();
-    expect(screen.getByText('Experience')).toBeTruthy();
+    expect(screen.queryByText('Experience')).toBeNull();
+    expect(screen.queryByText('Haptic feedback')).toBeNull();
   });
 
   it('calls setDisplayChrome when choosing a contrast mode', async () => {
