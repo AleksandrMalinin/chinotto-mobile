@@ -26,7 +26,7 @@ import { useEnableSyncController } from './useEnableSyncController';
  *
  * **`__DEV__` only:** no RevenueCat debug panel or extra RC fetch in release / TestFlight.
  */
-const TEMP_RC_OFFERINGS_DEBUG_UI = __DEV__;
+const TEMP_RC_OFFERINGS_DEBUG_UI = false;
 
 /** TEMPORARY — remove with {@link TEMP_RC_OFFERINGS_DEBUG_UI}. No full key, only shape / EAS hint. */
 function tempRcEmbeddedIosKeyHint(): string {
