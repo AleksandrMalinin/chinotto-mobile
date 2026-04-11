@@ -14,6 +14,7 @@ export async function getHapticsEnabled(): Promise<boolean> {
   }
 }
 
+/** Persists preference; there is no Settings toggle (removed) — kept so existing installs and tests stay consistent. */
 export async function setHapticsEnabled(enabled: boolean): Promise<void> {
   try {
     await AsyncStorage.setItem(KEY_HAPTICS_ENABLED, enabled ? '1' : '0');
