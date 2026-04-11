@@ -5,6 +5,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import * as entryRepository from '../../storage/entryRepository';
 import * as syncHeaderShimmerPrefs from '../../storage/syncHeaderShimmerPrefs';
+import * as syncHighlightSignals from '../../storage/syncHighlightSignals';
+import { SYNC_HIGHLIGHT_SCHEDULE_DELAY_MS } from '../../sync/syncHighlightConstants';
 import * as firebaseAuthModule from '../../sync/firebaseAuth';
 import * as firebaseConfig from '../../sync/firebaseConfig';
 import * as syncQueueModule from '../../sync/syncQueue';
@@ -51,7 +53,6 @@ jest.mock('expo-clipboard', () => ({
 
 jest.mock('../../storage/settingsPrefs', () => ({
   getHapticsEnabled: jest.fn(() => Promise.resolve(true)),
-  setHapticsEnabled: jest.fn(() => Promise.resolve()),
 }));
 
 jest.mock('../../storage/firstLaunchCapturePrefs', () => ({
@@ -72,12 +73,26 @@ jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
 }));
 
 jest.mock('../../storage/syncHeaderShimmerPrefs', () => ({
-  hasEnableSyncShimmerCompleted: jest.fn(() => Promise.resolve(false)),
-  hasFirstSavedThought: jest.fn(() => Promise.resolve(true)),
   hasSyncHeaderCtaBeenTapped: jest.fn(() => Promise.resolve(false)),
-  markEnableSyncShimmerCompleted: jest.fn(() => Promise.resolve()),
-  recordFirstSavedThought: jest.fn(() => Promise.resolve()),
   recordSyncHeaderCtaTapped: jest.fn(() => Promise.resolve()),
+  resetSyncHeaderShimmerPrefsForDev: jest.fn(() => Promise.resolve()),
+}));
+
+jest.mock('../../storage/syncHighlightSignals', () => ({
+  loadSyncHighlightSignals: jest.fn(() =>
+    Promise.resolve({
+      appLaunchCount: 1,
+      shimmerImpressionCount: 0,
+      lastShimmerAt: null,
+      hasDeepScrolledStream: false,
+      hasOpenedExistingThought: false,
+      hasUsedSearch: false,
+    })
+  ),
+  recordStreamDeepScrolledForSyncHighlight: jest.fn(() => Promise.resolve()),
+  recordOpenedExistingThoughtForSyncHighlight: jest.fn(() => Promise.resolve()),
+  recordSearchUsedForSyncHighlight: jest.fn(() => Promise.resolve()),
+  recordSyncShimmerImpression: jest.fn(() => Promise.resolve()),
 }));
 
 jest.mock('../../storage/entryRepository', () => ({
@@ -90,6 +105,7 @@ jest.mock('../../storage/entryRepository', () => ({
   ),
   getRecentEntries: jest.fn(() => Promise.resolve([])),
   getEntriesOlderThan: jest.fn(() => Promise.resolve([])),
+  getEntryCount: jest.fn(() => Promise.resolve(0)),
   searchEntriesForRecall: jest.fn(() => Promise.resolve({ entries: [], truncated: false })),
   deleteEntry: jest.fn(() => Promise.resolve()),
 }));
@@ -112,6 +128,7 @@ const STREAM_SEARCH_SEED_ENTRY = {
 
 describe('CaptureScreen', () => {
   beforeEach(() => {
+    jest.mocked(entryRepository.saveEntry).mockReset();
     jest.mocked(entryRepository.saveEntry).mockImplementation(() =>
       Promise.resolve({
         id: '1',
@@ -122,7 +139,6 @@ describe('CaptureScreen', () => {
     mockOnAuthStateChanged.mockReset();
     mockOnAuthStateChanged.mockImplementation(() => jest.fn());
     jest.mocked(firebaseConfig.isFirebaseSyncConfigured).mockReturnValue(false);
-    jest.mocked(syncHeaderShimmerPrefs.hasFirstSavedThought).mockResolvedValue(true);
     jest.mocked(settingsPrefs.getHapticsEnabled).mockImplementation(() => Promise.resolve(true));
     jest.mocked(entryRepository.getRecentEntries).mockImplementation(() => Promise.resolve([]));
     jest.mocked(firstLaunchCapturePrefs.getFirstLaunchEmptyCaptureRevealDone).mockImplementation(() =>
@@ -157,6 +173,54 @@ describe('CaptureScreen', () => {
 
     const input = await findByTestId('capture-input');
     expect(input.props.autoFocus).toBe(false);
+  });
+
+  it('calls onAnalyticsPresentationGateReady once the stream has at least one entry', async () => {
+    jest.mocked(entryRepository.getRecentEntries).mockImplementation(() =>
+      Promise.resolve([
+        {
+          id: 'seed',
+          text: 'hello',
+          createdAt: '2025-01-01T00:00:00.000Z',
+        },
+      ])
+    );
+    const onGate = jest.fn();
+    render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <CaptureScreen allowCaptureFocus onAnalyticsPresentationGateReady={onGate} />
+      </SafeAreaProvider>
+    );
+
+    await waitFor(() => {
+      expect(onGate).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('does not call onAnalyticsPresentationGateReady while allowCaptureFocus is false', async () => {
+    const onGate = jest.fn();
+    render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <CaptureScreen allowCaptureFocus={false} onAnalyticsPresentationGateReady={onGate} />
+      </SafeAreaProvider>
+    );
+
+    await waitFor(() => {
+      expect(onGate).not.toHaveBeenCalled();
+    });
+  });
+
+  it('does not call onAnalyticsPresentationGateReady while the stream is empty', async () => {
+    const onGate = jest.fn();
+    render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <CaptureScreen allowCaptureFocus onAnalyticsPresentationGateReady={onGate} />
+      </SafeAreaProvider>
+    );
+
+    await waitFor(() => {
+      expect(onGate).not.toHaveBeenCalled();
+    });
   });
 
   it('calls saveEntry with trimmed text on submit and clears the field after save succeeds', async () => {
@@ -469,7 +533,7 @@ describe('CaptureScreen', () => {
 
       const opts = jest.mocked(devMenuModule.showDevMenu).mock.calls[0][0];
       await act(async () => {
-        opts.onResetFirstLaunchEmptyCaptureReveal?.();
+        opts.onResetSyncCaptureQA?.();
       });
 
       await act(async () => {
@@ -524,8 +588,15 @@ describe('CaptureScreen enable sync label shimmer', () => {
     jest.mocked(firebaseConfig.isFirebaseSyncConfigured).mockReturnValue(true);
     jest.mocked(firebaseAuthModule.getOrInitAuth).mockReturnValue({ currentUser: null } as never);
     mockOnAuthStateChanged.mockReset();
-    jest.mocked(syncHeaderShimmerPrefs.hasFirstSavedThought).mockResolvedValue(false);
-    jest.mocked(syncHeaderShimmerPrefs.hasEnableSyncShimmerCompleted).mockResolvedValue(false);
+    jest.mocked(syncHighlightSignals.loadSyncHighlightSignals).mockResolvedValue({
+      appLaunchCount: 3,
+      shimmerImpressionCount: 0,
+      lastShimmerAt: null,
+      hasDeepScrolledStream: false,
+      hasOpenedExistingThought: false,
+      hasUsedSearch: false,
+    });
+    jest.mocked(entryRepository.getEntryCount).mockResolvedValue(0);
     jest.mocked(syncHeaderShimmerPrefs.hasSyncHeaderCtaBeenTapped).mockResolvedValue(false);
   });
 
@@ -533,7 +604,7 @@ describe('CaptureScreen enable sync label shimmer', () => {
     jest.restoreAllMocks();
   });
 
-  it('schedules one-shot shimmer after first save and 1–2s delay when Enable sync is visible', async () => {
+  it('schedules one-shot shimmer after contextual delay when eligible', async () => {
     jest.useFakeTimers();
     try {
       let listener: ((user: unknown) => void) | undefined;
@@ -557,21 +628,13 @@ describe('CaptureScreen enable sync label shimmer', () => {
         });
       });
 
-      fireEvent.changeText(getByTestId('capture-input'), 'first thought');
-      fireEvent(getByTestId('capture-input'), 'submitEditing');
-
-      await waitFor(() => {
-        expect(jest.mocked(entryRepository.saveEntry)).toHaveBeenCalled();
-      });
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
       expect(queryByTestId('enable-sync-label-shimmer')).toBeNull();
 
       await act(async () => {
-        jest.advanceTimersByTime(2100);
+        jest.advanceTimersByTime(SYNC_HIGHLIGHT_SCHEDULE_DELAY_MS);
+      });
+      await act(async () => {
+        await Promise.resolve();
       });
 
       await waitFor(() => {
@@ -606,22 +669,14 @@ describe('CaptureScreen enable sync label shimmer', () => {
         });
       });
 
-      fireEvent.changeText(getByTestId('capture-input'), 'only');
-      fireEvent(getByTestId('capture-input'), 'submitEditing');
-
-      await waitFor(() => {
-        expect(jest.mocked(entryRepository.saveEntry)).toHaveBeenCalled();
-      });
-
-      await act(async () => {
-        await Promise.resolve();
-      });
-
       fireEvent.press(getByTestId('sync-header-cta'));
       jest.mocked(syncHeaderShimmerPrefs.hasSyncHeaderCtaBeenTapped).mockResolvedValue(true);
 
       await act(async () => {
-        jest.advanceTimersByTime(2100);
+        jest.advanceTimersByTime(SYNC_HIGHLIGHT_SCHEDULE_DELAY_MS);
+      });
+      await act(async () => {
+        await Promise.resolve();
       });
 
       expect(queryByTestId('enable-sync-label-shimmer')).toBeNull();
@@ -640,7 +695,6 @@ describe('CaptureScreen sync auth restore', () => {
     jest.mocked(syncQueueModule.getPendingSyncCount).mockResolvedValue(0);
     mockOnAuthStateChanged.mockReset();
     mockOnAuthStateChanged.mockImplementation(() => jest.fn());
-    jest.mocked(syncHeaderShimmerPrefs.hasFirstSavedThought).mockResolvedValue(true);
   });
 
   afterEach(() => {
@@ -820,7 +874,7 @@ describe('CaptureScreen sync auth restore', () => {
       return jest.fn();
     });
 
-    const { getByTestId, findByTestId, getByText } = render(
+    const { getByTestId, findByTestId } = render(
       <SafeAreaProvider initialMetrics={safeAreaMetrics}>
         <CaptureScreen />
       </SafeAreaProvider>
@@ -836,8 +890,10 @@ describe('CaptureScreen sync auth restore', () => {
       });
     });
 
-    expect(getByTestId('sync-header-cta')).toBeTruthy();
-    expect(getByText('Enable sync')).toBeTruthy();
+    const headerCta = getByTestId('sync-header-cta');
+    expect(headerCta).toBeTruthy();
+    // Gradient/shimmer masks duplicate the label string in multiple Text nodes.
+    expect(within(headerCta).getAllByText('Enable sync').length).toBeGreaterThan(0);
   });
 
   it('shows Enable sync in header after restore completes with no signed-in user', async () => {
@@ -847,7 +903,7 @@ describe('CaptureScreen sync auth restore', () => {
       return jest.fn();
     });
 
-    const { getByTestId, findByTestId, getByText } = render(
+    const { getByTestId, findByTestId } = render(
       <SafeAreaProvider initialMetrics={safeAreaMetrics}>
         <CaptureScreen />
       </SafeAreaProvider>
@@ -860,7 +916,8 @@ describe('CaptureScreen sync auth restore', () => {
       listener?.(null);
     });
 
-    expect(getByTestId('sync-header-cta')).toBeTruthy();
-    expect(getByText('Enable sync')).toBeTruthy();
+    const headerCta = getByTestId('sync-header-cta');
+    expect(headerCta).toBeTruthy();
+    expect(within(headerCta).getAllByText('Enable sync').length).toBeGreaterThan(0);
   });
 });

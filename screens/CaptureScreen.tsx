@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+
+import { track, type SyncModalSurface } from '../analytics/analytics';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import {
   Alert,
+  DevSettings,
   Keyboard,
   KeyboardAvoidingView,
   LayoutAnimation,
@@ -57,27 +60,42 @@ import {
 import {
   deleteEntry,
   getEntriesOlderThan,
+  getEntryCount,
   getRecentEntries,
   saveEntry,
   searchEntriesForRecall,
 } from '../storage/entryRepository';
-import { clearLocalSyncPaywallFlags } from '../monetization/subscriptionState';
-import { devRevenueCatLogOutAndRefreshEntitlementCache } from '../src/services/purchases/revenueCat';
 import {
-  hasEnableSyncShimmerCompleted,
-  hasFirstSavedThought,
+  loadSyncHighlightSignals,
+  recordOpenedExistingThoughtForSyncHighlight,
+  recordSearchUsedForSyncHighlight,
+  recordStreamDeepScrolledForSyncHighlight,
+  recordSyncShimmerImpression,
+} from '../storage/syncHighlightSignals';
+import {
   hasSyncHeaderCtaBeenTapped,
-  markEnableSyncShimmerCompleted,
-  recordFirstSavedThought,
   recordSyncHeaderCtaTapped,
+  resetSyncHeaderShimmerPrefsForDev,
 } from '../storage/syncHeaderShimmerPrefs';
-import { getHapticsEnabled, setHapticsEnabled } from '../storage/settingsPrefs';
+import { getHapticsEnabled } from '../storage/settingsPrefs';
 import { isFirebaseSyncConfigured } from '../sync/firebaseConfig';
 import { getOrInitAuth } from '../sync/firebaseAuth';
 import { getPendingSyncCount } from '../sync/syncQueue';
 import { mirrorChinottoSyncAccessToFirestore } from '../sync/firestoreSyncAccessMirror';
 import { flushSyncTombstoneOutbox } from '../sync/tombstoneFlush';
-import { fonts, radius, screenContentGutter, screenContentInnerPad, useAppTheme } from '../theme';
+import {
+  SYNC_HIGHLIGHT_SCHEDULE_DELAY_MS,
+  SYNC_HIGHLIGHT_STREAM_SCROLL_DEPTH_PX,
+} from '../sync/syncHighlightConstants';
+import { getSyncHighlightEligibility } from '../sync/syncHighlightEligibility';
+import {
+  fonts,
+  radius,
+  screenContentGutter,
+  screenContentInnerPad,
+  spacing,
+  useAppTheme,
+} from '../theme';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -106,6 +124,7 @@ const SYNC_UPLOAD_POLL_MS = 2500;
 const SYNC_STUCK_PENDING_MIN = 5;
 /** Consecutive polls (see interval) with high pending count before showing Sync paused. */
 const SYNC_STUCK_CONSECUTIVE_POLLS = 3;
+const ENABLE_SYNC_SHIMMER_MAX_AUTH_PROBES = 28;
 /** Firebase session restore vs signed-out; avoids showing Enable sync before persistence restores. */
 export type AuthRestorePhase = SyncHeaderAuthPhase;
 
@@ -128,6 +147,13 @@ export type CaptureScreenProps = {
   subscriptionHydrated?: boolean;
   /** Stub or real Plus purchase completed — refresh Firestore ingest when paywall is on. */
   onSubscriptionUnlocked?: () => void;
+  /** Anonymous Umami opt-in (Settings). */
+  analyticsEnabled?: boolean;
+  onAnalyticsOptInChange?: (enabled: boolean) => void;
+  /** Fires once when the stream has at least one saved thought (Umami opt-in timing). */
+  onAnalyticsPresentationGateReady?: () => void;
+  /** Dev: clear prompt flag and reload the JS bundle (QA). */
+  onResetAnalyticsPrompt?: () => void;
   /**
    * Increment (from universal link / custom scheme) to open the same sync sheet as the header CTA,
    * without recording a header “tap” for shimmer prefs.
@@ -156,6 +182,10 @@ export function CaptureScreen({
   onScheduleStreamHighlight,
   subscriptionHydrated = true,
   onSubscriptionUnlocked,
+  analyticsEnabled = false,
+  onAnalyticsOptInChange,
+  onAnalyticsPresentationGateReady,
+  onResetAnalyticsPrompt,
   syncEntryRequestNonce = 0,
   screenshot,
   allowCaptureFocus = true,
@@ -194,12 +224,22 @@ export function CaptureScreen({
   const [uploadPending, setUploadPending] = useState(false);
   const [uploadStuck, setUploadStuck] = useState(false);
   const [enableSyncLabelShimmer, setEnableSyncLabelShimmer] = useState(false);
+  /** Bumps when engagement signals change so contextual sync highlight can re-evaluate. */
+  const [syncHighlightTick, setSyncHighlightTick] = useState(0);
   /** __DEV__: incremented from dev menu to re-show “Sync enabled” / desktop link sheet. */
   const [devPostSyncPreviewNonce, setDevPostSyncPreviewNonce] = useState(0);
   const stuckPollsRef = useRef(0);
   const lastSyncEntryNonceRef = useRef(0);
   const authPhaseRef = useRef(authRestorePhase);
-  const enableSyncShimmerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Calm delay before running {@link runEnableSyncShimmerProbe} when eligibility may have flipped. */
+  const syncHighlightScheduleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Retries while {@link AuthRestorePhase} is still `restoring` when the shimmer probe runs. */
+  const enableSyncAuthRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const enableSyncShimmerAuthRetryRef = useRef(0);
+  const syncModalVisibleRef = useRef(syncModalVisible);
+  syncModalVisibleRef.current = syncModalVisible;
+  const deepScrollRecordedRef = useRef(false);
+  const searchSignalLoggedRef = useRef(false);
   const inputRef = useRef<TextInput>(null);
   const searchInputRef = useRef<TextInput>(null);
   const searchBlurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -221,6 +261,7 @@ export function CaptureScreen({
   const firstLaunchFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Bumps on dev reset so a late resolve from the mount-time prefs read cannot overwrite cleared state. */
   const firstLaunchPrefsLoadGenerationRef = useRef(0);
+  const analyticsGateReportedRef = useRef(false);
   const { width: windowWidth } = useWindowDimensions();
   const t = useAppTheme();
   const gutter = screenContentGutter(windowWidth);
@@ -249,11 +290,6 @@ export function CaptureScreen({
       return;
     }
     void getCurrentAppIconVariantId().then(setAppIconVariantId);
-  }, []);
-
-  const persistHapticsEnabled = useCallback((next: boolean) => {
-    setHapticsEnabledState(next);
-    void setHapticsEnabled(next);
   }, []);
 
   const playSearchChromeHaptic = useCallback(() => {
@@ -312,10 +348,16 @@ export function CaptureScreen({
   }, []);
 
   const runSearch = useCallback(async (q: string) => {
+    const trimmed = q.trim();
     try {
       const { entries: rows, truncated } = await searchEntriesForRecall(q, SEARCH_MAX_RESULTS);
       setSearchResults(rows);
       setSearchTruncated(truncated);
+      if (!searchSignalLoggedRef.current && trimmed.length > 0) {
+        searchSignalLoggedRef.current = true;
+        void recordSearchUsedForSyncHighlight();
+        setSyncHighlightTick((n) => n + 1);
+      }
     } catch (err) {
       if (__DEV__) {
         console.warn('searchEntriesForRecall failed', err);
@@ -396,9 +438,10 @@ export function CaptureScreen({
       setSettingsRoute('settings');
     }
     if (screenshotScene === 'sync' || screenshotScene === 'sync_apple') {
+      track({ event: 'sync_modal_opened', surface: 'screenshot' });
       setSyncModalVisible(true);
     }
-  }, [screenshotActive, screenshotScene]);
+  }, [screenshotActive, screenshotScene, setSyncModalVisible]);
 
   useEffect(() => {
     if (!screenshotActive) {
@@ -507,15 +550,52 @@ export function CaptureScreen({
     firstLaunchRevealDevResetNonce,
   ]);
 
+  /** Fires once when the stream has at least one entry → App waits 4s (`ANALYTICS_OPTIN_DELAY_MS` in App) then may show Umami sheet. */
+  useEffect(() => {
+    if (!onAnalyticsPresentationGateReady) {
+      return;
+    }
+    if (screenshotActive) {
+      if (!analyticsGateReportedRef.current) {
+        analyticsGateReportedRef.current = true;
+        onAnalyticsPresentationGateReady();
+      }
+      return;
+    }
+    if (!allowCaptureFocus) {
+      return;
+    }
+    if (entries.length === 0 || analyticsGateReportedRef.current) {
+      return;
+    }
+    analyticsGateReportedRef.current = true;
+    onAnalyticsPresentationGateReady();
+  }, [onAnalyticsPresentationGateReady, screenshotActive, allowCaptureFocus, entries.length]);
+
   useEffect(
     () => () => {
-      if (enableSyncShimmerTimerRef.current) {
-        clearTimeout(enableSyncShimmerTimerRef.current);
-        enableSyncShimmerTimerRef.current = null;
+      if (syncHighlightScheduleTimerRef.current) {
+        clearTimeout(syncHighlightScheduleTimerRef.current);
+        syncHighlightScheduleTimerRef.current = null;
+      }
+      if (enableSyncAuthRetryTimerRef.current) {
+        clearTimeout(enableSyncAuthRetryTimerRef.current);
+        enableSyncAuthRetryTimerRef.current = null;
       }
     },
     []
   );
+
+  useEffect(() => {
+    void loadSyncHighlightSignals().then((s) => {
+      if (s.hasDeepScrolledStream) {
+        deepScrollRecordedRef.current = true;
+      }
+      if (s.hasUsedSearch) {
+        searchSignalLoggedRef.current = true;
+      }
+    });
+  }, []);
 
   useEffect(() => {
     if (!isFirebaseSyncConfigured() || Platform.OS !== 'ios') {
@@ -657,77 +737,134 @@ export function CaptureScreen({
       });
   }, [refreshEntries, refreshUploadPending, screenshotActive]);
 
-  /**
-   * One delayed shimmer after the first successful save (AsyncStorage), if the user never opened
-   * the sync CTA and the animation has not run before. If auth is still “restoring” when the timer
-   * fires, the sweep is skipped (calm; rare edge — user may already be ineligible on next save).
-   */
-  const scheduleEnableSyncLabelShimmerAfterFirstSave = useCallback(() => {
+  const runEnableSyncShimmerProbe = useCallback(() => {
     void (async () => {
-      if (!isFirebaseSyncConfigured() || Platform.OS !== 'ios') {
+      if (!isFirebaseSyncConfigured() || Platform.OS !== 'ios' || screenshotActiveRef.current) {
         return;
       }
-      if (enableSyncShimmerTimerRef.current !== null) {
+      const [ctaTapped, signals, totalThoughtCount] = await Promise.all([
+        hasSyncHeaderCtaBeenTapped(),
+        loadSyncHighlightSignals(),
+        getEntryCount(),
+      ]);
+      const { shouldShimmer } = getSyncHighlightEligibility({
+        authPhase: authPhaseRef.current,
+        syncFlowOpen: syncModalVisibleRef.current,
+        screenshotActive: screenshotActiveRef.current,
+        totalThoughtCount,
+        signals,
+        syncHeaderCtaTapped: ctaTapped,
+        nowMs: Date.now(),
+      });
+      if (!shouldShimmer) {
         return;
       }
-      if (await hasSyncHeaderCtaBeenTapped()) {
+      const phase = authPhaseRef.current;
+      if (phase === 'signed_in') {
         return;
       }
-      if (await hasEnableSyncShimmerCompleted()) {
+      if (phase === 'restoring') {
+        if (enableSyncShimmerAuthRetryRef.current >= ENABLE_SYNC_SHIMMER_MAX_AUTH_PROBES) {
+          return;
+        }
+        enableSyncShimmerAuthRetryRef.current += 1;
+        enableSyncAuthRetryTimerRef.current = setTimeout(() => {
+          enableSyncAuthRetryTimerRef.current = null;
+          runEnableSyncShimmerProbe();
+        }, 280);
         return;
       }
-      if (await hasFirstSavedThought()) {
-        return;
+      if (phase === 'signed_out') {
+        enableSyncShimmerAuthRetryRef.current = 0;
+        setEnableSyncLabelShimmer(true);
       }
-      await recordFirstSavedThought();
-      if (enableSyncShimmerTimerRef.current !== null) {
-        return;
-      }
-      if (await hasSyncHeaderCtaBeenTapped()) {
-        return;
-      }
-      const delayMs = 1000 + Math.random() * 1000;
-      enableSyncShimmerTimerRef.current = setTimeout(() => {
-        enableSyncShimmerTimerRef.current = null;
-        void (async () => {
-          if (await hasSyncHeaderCtaBeenTapped()) {
-            return;
-          }
-          if (await hasEnableSyncShimmerCompleted()) {
-            return;
-          }
-          if (authPhaseRef.current !== 'signed_out') {
-            return;
-          }
-          setEnableSyncLabelShimmer(true);
-        })();
-      }, delayMs);
     })();
   }, []);
 
-  const openSyncModalFromHeader = useCallback(() => {
-    void recordSyncHeaderCtaTapped();
-    if (enableSyncShimmerTimerRef.current) {
-      clearTimeout(enableSyncShimmerTimerRef.current);
-      enableSyncShimmerTimerRef.current = null;
+  /**
+   * Contextual Enable sync label shimmer: one calm delay after eligibility may have become true,
+   * then a single masked sweep (see `SyncHeaderStatus`). Suppressed on first launch and while
+   * sync UI is open — see `getSyncHighlightEligibility`.
+   */
+  useEffect(() => {
+    if (!isFirebaseSyncConfigured() || Platform.OS !== 'ios') {
+      return;
     }
-    setEnableSyncLabelShimmer(false);
-    setSyncModalVisible(true);
-  }, []);
+    if (screenshotActive) {
+      return;
+    }
+    if (!allowCaptureFocus) {
+      return;
+    }
+    if (syncModalVisible) {
+      return;
+    }
+
+    if (syncHighlightScheduleTimerRef.current) {
+      clearTimeout(syncHighlightScheduleTimerRef.current);
+      syncHighlightScheduleTimerRef.current = null;
+    }
+
+    let cancelled = false;
+    syncHighlightScheduleTimerRef.current = setTimeout(() => {
+      syncHighlightScheduleTimerRef.current = null;
+      if (!cancelled) {
+        runEnableSyncShimmerProbe();
+      }
+    }, SYNC_HIGHLIGHT_SCHEDULE_DELAY_MS);
+
+    return () => {
+      cancelled = true;
+      if (syncHighlightScheduleTimerRef.current) {
+        clearTimeout(syncHighlightScheduleTimerRef.current);
+        syncHighlightScheduleTimerRef.current = null;
+      }
+    };
+  }, [
+    allowCaptureFocus,
+    authRestorePhase,
+    entries.length,
+    runEnableSyncShimmerProbe,
+    screenshotActive,
+    syncHighlightTick,
+    syncModalVisible,
+  ]);
+
+  const openSyncModal = useCallback(
+    (surface: SyncModalSurface) => {
+      if (surface === 'header') {
+        void recordSyncHeaderCtaTapped();
+        if (syncHighlightScheduleTimerRef.current) {
+          clearTimeout(syncHighlightScheduleTimerRef.current);
+          syncHighlightScheduleTimerRef.current = null;
+        }
+        if (enableSyncAuthRetryTimerRef.current) {
+          clearTimeout(enableSyncAuthRetryTimerRef.current);
+          enableSyncAuthRetryTimerRef.current = null;
+        }
+        enableSyncShimmerAuthRetryRef.current = 0;
+        setEnableSyncLabelShimmer(false);
+      }
+      track({ event: 'sync_modal_opened', surface });
+      setSyncModalVisible(true);
+    },
+    [setSyncModalVisible]
+  );
+
+  const openSyncModalFromHeader = useCallback(() => openSyncModal('header'), [openSyncModal]);
 
   const openDevMenuFromSettings = useCallback(() => {
     if (!__DEV__ || Platform.OS !== 'ios') {
       return;
     }
     showDevMenu({
-      onClearLocalSyncPaywallFlags: () => void clearLocalSyncPaywallFlags(),
-      onRevenueCatLogOut: () => void devRevenueCatLogOutAndRefreshEntitlementCache(),
       onResetPaywallForPurchaseTesting: () => void resetPaywallForPurchaseTesting(),
       onPreviewSyncEnabledSheet: () => {
         setDevPostSyncPreviewNonce((n) => n + 1);
-        setSyncModalVisible(true);
+        openSyncModal('dev_menu');
       },
-      onResetFirstLaunchEmptyCaptureReveal: () => {
+      onResetAnalyticsPrompt: onResetAnalyticsPrompt,
+      onResetSyncCaptureQA: () => {
         Keyboard.dismiss();
         if (firstLaunchFocusTimerRef.current) {
           clearTimeout(firstLaunchFocusTimerRef.current);
@@ -736,35 +873,55 @@ export function CaptureScreen({
         firstLaunchPrefsLoadGenerationRef.current += 1;
         splashFocusPendingRef.current = true;
         void (async () => {
+          await resetSyncHeaderShimmerPrefsForDev();
           await clearFirstLaunchEmptyCaptureRevealDone();
           setFirstLaunchRevealDone(false);
           setComposerHasFocusedOnce(false);
           setFirstLaunchRevealDevResetNonce((n) => n + 1);
+          DevSettings.reload();
         })();
       },
     });
-  }, []);
+  }, [openSyncModal, onResetAnalyticsPrompt]);
 
   useEffect(() => {
     if (syncEntryRequestNonce <= lastSyncEntryNonceRef.current) {
       return;
     }
     lastSyncEntryNonceRef.current = syncEntryRequestNonce;
-    if (enableSyncShimmerTimerRef.current) {
-      clearTimeout(enableSyncShimmerTimerRef.current);
-      enableSyncShimmerTimerRef.current = null;
+    if (syncHighlightScheduleTimerRef.current) {
+      clearTimeout(syncHighlightScheduleTimerRef.current);
+      syncHighlightScheduleTimerRef.current = null;
     }
+    if (enableSyncAuthRetryTimerRef.current) {
+      clearTimeout(enableSyncAuthRetryTimerRef.current);
+      enableSyncAuthRetryTimerRef.current = null;
+    }
+    enableSyncShimmerAuthRetryRef.current = 0;
     setEnableSyncLabelShimmer(false);
-    setSyncModalVisible(true);
-  }, [syncEntryRequestNonce]);
+    openSyncModal('deeplink');
+  }, [syncEntryRequestNonce, openSyncModal]);
 
   const onEnableSyncLabelShimmerComplete = useCallback(() => {
     setEnableSyncLabelShimmer(false);
-    void markEnableSyncShimmerCompleted();
+    void recordSyncShimmerImpression();
+  }, []);
+
+  const onStreamEntryPress = useCallback((entry: Entry) => {
+    void recordOpenedExistingThoughtForSyncHighlight().then(() => {
+      setSyncHighlightTick((n) => n + 1);
+    });
+    setReadEntry(entry);
   }, []);
 
   const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;
+
+    if (!deepScrollRecordedRef.current && contentOffset.y >= SYNC_HIGHLIGHT_STREAM_SCROLL_DEPTH_PX) {
+      deepScrollRecordedRef.current = true;
+      void recordStreamDeepScrolledForSyncHighlight();
+      setSyncHighlightTick((n) => n + 1);
+    }
 
     if (searchActiveRef.current) {
       return;
@@ -880,7 +1037,6 @@ export function CaptureScreen({
           void runSearch(sq);
         }
         void refreshUploadPending();
-        scheduleEnableSyncLabelShimmerAfterFirstSave();
         await playThoughtSavedHaptic();
       })
       .catch((err) => {
@@ -893,7 +1049,6 @@ export function CaptureScreen({
     runSearch,
     onScheduleStreamHighlight,
     refreshUploadPending,
-    scheduleEnableSyncLabelShimmerAfterFirstSave,
     screenshotActive,
     playThoughtSavedHaptic,
   ]);
@@ -919,12 +1074,14 @@ export function CaptureScreen({
   const searchBorderWidth = t.sunlightMode ? 1 : StyleSheet.hairlineWidth;
   const searchIconColor = t.colors.sectionFg;
   const searchPlaceholderColor = t.colors.searchPlaceholder;
-  const capturePlaceholderColor = t.colors.metaFg;
+  const capturePlaceholderColor = t.colors.capturePlaceholder;
   const searchFieldFg = t.sunlightMode ? t.colors.fg : t.colors.fgDim;
   const headerLogoColor = t.sunlightMode ? t.colors.metaFg : t.colors.fgDim;
   const headerLogoSize = 42;
   /** Ring geometry: align **outer ring** with search field (gutter only); composer is inset +`screenContentInnerPad`. */
   const headerLogoAlignStyle = { marginLeft: -chinottoLogoLeadingOutset(headerLogoSize) };
+
+  const showCaptureSyncHeader = Platform.OS === 'ios' && isFirebaseSyncConfigured();
 
   return (
     <View style={styles.shell}>
@@ -944,7 +1101,7 @@ export function CaptureScreen({
             <View
               style={[
                 styles.headerLogoSlot,
-                isFirebaseSyncConfigured() && Platform.OS === 'ios' && styles.headerReserveDevMenuTray,
+                showCaptureSyncHeader && styles.headerReserveDevMenuTray,
               ]}
             >
               <Pressable
@@ -960,7 +1117,7 @@ export function CaptureScreen({
                   style={headerLogoAlignStyle}
                 />
               </Pressable>
-              {isFirebaseSyncConfigured() && Platform.OS === 'ios' ? (
+              {showCaptureSyncHeader ? (
                 <SyncHeaderStatus
                   phase={headerAuthPhase}
                   uploadPending={headerAuthPhase === 'signed_in' && uploadPending}
@@ -968,7 +1125,7 @@ export function CaptureScreen({
                   onPress={openSyncModalFromHeader}
                   enableSyncLabelShimmer={!screenshotActive && enableSyncLabelShimmer}
                   onEnableSyncLabelShimmerComplete={onEnableSyncLabelShimmerComplete}
-                  style={styles.syncAfterLogo}
+                  style={[styles.syncAfterLogo, { marginLeft: spacing.xs }]}
                 />
               ) : null}
             </View>
@@ -1138,7 +1295,7 @@ export function CaptureScreen({
                   ? `Showing first ${SEARCH_MAX_RESULTS} matches`
                   : undefined
               }
-              onEntryPress={setReadEntry}
+              onEntryPress={onStreamEntryPress}
               onEntryDelete={handleEntryDelete}
             />
             <Pressable
@@ -1152,7 +1309,9 @@ export function CaptureScreen({
       {settingsRoute === 'settings' ? (
         <SettingsScreen
           onClose={() => setSettingsRoute(null)}
-          onOpenSync={openSyncModalFromHeader}
+          onOpenSync={() => openSyncModal('settings')}
+          analyticsEnabled={analyticsEnabled}
+          onAnalyticsOptInChange={onAnalyticsOptInChange}
           onOpenManifesto={() => setSettingsRoute('manifesto')}
           canOpenAppIcon={ENABLE_APP_ICON_SWITCHER}
           onOpenAppIcon={
@@ -1172,8 +1331,6 @@ export function CaptureScreen({
                     : 'Sync on'
                 : 'Off'
           }
-          hapticsEnabled={hapticsEnabled}
-          onHapticsEnabledChange={persistHapticsEnabled}
           onOpenDevMenu={__DEV__ && Platform.OS === 'ios' ? openDevMenuFromSettings : undefined}
         />
       ) : null}
@@ -1277,8 +1434,8 @@ const styles = StyleSheet.create({
   headerReserveDevMenuTray: {
     paddingRight: 56,
   },
+  /** Horizontal gap logo → label: same as Settings header (logo → “Settings”). */
   syncAfterLogo: {
-    marginLeft: 14,
     paddingVertical: 6,
     paddingRight: 4,
   },
