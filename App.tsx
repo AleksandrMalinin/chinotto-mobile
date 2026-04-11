@@ -1,9 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  clearAnalyticsPromptShown,
+  getAnalyticsPromptShown,
+  initAnalyticsOptIn,
+  isOptIn,
+  isUmamiConfigured,
+  setAnalyticsPromptShown,
+  setOptIn,
+  setUmami,
+} from './analytics/analytics';
+import { AnalyticsOptInModal } from './components/AnalyticsOptInModal';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useIncomingShare } from 'expo-sharing';
-import { AccessibilityInfo, LogBox, Platform, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, DevSettings, LogBox, Platform, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -32,6 +43,7 @@ import {
   type DisplayChromePreference,
 } from './storage/displayChromePrefs';
 import { saveEntry } from './storage/entryRepository';
+import { incrementAppLaunchCountForSyncHighlight } from './storage/syncHighlightSignals';
 import { useAdaptiveChromeBlend } from './hooks/useAdaptiveChromeBlend';
 import { isFirebaseSyncConfigured } from './sync/firebaseConfig';
 import { mirrorChinottoSyncAccessToFirestore } from './sync/firestoreSyncAccessMirror';
@@ -51,6 +63,15 @@ if (__DEV__ && isRevenueCatQuietMode()) {
  * `onLayout` calls `SplashScreen.hideAsync()` so the JS logo is already positioned underneath.
  */
 const NATIVE_SPLASH_BEAT_MS = 400;
+/**
+ * Normal order (independent timers; all optional):
+ *
+ * 1. **Contextual Enable sync shimmer** — after local relevance + cooldown (see `getSyncHighlightEligibility`
+ *    + `SYNC_HIGHLIGHT_SCHEDULE_DELAY_MS` in `CaptureScreen`), never on first cold launch.
+ * 2. **First saved thought** — `CaptureScreen` calls `onAnalyticsPresentationGateReady` → after this delay,
+ *    the Umami opt-in sheet may open (if configured and not already shown).
+ */
+const ANALYTICS_OPTIN_DELAY_MS = 4000;
 /** Wait for expo-sharing to finish resolving multi-part payloads before one save. */
 const SHARE_SAVE_DEBOUNCE_MS = 400;
 
@@ -123,6 +144,9 @@ const shareAckStyles = StyleSheet.create({
   },
 });
 
+/** One increment per JS session when capture shell mounts (Strict Mode–safe). */
+let didIncrementAppLaunchThisSession = false;
+
 export default function App() {
   const [fontsLoaded] = useFonts({
     'OpenSauceOne-400': require('./assets/fonts/OpenSauceOne-Regular.ttf'),
@@ -167,6 +191,11 @@ export default function App() {
   const streamHighlightClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [syncEntryRequestNonce, setSyncEntryRequestNonce] = useState(0);
   const [syncModalVisible, setSyncModalVisible] = useState(false);
+  const [analyticsEnabled, setAnalyticsEnabled] = useState(false);
+  const [analyticsInitDone, setAnalyticsInitDone] = useState(false);
+  const [showAnalyticsOptIn, setShowAnalyticsOptIn] = useState(false);
+  /** True once capture has at least one saved thought (see CaptureScreen analytics gate). */
+  const [captureShellReadyForAnalytics, setCaptureShellReadyForAnalytics] = useState(false);
   const syncModalWasOpenRef = useRef(false);
   const remoteIngestNotifyRef = useRef<ReturnType<typeof createDebouncedRemoteIngestNotifier> | null>(
     null
@@ -190,6 +219,17 @@ export default function App() {
     setPhase('main');
   }, []);
 
+  useEffect(() => {
+    if (phase !== 'main') {
+      return;
+    }
+    if (didIncrementAppLaunchThisSession) {
+      return;
+    }
+    didIncrementAppLaunchThisSession = true;
+    void incrementAppLaunchCountForSyncHighlight();
+  }, [phase]);
+
   const scheduleStreamHighlight = useCallback((entryId: string) => {
     if (streamHighlightClearRef.current != null) {
       clearTimeout(streamHighlightClearRef.current);
@@ -203,6 +243,71 @@ export default function App() {
 
   useEffect(() => {
     void initDatabase().finally(() => setDbReady(true));
+  }, []);
+
+  useEffect(() => {
+    const url = process.env.EXPO_PUBLIC_UMAMI_URL?.trim() || null;
+    const id = process.env.EXPO_PUBLIC_UMAMI_WEBSITE_ID?.trim() || null;
+    setUmami(url, id);
+    void (async () => {
+      await initAnalyticsOptIn();
+      setAnalyticsEnabled(isOptIn());
+      setAnalyticsInitDone(true);
+    })();
+  }, []);
+
+  const onCaptureShellReadyForAnalytics = useCallback(() => {
+    setCaptureShellReadyForAnalytics(true);
+  }, []);
+
+  const resetAnalyticsPromptForDev = useCallback(() => {
+    void (async () => {
+      await clearAnalyticsPromptShown();
+      DevSettings.reload();
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!analyticsInitDone || phase !== 'main' || !captureShellReadyForAnalytics || isScreenshotMode()) {
+      return undefined;
+    }
+    if (!isUmamiConfigured()) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    void (async () => {
+      const shown = await getAnalyticsPromptShown();
+      if (cancelled || shown) {
+        return;
+      }
+      if (isOptIn()) {
+        void setAnalyticsPromptShown();
+        return;
+      }
+      timer = setTimeout(() => {
+        if (!cancelled) {
+          setShowAnalyticsOptIn(true);
+        }
+      }, ANALYTICS_OPTIN_DELAY_MS);
+    })();
+
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) {
+        clearTimeout(timer);
+      }
+    };
+  }, [phase, analyticsInitDone, captureShellReadyForAnalytics]);
+
+  const onAnalyticsOptInChange = useCallback((enabled: boolean) => {
+    setOptIn(enabled);
+    setAnalyticsEnabled(enabled);
+    if (enabled) {
+      void setAnalyticsPromptShown();
+    }
   }, []);
 
   useEffect(() => {
@@ -422,7 +527,7 @@ export default function App() {
           <View style={{ flex: 1 }}>
             <StatusBar style="light" />
             <CaptureScreen
-              allowCaptureFocus={phase === 'main'}
+              allowCaptureFocus={phase === 'main' && !showAnalyticsOptIn}
               remoteIngestVersion={remoteIngestVersion}
               externalEntriesEpoch={externalEntriesEpoch}
               captureFocusNonce={captureFocusNonce}
@@ -434,8 +539,19 @@ export default function App() {
               screenshot={isScreenshotMode() ? { scene: screenshotScene } : undefined}
               syncModalVisible={syncModalVisible}
               onSyncModalVisibleChange={setSyncModalVisible}
+              analyticsEnabled={analyticsEnabled}
+              onAnalyticsOptInChange={onAnalyticsOptInChange}
+              onAnalyticsPresentationGateReady={onCaptureShellReadyForAnalytics}
+              onResetAnalyticsPrompt={__DEV__ && Platform.OS === 'ios' ? resetAnalyticsPromptForDev : undefined}
             />
             {phase === 'brand' ? <BrandSplash onFinished={onBrandFinished} /> : null}
+            <AnalyticsOptInModal
+              visible={showAnalyticsOptIn}
+              onClose={() => {
+                setShowAnalyticsOptIn(false);
+                setAnalyticsEnabled(isOptIn());
+              }}
+            />
             <ShareSavedAck visible={shareSavedAck} />
           </View>
         </SafeAreaProvider>
