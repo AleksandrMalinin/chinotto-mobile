@@ -1,5 +1,6 @@
 import { act, fireEvent, render } from '@testing-library/react-native';
 
+import { AdaptiveChromeContext } from '../../theme';
 import { SyncHeaderStatus } from '../SyncHeaderStatus';
 
 describe('SyncHeaderStatus', () => {
@@ -41,12 +42,24 @@ describe('SyncHeaderStatus', () => {
   });
 
   it('shows Enable sync with no dot when signed out', () => {
-    const { getByText, queryByTestId } = render(
+    const { getByTestId, queryByTestId } = render(
       <SyncHeaderStatus phase="signed_out" onPress={jest.fn()} />
     );
 
-    expect(getByText('Enable sync')).toBeTruthy();
+    expect(getByTestId('enable-sync-headline-gradient-label')).toBeTruthy();
     expect(queryByTestId('sync-header-dot')).toBeNull();
+  });
+
+  it('shows Enable sync when signed out in Sunlight chrome (full blend)', () => {
+    const { getByTestId } = render(
+      <AdaptiveChromeContext.Provider
+        value={{ blendProgress: 1, displayChrome: 'auto', setDisplayChrome: jest.fn() }}
+      >
+        <SyncHeaderStatus phase="signed_out" onPress={jest.fn()} />
+      </AdaptiveChromeContext.Provider>
+    );
+
+    expect(getByTestId('enable-sync-headline-gradient-label')).toBeTruthy();
   });
 
   it('calls onPress when pressed', () => {
@@ -73,7 +86,7 @@ describe('SyncHeaderStatus', () => {
       expect(getByTestId('enable-sync-label-shimmer')).toBeTruthy();
 
       act(() => {
-        jest.advanceTimersByTime(1300);
+        jest.advanceTimersByTime(2800);
       });
 
       expect(onComplete).toHaveBeenCalledTimes(1);
@@ -81,4 +94,5 @@ describe('SyncHeaderStatus', () => {
       jest.useRealTimers();
     }
   });
+
 });
