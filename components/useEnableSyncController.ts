@@ -19,8 +19,21 @@ import { resolvePushEntryForSync } from '../sync/pushEntryForSync';
 import { processSyncQueue } from '../sync/syncEngine';
 import { mirrorChinottoSyncAccessToFirestore } from '../sync/firestoreSyncAccessMirror';
 import { flushSyncTombstoneOutbox } from '../sync/tombstoneFlush';
+import { track } from '../analytics/analytics';
 
 import type { SyncModalAuthPhase } from './EnableSyncModal';
+
+function purchaseFailureKind(err: Error): 'user_cancelled' | 'network' | 'unknown' {
+  const rec = err as { code?: string };
+  const code = typeof rec.code === 'string' ? rec.code : '';
+  if (code === 'PURCHASE_CANCELLED' || /cancel/i.test(err.message)) {
+    return 'user_cancelled';
+  }
+  if (code === 'NETWORK_ERROR' || /network|offline|internet|connection/i.test(err.message)) {
+    return 'network';
+  }
+  return 'unknown';
+}
 
 export function useEnableSyncController(params: {
   visible: boolean;
@@ -66,6 +79,7 @@ export function useEnableSyncController(params: {
   const [desktopLinkCopied, setDesktopLinkCopied] = useState(false);
   const copyFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastDevPostSyncNonce = useRef(0);
+  const paywallShownForOpenRef = useRef(false);
 
   useEffect(() => {
     if (!__DEV__) {
@@ -84,6 +98,7 @@ export function useEnableSyncController(params: {
 
   useEffect(() => {
     if (!visible) {
+      paywallShownForOpenRef.current = false;
       setPostSyncSuccess(false);
       setDesktopLinkCopied(false);
       setSelectedPackageKind('yearly');
@@ -95,6 +110,23 @@ export function useEnableSyncController(params: {
       }
     }
   }, [visible]);
+
+  useEffect(() => {
+    if (!visible || !isPaywallEnabled() || !subscriptionHydrated || authPhase !== 'signed_out') {
+      return;
+    }
+    if (getCachedHasSyncEntitlement()) {
+      return;
+    }
+    if (paywallPlansLoading || paywallPlans.length === 0) {
+      return;
+    }
+    if (paywallShownForOpenRef.current) {
+      return;
+    }
+    paywallShownForOpenRef.current = true;
+    track({ event: 'sync_paywall_shown' });
+  }, [visible, subscriptionHydrated, authPhase, paywallPlansLoading, paywallPlans.length]);
 
   useEffect(() => {
     if (!visible || !isPaywallEnabled() || !subscriptionHydrated || authPhase !== 'signed_out') {
@@ -143,6 +175,7 @@ export function useEnableSyncController(params: {
   const handlePlusContinue = useCallback(async () => {
     setErrorMessage(null);
     setBusy(true);
+    track({ event: 'sync_plus_continue_clicked', package_kind: selectedPackageKind });
     try {
       const result = await openSyncPurchaseFlow({
         packageKind: selectedPackageKind,
@@ -150,10 +183,12 @@ export function useEnableSyncController(params: {
       });
       switch (result.kind) {
         case 'already_has_sync_access':
+          track({ event: 'sync_purchase_outcome', outcome: 'already_has_sync_access' });
           onSubscriptionUnlocked?.();
           void mirrorChinottoSyncAccessToFirestore();
           break;
         case 'purchased':
+          track({ event: 'sync_purchase_outcome', outcome: 'purchased' });
           onSubscriptionUnlocked?.();
           void mirrorChinottoSyncAccessToFirestore();
           if (!getCachedHasSyncEntitlement()) {
@@ -163,11 +198,18 @@ export function useEnableSyncController(params: {
           }
           break;
         case 'cancelled':
+          track({ event: 'sync_purchase_outcome', outcome: 'cancelled' });
           break;
         case 'unavailable':
+          track({ event: 'sync_purchase_outcome', outcome: 'unavailable' });
           setErrorMessage('Plans are not available right now. Try again later.');
           break;
         case 'failed':
+          track({
+            event: 'sync_purchase_outcome',
+            outcome: 'failed',
+            failure_kind: purchaseFailureKind(result.error),
+          });
           setErrorMessage(result.error.message || 'Something went wrong. Try again.');
           break;
       }
@@ -179,19 +221,23 @@ export function useEnableSyncController(params: {
   const handleRestorePurchases = useCallback(async () => {
     setErrorMessage(null);
     setBusy(true);
+    track({ event: 'sync_restore_tapped' });
     try {
       const info = await restorePurchases();
       if (__DEV__) {
         void logRevenueCatSubscriptionsAndProducts(info ?? undefined, 'after-restore');
       }
       if (getCachedHasSyncEntitlement()) {
+        track({ event: 'sync_restore_outcome', outcome: 'entitlement_active' });
         onSubscriptionUnlocked?.();
         void mirrorChinottoSyncAccessToFirestore();
         return;
       }
       if (info != null) {
+        track({ event: 'sync_restore_outcome', outcome: 'no_entitlement' });
         setErrorMessage('No purchases found for this Apple ID.');
       } else {
+        track({ event: 'sync_restore_outcome', outcome: 'error' });
         setErrorMessage('Could not restore. Check your connection and try again.');
       }
     } finally {
@@ -207,16 +253,21 @@ export function useEnableSyncController(params: {
       await processSyncQueue(resolvePushEntryForSync());
       await flushSyncTombstoneOutbox();
       await mirrorChinottoSyncAccessToFirestore();
+      track({ event: 'sync_apple_mobile_sign_in_outcome', outcome: 'success' });
       onEnabled();
       setPostSyncSuccess(true);
     } catch (err: unknown) {
       if (err instanceof AppleUserCanceledError) {
+        track({ event: 'sync_apple_mobile_sign_in_outcome', outcome: 'user_cancelled' });
         // Calm: no error banner for cancel
       } else if (err instanceof AppleSyncIdentityError) {
+        track({ event: 'sync_apple_mobile_sign_in_outcome', outcome: 'error' });
         setErrorMessage(err.message);
       } else if (err instanceof Error) {
+        track({ event: 'sync_apple_mobile_sign_in_outcome', outcome: 'error' });
         setErrorMessage(err.message);
       } else {
+        track({ event: 'sync_apple_mobile_sign_in_outcome', outcome: 'error' });
         setErrorMessage('Something went wrong. Try again.');
       }
     } finally {
@@ -227,6 +278,7 @@ export function useEnableSyncController(params: {
   const handleStopSyncing = useCallback(async () => {
     setErrorMessage(null);
     setBusy(true);
+    track({ event: 'sync_stop_sync_clicked' });
     try {
       await mirrorChinottoSyncAccessToFirestore({ forceInactive: true });
       await signOut(getOrInitAuth());
