@@ -41,6 +41,13 @@ const LINES_ONLY_DUR_A_MS = 6000;
 const LINES_ONLY_DUR_B_MS = 5400;
 const LINES_ONLY_DUR_C_MS = 5000;
 
+/** Latest finish time for staged `linesOnly` stroke draw (parallel paths). Used for first-launch sync shimmer timing. */
+export const LINES_ONLY_MOTION_END_MS = Math.max(
+  LINES_ONLY_DELAY_A_MS + LINES_ONLY_DUR_A_MS,
+  LINES_ONLY_DELAY_B_MS + LINES_ONLY_DUR_B_MS,
+  LINES_ONLY_DELAY_C_MS + LINES_ONLY_DUR_C_MS
+);
+
 const DRAW_EASING = Easing.bezier(0.22, 1, 0.36, 1);
 
 /** Drift timings — same roles as before; fills are `IntroRadialBlobView` (desktop intro blobs). */

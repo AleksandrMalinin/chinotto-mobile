@@ -1,8 +1,12 @@
 import { render } from '@testing-library/react-native';
 
-import { StreamFlowPanel } from '../StreamFlowPanel';
+import { LINES_ONLY_MOTION_END_MS, StreamFlowPanel } from '../StreamFlowPanel';
 
 describe('StreamFlowPanel', () => {
+  it('exports line-art end time for first-launch sync shimmer scheduling', () => {
+    expect(LINES_ONLY_MOTION_END_MS).toBe(7100);
+  });
+
   it('renders linesOnly without glass card decorations', () => {
     const { toJSON } = render(<StreamFlowPanel linesOnly calm useAdaptiveChrome />);
     const tree = toJSON();
