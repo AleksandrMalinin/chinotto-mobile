@@ -93,6 +93,10 @@ describe('openSyncPurchaseFlow', () => {
   });
 
   it('returns purchased on successful purchase', async () => {
+    mockGetCachedHasSyncEntitlement
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
     mockLoadOffering.mockResolvedValue({
       ok: true,
       offering: {} as never,
@@ -108,7 +112,29 @@ describe('openSyncPurchaseFlow', () => {
     expect(mockPurchase).toHaveBeenCalledTimes(1);
   });
 
+  it('returns purchased_without_entitlement when purchase succeeds but sync gate stays false', async () => {
+    mockLoadOffering.mockResolvedValue({
+      ok: true,
+      offering: {} as never,
+      packages: [row('monthly')],
+    });
+    mockPurchase.mockResolvedValue({
+      status: 'success',
+      productIdentifier: 'chinotto.pro.monthly',
+      customerInfo: {} as never,
+    });
+    const r = await openSyncPurchaseFlow({ packageKind: 'monthly' });
+    expect(r).toEqual({
+      kind: 'purchased_without_entitlement',
+      productIdentifier: 'chinotto.pro.monthly',
+    });
+  });
+
   it('skips loadCurrentChinottoOffering when preloadedPackages provided', async () => {
+    mockGetCachedHasSyncEntitlement
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
     mockPurchase.mockResolvedValue({
       status: 'success',
       productIdentifier: 'x',

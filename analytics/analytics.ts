@@ -32,7 +32,13 @@ export type AnalyticsEvent =
   | { event: 'sync_plus_continue_clicked'; package_kind: 'monthly' | 'yearly' | 'lifetime' }
   | {
       event: 'sync_purchase_outcome';
-      outcome: 'purchased' | 'already_has_sync_access' | 'cancelled' | 'unavailable' | 'failed';
+      outcome:
+        | 'purchased'
+        | 'purchased_without_entitlement'
+        | 'already_has_sync_access'
+        | 'cancelled'
+        | 'unavailable'
+        | 'failed';
       failure_kind?: 'user_cancelled' | 'network' | 'unknown';
     }
   | { event: 'sync_restore_tapped' }

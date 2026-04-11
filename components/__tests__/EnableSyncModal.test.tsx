@@ -374,7 +374,7 @@ describe('EnableSyncModal', () => {
     paywallGate.enabled = true;
     mockGetEntitlement.mockReturnValue(false);
     mockOpenSyncPurchaseFlow.mockResolvedValue({
-      kind: 'purchased',
+      kind: 'purchased_without_entitlement',
       productIdentifier: 'chinotto.pro.monthly',
     });
 
@@ -393,7 +393,7 @@ describe('EnableSyncModal', () => {
     fireEvent.press(getByLabelText('Enable sync with selected plan'));
 
     await waitFor(() => {
-      expect(getByText(/Apple shows an active subscription/)).toBeTruthy();
+      expect(getByText(/Sync access is not active yet/)).toBeTruthy();
       expect(getByText(/Chinotto Pro/)).toBeTruthy();
     });
   });

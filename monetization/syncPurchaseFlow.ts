@@ -18,6 +18,11 @@ import { getCachedHasSyncEntitlement } from './subscriptionState';
 export type SyncPurchaseFlowResult =
   | { kind: 'already_has_sync_access' }
   | { kind: 'purchased'; productIdentifier: string }
+  /**
+   * App Store purchase finished in the RevenueCat SDK but local sync gate is still false
+   * (entitlement not active yet, or products not linked to **Chinotto Pro** in the RC dashboard).
+   */
+  | { kind: 'purchased_without_entitlement'; productIdentifier: string }
   | { kind: 'cancelled' }
   | {
       kind: 'unavailable';
@@ -114,6 +119,13 @@ export async function openSyncPurchaseFlow(
   }
   if (purchase.status === 'failed') {
     return { kind: 'failed', error: purchase.error };
+  }
+
+  if (!getCachedHasSyncEntitlement()) {
+    return {
+      kind: 'purchased_without_entitlement',
+      productIdentifier: purchase.productIdentifier,
+    };
   }
 
   return { kind: 'purchased', productIdentifier: purchase.productIdentifier };

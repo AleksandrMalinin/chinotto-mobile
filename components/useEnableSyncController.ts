@@ -181,6 +181,9 @@ export function useEnableSyncController(params: {
         packageKind: selectedPackageKind,
         ...(paywallPlans.length > 0 ? { preloadedPackages: paywallPlans } : {}),
       });
+      if (__DEV__) {
+        console.log('[EnableSync] purchase flow result:', result.kind);
+      }
       switch (result.kind) {
         case 'already_has_sync_access':
           track({ event: 'sync_purchase_outcome', outcome: 'already_has_sync_access' });
@@ -191,14 +194,20 @@ export function useEnableSyncController(params: {
           track({ event: 'sync_purchase_outcome', outcome: 'purchased' });
           onSubscriptionUnlocked?.();
           void mirrorChinottoSyncAccessToFirestore();
-          if (!getCachedHasSyncEntitlement()) {
-            setErrorMessage(
-              'Apple shows an active subscription, but this app has not received sync access yet. In RevenueCat, attach each product to the entitlement Chinotto Pro, then tap Restore purchases. After that, Continue will take you to Sign in with Apple.'
-            );
-          }
+          break;
+        case 'purchased_without_entitlement':
+          track({ event: 'sync_purchase_outcome', outcome: 'purchased_without_entitlement' });
+          onSubscriptionUnlocked?.();
+          void mirrorChinottoSyncAccessToFirestore();
+          setErrorMessage(
+            'Sync access is not active yet. Tap Restore purchases once, then Continue again. If this persists, in RevenueCat attach each product to the entitlement Chinotto Pro (exact name).'
+          );
           break;
         case 'cancelled':
           track({ event: 'sync_purchase_outcome', outcome: 'cancelled' });
+          setErrorMessage(
+            'Purchase did not finish (Apple returned cancel). Try Enable sync again, or Restore purchases if you already subscribed.'
+          );
           break;
         case 'unavailable':
           track({ event: 'sync_purchase_outcome', outcome: 'unavailable' });
