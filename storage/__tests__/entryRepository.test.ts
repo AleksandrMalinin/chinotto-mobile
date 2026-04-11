@@ -9,6 +9,7 @@ import {
   applyRemoteTombstoneDeletes,
   deleteEntry,
   getAllEntries,
+  getEntryCount,
   getEntriesOlderThan,
   getRecentEntries,
   saveEntry,
@@ -132,6 +133,17 @@ describe('entryRepository', () => {
       expect(withTransactionAsync).not.toHaveBeenCalled();
       expect(runAsync).not.toHaveBeenCalled();
       expect(mockInsertPendingSyncItem).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getEntryCount', () => {
+    it('returns total row count', async () => {
+      getFirstAsync.mockResolvedValueOnce({ n: 42 });
+
+      const n = await getEntryCount();
+
+      expect(n).toBe(42);
+      expect(getFirstAsync).toHaveBeenCalledWith('SELECT COUNT(*) AS n FROM entries');
     });
   });
 

@@ -126,6 +126,15 @@ export async function getRecentEntries(limit: number): Promise<Entry[]> {
   });
 }
 
+/** Total local thoughts — used for sync highlight relevance (not limited to current stream page). */
+export async function getEntryCount(): Promise<number> {
+  return runSerializedDb(async () => {
+    const db = await getDatabase();
+    const row = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM entries');
+    return row?.n ?? 0;
+  });
+}
+
 /**
  * Next page in global newest-first order. Tie-break on `id` matches docs/sync/sync.md ordering.
  */
