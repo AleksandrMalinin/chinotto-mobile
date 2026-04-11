@@ -1,44 +1,33 @@
 import { Alert, type AlertButton } from 'react-native';
 
+/**
+ * Minimal dev-only QA menu (`__DEV__`). Fewer entries — most paywall cases use
+ * {@link onResetPaywallForPurchaseTesting} (RC log out + clear local flags).
+ */
 export type DevMenuOptions = {
-  /** Clears local trial + legacy “subscribed” AsyncStorage flags so the sync paywall can show again (device-only, not Apple ID). */
-  onClearLocalSyncPaywallFlags?: () => void | Promise<void>;
-  /**
-   * iOS: `Purchases.logOut()` + refresh entitlement cache — new RC anonymous user so StoreKit-cleared sim state matches gating.
-   */
-  onRevenueCatLogOut?: () => void | Promise<void>;
-  /** iOS: RC log out + clear local paywall flags — fastest way to see the plan picker again when testing purchases. */
+  /** RC log out + clear local paywall flags — usual path to re-test purchases. */
   onResetPaywallForPurchaseTesting?: () => void | Promise<void>;
-  /** iOS: re-open sync modal on the post–“Sync enabled” / desktop link step (QA, repeatable). */
+  /** Re-open sync modal on the post–“Sync enabled” / desktop link step. */
   onPreviewSyncEnabledSheet?: () => void;
-  /** Clear first-launch empty capture reveal flag so delayed keyboard + art show again (dev builds). */
-  onResetFirstLaunchEmptyCaptureReveal?: () => void | Promise<void>;
+  /** Clear Umami analytics prompt flag and reload JS. */
+  onResetAnalyticsPrompt?: () => void | Promise<void>;
+  /** Clear sync shimmer prefs + first-launch capture prefs, then reload JS (`DevSettings.reload`). */
+  onResetSyncCaptureQA?: () => void | Promise<void>;
 };
 
 /**
- * Extensible dev-only actions (development builds / `__DEV__` only).
- * Trigger from Settings (iOS dev builds) after opening via header logo.
+ * Single flat alert — Settings → logo (iOS dev builds).
  */
 export function showDevMenu(options: DevMenuOptions): void {
   if (!__DEV__) {
     return;
   }
+
   const buttons: AlertButton[] = [];
-  if (options.onClearLocalSyncPaywallFlags != null) {
-    buttons.push({
-      text: 'Clear local sync paywall flags',
-      onPress: () => void options.onClearLocalSyncPaywallFlags?.(),
-    });
-  }
-  if (options.onRevenueCatLogOut != null) {
-    buttons.push({
-      text: 'RevenueCat: refresh (log out or sync)',
-      onPress: () => void options.onRevenueCatLogOut?.(),
-    });
-  }
+
   if (options.onResetPaywallForPurchaseTesting != null) {
     buttons.push({
-      text: 'Reset paywall for purchase testing',
+      text: 'Reset paywall for testing',
       onPress: () => void options.onResetPaywallForPurchaseTesting?.(),
     });
   }
@@ -48,12 +37,19 @@ export function showDevMenu(options: DevMenuOptions): void {
       onPress: options.onPreviewSyncEnabledSheet,
     });
   }
-  if (options.onResetFirstLaunchEmptyCaptureReveal != null) {
+  if (options.onResetAnalyticsPrompt != null) {
     buttons.push({
-      text: 'Reset first-launch empty capture',
-      onPress: () => void options.onResetFirstLaunchEmptyCaptureReveal?.(),
+      text: 'Reset analytics prompt',
+      onPress: () => void options.onResetAnalyticsPrompt?.(),
     });
   }
+  if (options.onResetSyncCaptureQA != null) {
+    buttons.push({
+      text: 'Reset sync & capture QA',
+      onPress: () => void options.onResetSyncCaptureQA?.(),
+    });
+  }
+
   buttons.push({ text: 'Cancel', style: 'cancel' });
   Alert.alert('Dev menu', undefined, buttons);
 }
