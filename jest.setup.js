@@ -100,6 +100,11 @@ jest.mock('react-native-purchases', () => {
         productIdentifier: 'monthly',
       })
     ),
+    syncPurchasesForResult: jest.fn(() =>
+      Promise.resolve({
+        customerInfo: emptyCustomerInfo,
+      })
+    ),
     restorePurchases: jest.fn(() => Promise.resolve(emptyCustomerInfo)),
     addCustomerInfoUpdateListener: jest.fn(),
     removeCustomerInfoUpdateListener: jest.fn(() => true),

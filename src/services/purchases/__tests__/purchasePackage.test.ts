@@ -1,16 +1,20 @@
-import type { PurchasesPackage } from 'react-native-purchases';
+import type { CustomerInfo, PurchasesPackage } from 'react-native-purchases';
 import Purchases from 'react-native-purchases';
 
 jest.mock('../revenueCatDebugLog', () => ({
   logRevenueCatSubscriptionsAndProducts: jest.fn(() => Promise.resolve()),
 }));
 
-import { resetRevenueCatEntitlementCacheForTests } from '../entitlementCache';
+import { getCachedHasChinottoProEntitlement, resetRevenueCatEntitlementCacheForTests } from '../entitlementCache';
 import { purchaseChinottoPackage } from '../purchasePackage';
 
-const emptyCustomerInfo = {
+const withChinottoPro = {
   entitlements: { active: { 'Chinotto Pro': { identifier: 'Chinotto Pro' } }, all: {} },
-} as never;
+} as unknown as CustomerInfo;
+
+const withoutChinottoPro = {
+  entitlements: { active: {}, all: {} },
+} as unknown as CustomerInfo;
 
 describe('purchaseChinottoPackage', () => {
   const rcPackage = { identifier: 'x', product: { identifier: 'monthly' } } as PurchasesPackage;
@@ -18,11 +22,15 @@ describe('purchaseChinottoPackage', () => {
   beforeEach(() => {
     resetRevenueCatEntitlementCacheForTests();
     jest.mocked(Purchases.purchasePackage).mockReset();
+    jest.mocked(Purchases.syncPurchasesForResult).mockReset();
+    jest.mocked(Purchases.syncPurchasesForResult).mockResolvedValue({
+      customerInfo: withoutChinottoPro,
+    });
   });
 
   it('returns success and syncs cache', async () => {
     jest.mocked(Purchases.purchasePackage).mockResolvedValue({
-      customerInfo: emptyCustomerInfo,
+      customerInfo: withChinottoPro,
       productIdentifier: 'monthly',
     } as never);
 
@@ -32,6 +40,22 @@ describe('purchaseChinottoPackage', () => {
       expect(r.productIdentifier).toBe('monthly');
     }
     expect(Purchases.purchasePackage).toHaveBeenCalledWith(rcPackage);
+    expect(jest.mocked(Purchases.syncPurchasesForResult)).not.toHaveBeenCalled();
+  });
+
+  it('updates entitlement when purchase payload lacks Chinotto Pro but syncPurchasesForResult returns it', async () => {
+    jest.mocked(Purchases.purchasePackage).mockResolvedValue({
+      customerInfo: withoutChinottoPro,
+      productIdentifier: 'monthly',
+    } as never);
+    jest.mocked(Purchases.syncPurchasesForResult).mockResolvedValue({
+      customerInfo: withChinottoPro,
+    } as never);
+
+    await purchaseChinottoPackage(rcPackage);
+
+    expect(getCachedHasChinottoProEntitlement()).toBe(true);
+    expect(jest.mocked(Purchases.syncPurchasesForResult)).toHaveBeenCalled();
   });
 
   it('returns cancelled on purchase cancel error', async () => {
