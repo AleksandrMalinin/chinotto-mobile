@@ -312,7 +312,7 @@ describe('EnableSyncModal', () => {
     paywallGate.enabled = true;
     mockGetEntitlement.mockReturnValue(false);
 
-    const { getByText, getByLabelText } = render(
+    const { getByText, getByLabelText, queryByTestId } = render(
       <EnableSyncModal
         visible
         onClose={jest.fn()}
@@ -324,6 +324,7 @@ describe('EnableSyncModal', () => {
 
     await flushPaywallPrefetch();
 
+    expect(queryByTestId('temp-rc-offerings-debug')).toBeNull();
     expect(getByText('Continue on another device')).toBeTruthy();
     expect(getByText('Local by default. Sync is optional.')).toBeTruthy();
     expect(getByLabelText('Enable sync with selected plan')).toBeTruthy();

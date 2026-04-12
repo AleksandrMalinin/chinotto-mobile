@@ -24,9 +24,12 @@ import { useEnableSyncController } from './useEnableSyncController';
  * TEMPORARY — delete this constant, `buildTempRcOfferingsDebugText`, the related state/effect/styles,
  * and the paywall `ScrollView` block when the paywall is stable. Used to diagnose “plans unavailable” locally.
  *
- * **`__DEV__` only:** no RevenueCat debug panel or extra RC fetch in release / TestFlight.
+ * **Never in release:** {@link SHOW_RC_OFFERINGS_DEBUG_UI} is `__DEV__ &&` this flag so TestFlight/App Store
+ * builds never show the panel or run the extra RC fetch, even if this is set to `true` by mistake.
  */
 const TEMP_RC_OFFERINGS_DEBUG_UI = false;
+
+const SHOW_RC_OFFERINGS_DEBUG_UI = __DEV__ && TEMP_RC_OFFERINGS_DEBUG_UI;
 
 /** TEMPORARY — remove with {@link TEMP_RC_OFFERINGS_DEBUG_UI}. No full key, only shape / EAS hint. */
 function tempRcEmbeddedIosKeyHint(): string {
@@ -220,7 +223,7 @@ export function EnableSyncModal({
   const [rcDebugText, setRcDebugText] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!TEMP_RC_OFFERINGS_DEBUG_UI || Platform.OS !== 'ios') {
+    if (!SHOW_RC_OFFERINGS_DEBUG_UI || Platform.OS !== 'ios') {
       return;
     }
     const showPlusPaywallDebug =
@@ -477,7 +480,7 @@ export function EnableSyncModal({
               <Text style={[styles.body, { color: fgDim, fontFamily: fonts.regular }]}>
                 Local by default. Sync is optional.
               </Text>
-              {TEMP_RC_OFFERINGS_DEBUG_UI ? (
+              {SHOW_RC_OFFERINGS_DEBUG_UI ? (
                 <View
                   testID="temp-rc-offerings-debug"
                   style={[styles.tempRcDebugWrap, { borderColor: 'rgba(255, 159, 67, 0.55)' }]}
