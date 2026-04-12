@@ -1082,7 +1082,7 @@ export function CaptureScreen({
   const searchPlaceholderColor = t.colors.searchPlaceholder;
   const capturePlaceholderColor = t.colors.capturePlaceholder;
   const searchFieldFg = t.sunlightMode ? t.colors.fg : t.colors.fgDim;
-  const headerLogoColor = t.sunlightMode ? t.colors.metaFg : t.colors.fgDim;
+  const headerLogoColor = t.colors.metaFg;
   const headerLogoSize = 42;
   /** Ring geometry: align **outer ring** with search field (gutter only); composer is inset +`screenContentInnerPad`. */
   const headerLogoAlignStyle = { marginLeft: -chinottoLogoLeadingOutset(headerLogoSize) };

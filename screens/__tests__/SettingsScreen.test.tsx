@@ -91,4 +91,14 @@ describe('SettingsScreen', () => {
     expect(await screen.findByText('Appearance')).toBeTruthy();
     expect(screen.getByTestId('settings-open-app-icon')).toBeTruthy();
   });
+
+  it('shows Enable sync when cloud sync is off', async () => {
+    renderSettings({ syncStatusLabel: 'Off' });
+    expect(await screen.findByText('Enable sync')).toBeTruthy();
+  });
+
+  it('shows Manage when sync is on so the row label does not repeat the Sync section title', async () => {
+    renderSettings({ syncStatusLabel: 'Sync on' });
+    expect(await screen.findByText('Manage')).toBeTruthy();
+  });
 });

@@ -1,6 +1,7 @@
 import { act, fireEvent, render } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 
-import { AdaptiveChromeContext } from '../../theme';
+import { AdaptiveChromeContext, colorsDark } from '../../theme';
 import { SyncHeaderStatus } from '../SyncHeaderStatus';
 
 describe('SyncHeaderStatus', () => {
@@ -18,7 +19,10 @@ describe('SyncHeaderStatus', () => {
       <SyncHeaderStatus phase="signed_in" uploadPending={false} onPress={jest.fn()} />
     );
 
-    expect(getByText('Sync on')).toBeTruthy();
+    const label = getByText('Sync on');
+    expect(label).toBeTruthy();
+    const flat = StyleSheet.flatten(label.props.style) as { color?: string };
+    expect(flat.color).toBe(colorsDark.fgDim);
     expect(getByTestId('sync-header-dot')).toBeTruthy();
   });
 
@@ -27,7 +31,10 @@ describe('SyncHeaderStatus', () => {
       <SyncHeaderStatus phase="signed_in" uploadPending onPress={jest.fn()} />
     );
 
-    expect(getByText('Syncing…')).toBeTruthy();
+    const label = getByText('Syncing…');
+    expect(label).toBeTruthy();
+    const flat = StyleSheet.flatten(label.props.style) as { color?: string };
+    expect(flat.color).toBe(colorsDark.muted);
     expect(getByTestId('sync-header-dot')).toBeTruthy();
   });
 

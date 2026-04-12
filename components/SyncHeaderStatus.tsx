@@ -61,10 +61,17 @@ const ENABLE_SYNC_HEADLINE_GRADIENT_OPACITY_SUNLIGHT = 0.84;
 /** Lavender from the shell palette; deliberately not a “success” green. */
 const SYNC_DOT_FILL = 'rgba(148, 156, 212, 0.58)';
 const SYNC_DOT_FILL_SUNLIGHT = 'rgba(210, 216, 255, 0.92)';
+/** Brighter when cloud sync is connected and idle — matches stronger “Sync on” label. */
+const SYNC_DOT_IDLE = 'rgba(176, 184, 238, 0.95)';
+const SYNC_DOT_IDLE_SUNLIGHT = 'rgba(232, 234, 255, 1)';
 const SYNC_DOT_SHADOW_IOS = 'rgba(165, 172, 225, 0.55)';
 
 function syncDotFill(sunlightMode: boolean): string {
   return sunlightMode ? SYNC_DOT_FILL_SUNLIGHT : SYNC_DOT_FILL;
+}
+
+function syncDotFillIdle(sunlightMode: boolean): string {
+  return sunlightMode ? SYNC_DOT_IDLE_SUNLIGHT : SYNC_DOT_IDLE;
 }
 
 function syncDotShadowStyle(sunlightMode: boolean): ViewStyle {
@@ -287,14 +294,19 @@ export function SyncHeaderStatus({
             : 'Sync on'
         : 'Enable sync';
 
-  /** Intentionally quiet — sync is optional; never compete with capture. signed_out uses tuned neutrals. */
+  /** Connected, queue idle: sync is active — read clearly (not optional “enable” chrome). */
+  const syncOnIdle = phase === 'signed_in' && !uploadPending && !uploadStuck;
+
+  /** signed_out stays soft; restoring / syncing stay secondary; idle “Sync on” uses secondary fg so it lands. */
   const textColor =
     phase === 'signed_out'
       ? enableSyncLabelColor(t)
       : phase === 'signed_in'
         ? uploadStuck
           ? t.colors.sectionFg
-          : t.colors.muted
+          : uploadPending
+            ? t.colors.muted
+            : t.colors.fgDim
         : t.colors.muted;
 
   const showDot = phase === 'restoring' || phase === 'signed_in';
@@ -335,8 +347,10 @@ export function SyncHeaderStatus({
             style={[
               styles.dot,
               {
-                backgroundColor: syncDotFill(t.sunlightMode),
-                opacity: 0.52,
+                backgroundColor: syncOnIdle
+                  ? syncDotFillIdle(t.sunlightMode)
+                  : syncDotFill(t.sunlightMode),
+                opacity: syncOnIdle ? 1 : 0.52,
                 ...syncDotShadowStyle(t.sunlightMode),
               },
             ]}
@@ -381,6 +395,8 @@ export function SyncHeaderStatus({
     );
   }
 
+  const signedInRestOpacity = syncOnIdle ? 1 : CTA_REST_OPACITY;
+
   return (
     <Pressable
       testID="sync-header-cta"
@@ -388,7 +404,10 @@ export function SyncHeaderStatus({
       accessibilityLabel={accessibilityLabel}
       hitSlop={10}
       onPress={onPress}
-      style={({ pressed }) => [style, { opacity: pressed ? CTA_PRESSED_OPACITY : CTA_REST_OPACITY }]}
+      style={({ pressed }) => [
+        style,
+        { opacity: pressed ? CTA_PRESSED_OPACITY : signedInRestOpacity },
+      ]}
     >
       {row}
     </Pressable>

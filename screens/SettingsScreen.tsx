@@ -103,8 +103,8 @@ export function SettingsScreen({
                 <SettingsSection title="Sync">
                   <SettingsRow
                     variant="navigation"
-                    label={syncStatusLabel === 'Off' ? 'Enable sync' : 'Sync'}
-                    description="Continue on desktop with the same Apple ID."
+                    label={syncStatusLabel === 'Off' ? 'Enable sync' : 'Manage'}
+                    description="Same Apple ID in the desktop app."
                     valueLabel={syncStatusLabel}
                     onPress={onOpenSync}
                   />
