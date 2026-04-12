@@ -1,5 +1,6 @@
 import {
   doc,
+  getFirestore,
   initializeFirestore,
   memoryLocalCache,
   serverTimestamp,
@@ -16,12 +17,26 @@ export { getOrInitApp } from './firebaseApp';
 
 let firestoreSingleton: Firestore | null = null;
 
+/**
+ * Prefer in-memory cache (RN-friendly). If Firestore was already initialized for this app (parallel
+ * callers, Fast Refresh, or a prior session), fall back to {@link getFirestore} instead of throwing
+ * `initializeFirestore() has already been called with different options`.
+ */
 export function getOrInitFirestore(): Firestore {
   if (firestoreSingleton) {
     return firestoreSingleton;
   }
   const app = getOrInitApp();
-  firestoreSingleton = initializeFirestore(app, { localCache: memoryLocalCache() });
+  try {
+    firestoreSingleton = initializeFirestore(app, { localCache: memoryLocalCache() });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('already been called')) {
+      firestoreSingleton = getFirestore(app);
+    } else {
+      throw e;
+    }
+  }
   return firestoreSingleton;
 }
 
