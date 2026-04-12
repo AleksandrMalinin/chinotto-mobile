@@ -2,6 +2,15 @@ import { openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
 
 let initPromise: Promise<SQLiteDatabase> | null = null;
 
+/** Older installs created `entries` without `pinned`; keep column aligned with desktop + Firestore. */
+async function ensureEntriesPinnedColumn(db: SQLiteDatabase): Promise<void> {
+  const rows = await db.getAllAsync<{ name: string }>('PRAGMA table_info(entries)');
+  if (rows.some((r) => r.name === 'pinned')) {
+    return;
+  }
+  await db.execAsync('ALTER TABLE entries ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0');
+}
+
 /**
  * Opens the DB, ensures schema, and resolves once ready.
  * Call from app startup so the first capture pays minimal cold cost.
@@ -13,7 +22,8 @@ export function initDatabase(): Promise<SQLiteDatabase> {
       `CREATE TABLE IF NOT EXISTS entries (
         id TEXT PRIMARY KEY NOT NULL,
         text TEXT NOT NULL,
-        created_at TEXT NOT NULL
+        created_at TEXT NOT NULL,
+        pinned INTEGER NOT NULL DEFAULT 0
       );
       CREATE TABLE IF NOT EXISTS sync_queue (
         id TEXT PRIMARY KEY NOT NULL,
@@ -29,6 +39,7 @@ export function initDatabase(): Promise<SQLiteDatabase> {
         suppressed_at TEXT NOT NULL
       );`
     );
+    await ensureEntriesPinnedColumn(db);
     return db;
   })();
   return initPromise;
