@@ -1,6 +1,6 @@
 import Constants from 'expo-constants';
-import { useContext } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useContext, useEffect } from 'react';
+import { Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChinottoLogo, chinottoLogoLeadingOutset } from '../components/ChinottoLogo';
@@ -44,6 +44,10 @@ export function SettingsScreen({
   const headerLogoAlignStyle = {
     marginLeft: -chinottoLogoLeadingOutset(headerLogoSize),
   };
+
+  useEffect(() => {
+    Keyboard.dismiss();
+  }, []);
 
   return (
     <View
@@ -97,10 +101,11 @@ export function SettingsScreen({
             contentInsetAdjustmentBehavior="never"
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={Platform.OS === 'ios' ? 'on-drag' : 'none'}
           >
             <View style={styles.contentInner}>
               <View>
-                <SettingsSection title="Sync">
+                <SettingsSection title="Sync" isFirst>
                   <SettingsRow
                     variant="navigation"
                     label={syncStatusLabel === 'Off' ? 'Enable sync' : 'Manage'}
@@ -253,15 +258,15 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   versionBlock: {
-    marginTop: 20,
+    marginTop: 14,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 12,
     overflow: 'hidden',
   },
   versionRow: {
-    minHeight: 48,
+    minHeight: 44,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -291,7 +296,7 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   studioSignatureInline: {
-    marginTop: 20,
+    marginTop: 12,
     alignItems: 'center',
   },
   studioSignatureText: {

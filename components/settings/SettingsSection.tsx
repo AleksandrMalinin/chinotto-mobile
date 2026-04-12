@@ -6,12 +6,14 @@ import { fonts, useAppTheme } from '../../theme';
 type SettingsSectionProps = {
   title: string;
   children: ReactNode;
+  /** Slightly tighter gap under the header for the first section only (matches breathing room vs main). */
+  isFirst?: boolean;
 };
 
-export function SettingsSection({ title, children }: SettingsSectionProps) {
+export function SettingsSection({ title, children, isFirst = false }: SettingsSectionProps) {
   const t = useAppTheme();
   return (
-    <View style={styles.block}>
+    <View style={[styles.block, isFirst && styles.blockFirst]}>
       <Text
         style={[
           styles.title,
@@ -39,10 +41,13 @@ export function SettingsSection({ title, children }: SettingsSectionProps) {
 
 const styles = StyleSheet.create({
   block: {
-    marginTop: 20,
+    marginTop: 16,
+  },
+  blockFirst: {
+    marginTop: 10,
   },
   title: {
-    marginBottom: 8,
+    marginBottom: 6,
     marginLeft: 2,
     fontFamily: fonts.medium,
     fontSize: 11,

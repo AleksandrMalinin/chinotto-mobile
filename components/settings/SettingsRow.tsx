@@ -133,7 +133,7 @@ export function SettingsRow(props: SettingsRowProps) {
 
 const styles = StyleSheet.create({
   row: {
-    minHeight: 56,
+    minHeight: 52,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   interactiveRow: {
@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 10,
   },
   copy: {
     flex: 1,
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1,
   },
   description: {
-    marginTop: 3,
+    marginTop: 2,
     fontFamily: fonts.regular,
     fontSize: 12,
     lineHeight: 17,

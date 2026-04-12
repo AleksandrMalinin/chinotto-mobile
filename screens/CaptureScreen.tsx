@@ -836,6 +836,7 @@ export function CaptureScreen({
 
   const openSyncModal = useCallback(
     (surface: SyncModalSurface) => {
+      Keyboard.dismiss();
       if (surface === 'header') {
         void recordSyncHeaderCtaTapped();
         if (syncHighlightScheduleTimerRef.current) {
@@ -910,6 +911,12 @@ export function CaptureScreen({
     setEnableSyncLabelShimmer(false);
     void recordSyncShimmerImpression();
   }, []);
+
+  useEffect(() => {
+    if (settingsRoute != null) {
+      Keyboard.dismiss();
+    }
+  }, [settingsRoute]);
 
   const onStreamEntryPress = useCallback((entry: Entry) => {
     void recordOpenedExistingThoughtForSyncHighlight().then(() => {
