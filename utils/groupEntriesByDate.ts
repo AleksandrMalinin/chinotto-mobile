@@ -1,8 +1,15 @@
 import type { Entry } from '../types/entry';
+import { sortEntriesStreamOrder } from './streamEntryOrder';
 
 export type EntryTimeGroup = {
   label: string;
   items: Entry[];
+};
+
+/** Pinned rows first (no section header), then calendar groups for everyone else. */
+export type StreamListModel = {
+  pinnedLead: Entry[];
+  dayGroups: EntryTimeGroup[];
 };
 
 function pad2(n: number): string {
@@ -35,14 +42,43 @@ export function formatOlderSectionLabel(iso: string, locale?: string): string {
   });
 }
 
+const TIME_SEP = '\u00a0·\u00a0';
+
 /**
- * Groups entries into Today / Yesterday / per-day older buckets, newest first within each.
- * `referenceDate` defaults to now; inject in tests for stable grouping.
+ * Date + clock for pinned lead rows — same calendar vocabulary as stream sections (Today / Yesterday / …).
  */
-export function groupEntriesByDate(entries: Entry[], referenceDate: Date = new Date()): EntryTimeGroup[] {
-  const sorted = [...entries].sort(
-    (a, b) => parseDate(b.createdAt).getTime() - parseDate(a.createdAt).getTime()
-  );
+export function formatPinnedEntryTemporal(
+  iso: string,
+  referenceDate: Date = new Date(),
+  locale?: string,
+): string {
+  const t = formatEntryTime(iso, locale);
+  const todayKey = localDateKey(referenceDate);
+  const y = new Date(referenceDate);
+  y.setDate(y.getDate() - 1);
+  const yesterdayKey = localDateKey(y);
+  const entryKey = localDateKey(parseDate(iso));
+  if (entryKey === todayKey) {
+    return `Today${TIME_SEP}${t}`;
+  }
+  if (entryKey === yesterdayKey) {
+    return `Yesterday${TIME_SEP}${t}`;
+  }
+  return `${formatOlderSectionLabel(iso, locale)}${TIME_SEP}${t}`;
+}
+
+/**
+ * Today / Yesterday / older buckets, newest-first within each — **unpinned stream only**.
+ * Pinned rows are handled by {@link buildStreamListModel}.
+ */
+export function groupUnpinnedByCalendarDay(entries: Entry[], referenceDate: Date = new Date()): EntryTimeGroup[] {
+  const sorted = [...entries].sort((a, b) => {
+    const t = parseDate(b.createdAt).getTime() - parseDate(a.createdAt).getTime();
+    if (t !== 0) {
+      return t;
+    }
+    return b.id.localeCompare(a.id);
+  });
 
   const todayKey = localDateKey(referenceDate);
   const y = new Date(referenceDate);
@@ -84,4 +120,20 @@ export function groupEntriesByDate(entries: Entry[], referenceDate: Date = new D
   }
 
   return out;
+}
+
+/**
+ * All `pinned` thoughts sorted for stream order (newest pinned first); mobile shows the first inline,
+ * rest in overlay. Unpinned only in calendar sections — no “Pinned” header, no calendar mixing in groups.
+ */
+export function buildStreamListModel(entries: Entry[], referenceDate: Date = new Date()): StreamListModel {
+  const pinnedLead = sortEntriesStreamOrder(entries.filter((e) => e.pinned === true));
+  const unpinned = entries.filter((e) => e.pinned !== true);
+  const dayGroups = groupUnpinnedByCalendarDay(unpinned, referenceDate);
+  return { pinnedLead, dayGroups };
+}
+
+/** @deprecated Prefer {@link buildStreamListModel} for stream UI; kept for tests and simple chrono grouping. */
+export function groupEntriesByDate(entries: Entry[], referenceDate: Date = new Date()): EntryTimeGroup[] {
+  return groupUnpinnedByCalendarDay(entries, referenceDate);
 }

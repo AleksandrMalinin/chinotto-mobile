@@ -1,5 +1,10 @@
 import type { Entry } from '../../types/entry';
-import { groupEntriesByDate, localDateKey } from '../groupEntriesByDate';
+import {
+  buildStreamListModel,
+  formatPinnedEntryTemporal,
+  groupEntriesByDate,
+  localDateKey,
+} from '../groupEntriesByDate';
 
 describe('groupEntriesByDate', () => {
   /** Fixed local “now” for stable buckets across machines. */
@@ -36,6 +41,33 @@ describe('groupEntriesByDate', () => {
     ];
     const groups = groupEntriesByDate(entries, ref);
     expect(groups[0].items.map((e) => e.id)).toEqual(['b', 'a']);
+  });
+
+  it('buildStreamListModel: pinned lead then Today for unpinned (calendar order preserved)', () => {
+    const today = new Date(2025, 5, 15, 10, 0, 0).toISOString();
+    const olderPinned = new Date(2025, 5, 10, 9, 0, 0).toISOString();
+    const entries: Entry[] = [
+      { id: 'u-today', text: 'today', createdAt: today },
+      { id: 'p-old', text: 'pin', createdAt: olderPinned, pinned: true },
+    ];
+    const { pinnedLead, dayGroups } = buildStreamListModel(entries, ref);
+    expect(pinnedLead.map((e) => e.id)).toEqual(['p-old']);
+    expect(dayGroups.map((g) => g.label)).toEqual(['Today']);
+    expect(dayGroups[0].items.map((e) => e.id)).toEqual(['u-today']);
+  });
+});
+
+describe('formatPinnedEntryTemporal', () => {
+  const ref = new Date(2025, 5, 15, 12, 0, 0);
+
+  it('labels today, yesterday, and older days consistently with stream sections', () => {
+    const todayIso = new Date(2025, 5, 15, 10, 5, 0).toISOString();
+    const yestIso = new Date(2025, 5, 14, 18, 40, 0).toISOString();
+    const oldIso = new Date(2025, 5, 10, 9, 0, 0).toISOString();
+    expect(formatPinnedEntryTemporal(todayIso, ref)).toMatch(/^Today/);
+    expect(formatPinnedEntryTemporal(yestIso, ref)).toMatch(/^Yesterday/);
+    expect(formatPinnedEntryTemporal(oldIso, ref)).toMatch(/Jun/);
+    expect(formatPinnedEntryTemporal(oldIso, ref)).toMatch(/10/);
   });
 });
 
