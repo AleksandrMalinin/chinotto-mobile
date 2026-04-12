@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 
 import type { Entry } from '../types/entry';
+import type { RemoteIngestEntryRow } from '../storage/entryRepository';
 import { isSyncAccessBlocked } from '../monetization/syncAccessPolicy';
 import {
   applyRemoteTombstoneDeletes,
@@ -31,7 +32,25 @@ const BACKFILL_MAX_PAGES = 40;
 /** Tombstones are queried separately so deletes on older entries (outside the recent ingest window) still apply locally. */
 const TOMBSTONE_QUERY_LIMIT = 1000;
 
-export type FirestoreIngestRow = Pick<Entry, 'id' | 'text' | 'createdAt'>;
+function parsePinnedFromFirestore(data: DocumentData): boolean {
+  const p = data.pinned;
+  if (p === true) {
+    return true;
+  }
+  if (p === false) {
+    return false;
+  }
+  if (typeof p === 'number' && p !== 0) {
+    return true;
+  }
+  if (typeof p === 'string') {
+    const s = p.trim().toLowerCase();
+    if (s === '1' || s === 'true') {
+      return true;
+    }
+  }
+  return false;
+}
 
 function normalizeCreatedAt(value: unknown): string | null {
   if (value == null) {
@@ -53,9 +72,9 @@ function normalizeCreatedAt(value: unknown): string | null {
 
 function partitionFirestoreSnapshotDocs(
   docs: QueryDocumentSnapshot<DocumentData>[]
-): { tombstonedIds: string[]; activeRows: FirestoreIngestRow[] } {
+): { tombstonedIds: string[]; activeRows: RemoteIngestEntryRow[] } {
   const tombstonedIds: string[] = [];
-  const activeRows: FirestoreIngestRow[] = [];
+  const activeRows: RemoteIngestEntryRow[] = [];
   for (const d of docs) {
     const data = d.data();
     if (isFirestoreDocumentTombstoned(data)) {
@@ -70,7 +89,12 @@ function partitionFirestoreSnapshotDocs(
     if (!createdAt) {
       continue;
     }
-    activeRows.push({ id: d.id, text, createdAt });
+    activeRows.push({
+      id: d.id,
+      text,
+      createdAt,
+      pinned: parsePinnedFromFirestore(data),
+    });
   }
   return { tombstonedIds, activeRows };
 }

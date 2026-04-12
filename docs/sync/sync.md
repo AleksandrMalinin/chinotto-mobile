@@ -22,6 +22,7 @@ Mobile and desktop MUST use the same shape for sync payloads.
 | `id` | `string` | Stable unique identifier (e.g. UUID v4). Assigned once at creation. |
 | `text` | `string` | User-visible body. Trimmed on mobile at save; ingest stores as received (aside from transport decoding). |
 | `createdAt` | `string` | ISO 8601 UTC (e.g. `2025-03-22T12:00:00.000Z`). |
+| `pinned` | `boolean` (optional) | **Important** marker — same field and semantics as desktop; Firestore path `users/{uid}/entries/{entryId}.pinned`. Default false / omitted. Mobile: long-press Pin/Unpin merges this field only; ingest updates local `pinned` on existing rows without overwriting local `text`. |
 
 **Invariants:** `id` and `createdAt` immutable; Phase 1 **append-only** (no edit/delete via sync payload alone). Globally unique **`id`** for dedupe and ordering tie-break. **Phase 2** adds remote tombstones and delete ops — §8.
 
@@ -45,7 +46,9 @@ Mobile and desktop MUST use the same shape for sync payloads.
 
 ### Ordering
 
-- Sort by `createdAt`; tie-break by `id` lexicographically.
+- **Stream (mobile + desktop):** `pinned === true` entries **first**, preserving newest-first among pinned (`createdAt` desc, `id` desc), then all unpinned with the same `createdAt` / `id` rule.  
+- **Mobile list model (`buildStreamListModel`):** main stream shows only unpinned rows under **Today** / **Yesterday** / …; a subtle **Pinned (n)** control opens a minimal overlay listing pinned thoughts (date + time per row, tap opens read sheet). No duplicate pinned rows in the stream.  
+- **Chronology / ingest:** `id` and `createdAt` remain immutable; pin toggles only the `pinned` field.
 
 ### Retries
 
@@ -321,6 +324,7 @@ Record **implementation** and cross-repo **alignment** changes for **mobile** he
 
 | Date | Change |
 |------|--------|
+| 2026-04-12 | **`pinned` + stream:** Firestore/SQLite field; merge + ingest as above. **Ordering:** `ORDER BY pinned DESC, created_at DESC, id DESC` for `getRecentEntries` / pagination / search recall (`utils/streamEntryOrder.ts`). **UI:** `buildStreamListModel` — pinned lead block (no section title), then calendar groups for unpinned only; long-press Pin/Unpin. |
 | 2026-04-10 | **Mobile:** `startMobileFirestoreIngest` does not run while the Enable sync sheet is open; remote thoughts apply after the sheet closes (capture visible again). **Desktop (`chinotto-app`):** `startDesktopFirestoreIngest` pauses while `SyncModal` is open. **Smoothing:** ~200ms delay after closing the sync sheet before ingest starts; ingest-driven list refreshes are debounced (~120ms) so backfill does not stutter the stream. |
 | 2026-04-02 | Cross-device **unlock** mirror + desktop `SyncModal` gating (§3). Doc: [`cross-device-sync-unlock-flow.md`](./cross-device-sync-unlock-flow.md). Mirror clears stashed `ds` after a successful `sync_desktop_sessions` write. |
 | 2026-03-29 | Docs: unified release checklist with desktop; removed `desktop-alignment.md` and `desktop-sync-implementation.md`; desktop ingest/ops in Chinotto [`docs/sync.md`](https://github.com/AleksandrMalinin/chinotto/blob/main/docs/sync.md) + `sync-deletion-v2.md`; this file remains wire contract. |
