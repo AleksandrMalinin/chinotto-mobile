@@ -1,0 +1,13 @@
+{
+  "conditions": [],
+  "parameters": {
+    "chinotto_app_update_json": {
+      "defaultValue": {
+        "value": "{\"enabled\":false,\"minSupportedVersion\":\"1.0.0\",\"latestVersion\":\"1.0.0\",\"forceUpdate\":false,\"iosStoreUrl\":\"\"}"
+      },
+      "description": "Chinotto mobile app update policy. JSON shape: src/services/appUpdate/types.ts (UpdateConfig). App reads via @react-native-firebase/remote-config getValue().asString() then JSON.parse.",
+      "valueType": "STRING"
+    }
+  },
+  "parameterGroups": {}
+}
