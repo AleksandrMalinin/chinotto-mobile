@@ -13,6 +13,8 @@ export type DevMenuOptions = {
   onResetAnalyticsPrompt?: () => void | Promise<void>;
   /** Clear sync shimmer prefs + first-launch capture prefs, then reload JS (`DevSettings.reload`). */
   onResetSyncCaptureQA?: () => void | Promise<void>;
+  /** Show the shipped `UpdateScreen` in soft or forced mode (wired from `App`). */
+  onPreviewAppUpdateModal?: (mode: 'soft' | 'forced') => void;
 };
 
 /**
@@ -47,6 +49,17 @@ export function showDevMenu(options: DevMenuOptions): void {
     buttons.push({
       text: 'Reset sync & capture QA',
       onPress: () => void options.onResetSyncCaptureQA?.(),
+    });
+  }
+  if (options.onPreviewAppUpdateModal != null) {
+    const preview = options.onPreviewAppUpdateModal;
+    buttons.push({
+      text: 'Preview app update (soft)',
+      onPress: () => preview('soft'),
+    });
+    buttons.push({
+      text: 'Preview app update (forced)',
+      onPress: () => preview('forced'),
     });
   }
 

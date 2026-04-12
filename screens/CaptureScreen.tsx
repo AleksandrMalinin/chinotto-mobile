@@ -156,6 +156,8 @@ export type CaptureScreenProps = {
   onAnalyticsPresentationGateReady?: () => void;
   /** Dev: clear prompt flag and reload the JS bundle (QA). */
   onResetAnalyticsPrompt?: () => void;
+  /** Dev: show the app update modal (soft / forced) from Settings → dev menu. */
+  onDevPreviewAppUpdate?: (mode: 'soft' | 'forced') => void;
   /**
    * Increment (from universal link / custom scheme) to open the same sync sheet as the header CTA,
    * without recording a header “tap” for shimmer prefs.
@@ -188,6 +190,7 @@ export function CaptureScreen({
   onAnalyticsOptInChange,
   onAnalyticsPresentationGateReady,
   onResetAnalyticsPrompt,
+  onDevPreviewAppUpdate,
   syncEntryRequestNonce = 0,
   screenshot,
   allowCaptureFocus = true,
@@ -938,8 +941,9 @@ export function CaptureScreen({
           DevSettings.reload();
         })();
       },
+      onPreviewAppUpdateModal: onDevPreviewAppUpdate,
     });
-  }, [openSyncModal, onResetAnalyticsPrompt]);
+  }, [openSyncModal, onDevPreviewAppUpdate, onResetAnalyticsPrompt]);
 
   useEffect(() => {
     if (syncEntryRequestNonce <= lastSyncEntryNonceRef.current) {

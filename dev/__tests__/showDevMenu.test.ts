@@ -11,6 +11,7 @@ describe('showDevMenu', () => {
       onPreviewSyncEnabledSheet: jest.fn(),
       onResetAnalyticsPrompt: jest.fn(),
       onResetSyncCaptureQA: jest.fn(),
+      onPreviewAppUpdateModal: jest.fn(),
     });
 
     const buttons = alertSpy.mock.calls[0][2] as { text: string }[];
@@ -18,6 +19,8 @@ describe('showDevMenu', () => {
     expect(buttons.some((b) => b.text.includes('Sync enabled'))).toBe(true);
     expect(buttons.some((b) => b.text === 'Reset analytics prompt')).toBe(true);
     expect(buttons.some((b) => b.text === 'Reset sync & capture QA')).toBe(true);
+    expect(buttons.some((b) => b.text === 'Preview app update (soft)')).toBe(true);
+    expect(buttons.some((b) => b.text === 'Preview app update (forced)')).toBe(true);
 
     alertSpy.mockRestore();
   });
@@ -31,6 +34,7 @@ describe('showDevMenu', () => {
 
     const buttons = alertSpy.mock.calls[0][2] as { text: string }[];
     expect(buttons.some((b) => b.text.includes('Sync enabled'))).toBe(false);
+    expect(buttons.some((b) => b.text.includes('Preview app update'))).toBe(false);
 
     alertSpy.mockRestore();
   });
