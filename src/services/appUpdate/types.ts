@@ -11,6 +11,7 @@ export type UpdateConfig = {
   title?: string;
   message?: string;
   iosStoreUrl?: string;
+  /** Omit until the Android app is in Play Store; without it, `withStoreUrl` yields no store URL on Android. */
   androidStoreUrl?: string;
 };
 

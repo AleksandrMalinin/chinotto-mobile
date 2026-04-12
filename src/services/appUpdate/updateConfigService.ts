@@ -1,19 +1,11 @@
 /**
- * Remote update config — **plug-in point for production**
+ * Remote update policy: always tries **Firebase Remote Config** (React Native Firebase) when no
+ * custom `fetcher` is passed. Any failure (no native module, web, tests, network) → in-repo
+ * {@link mockUpdateConfig} (`enabled: false`), same as RC with `enabled: false`.
  *
- * Replace {@link fetchUpdateConfig} (or pass a custom fetcher into {@link useAppUpdateCheck}) with
- * something like:
- *
- * ```ts
- * const res = await fetch('https://cdn.example.com/chinotto/update-config.json', {
- *   headers: { Accept: 'application/json' },
- * });
- * if (!res.ok) throw new Error(String(res.status));
- * return (await res.json()) as UpdateConfig;
- * ```
- *
- * Keep the JSON shape aligned with {@link UpdateConfig}. Validate or fail closed in the fetcher.
+ * Pass a custom fetcher into {@link useAppUpdateCheck} to override. JSON shape: {@link UpdateConfig}.
  */
+import { fetchUpdateConfigFromRemoteConfig } from './fetchUpdateConfigFromRemoteConfig';
 import { mockUpdateConfig } from './mockUpdateConfig';
 import type { UpdateConfig } from './types';
 
@@ -25,11 +17,15 @@ export async function fetchUpdateConfigFromMock(): Promise<UpdateConfig> {
 }
 
 /**
- * App entry uses this. Swap the implementation body (or the default argument at call sites)
- * when your backend / CDN is ready.
+ * Injected `fetcher` wins; otherwise Remote Config, else fail-closed to {@link mockUpdateConfig}.
  */
-export async function fetchUpdateConfig(
-  fetcher: UpdateConfigFetcher = fetchUpdateConfigFromMock,
-): Promise<UpdateConfig> {
-  return fetcher();
+export async function fetchUpdateConfig(fetcher?: UpdateConfigFetcher): Promise<UpdateConfig> {
+  if (fetcher != null) {
+    return fetcher();
+  }
+  try {
+    return await fetchUpdateConfigFromRemoteConfig();
+  } catch {
+    return { ...mockUpdateConfig };
+  }
 }

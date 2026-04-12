@@ -10,5 +10,4 @@ export const mockUpdateConfig: UpdateConfig = {
   latestVersion: '1.0.0',
   forceUpdate: false,
   iosStoreUrl: '',
-  androidStoreUrl: '',
 };
