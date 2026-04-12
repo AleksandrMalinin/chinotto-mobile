@@ -12,4 +12,11 @@ describe('StreamFlowPanel', () => {
     const tree = toJSON();
     expect(tree).not.toBeNull();
   });
+
+  it('renders updateBackdrop line art (same shell as linesOnly)', () => {
+    const { toJSON } = render(
+      <StreamFlowPanel linesOnly updateBackdrop="soft" calm useAdaptiveChrome={false} />,
+    );
+    expect(toJSON()).not.toBeNull();
+  });
 });

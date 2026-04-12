@@ -75,6 +75,11 @@ export type StreamFlowPanelProps = {
    * Only animated stroke paths — no glass card, blobs, or outer auras. For empty capture stream.
    */
   linesOnly?: boolean;
+  /**
+   * Same geometry as {@link linesOnly}, with slower stroke timing and lower layer opacity for the
+   * update screen background (`soft` calmer / dimmer, `forced` slightly more present).
+   */
+  updateBackdrop?: 'soft' | 'forced';
 };
 
 export function StreamFlowPanel({
@@ -83,17 +88,24 @@ export function StreamFlowPanel({
   typingAccent = false,
   useAdaptiveChrome = true,
   linesOnly = false,
+  updateBackdrop,
 }: StreamFlowPanelProps) {
   const adaptive = useAppTheme();
   const fixed = useMemo(() => getTheme(), []);
   const { sunlightMode } = useAdaptiveChrome ? adaptive : fixed;
   const { width: windowWidth } = useWindowDimensions();
-  const panelW = linesOnly ? Math.min(windowWidth * 0.82, 318) : Math.min(260, windowWidth * 0.88);
-  const panelH = linesOnly ? (panelW * 15) / 11 : (panelW * 13) / 11;
+  const isLineArt = linesOnly || updateBackdrop != null;
+  const panelW = isLineArt
+    ? Math.min(
+        windowWidth * (updateBackdrop != null ? 0.94 : 0.82),
+        updateBackdrop != null ? 380 : 318,
+      )
+    : Math.min(260, windowWidth * 0.88);
+  const panelH = isLineArt ? (panelW * 15) / 11 : (panelW * 13) / 11;
 
-  const padT = linesOnly ? panelH * 0.065 : panelH * 0.14;
-  const padH = linesOnly ? panelW * 0.04 : panelW * 0.12;
-  const padB = linesOnly ? panelH * 0.095 : panelH * 0.16;
+  const padT = isLineArt ? panelH * 0.065 : panelH * 0.14;
+  const padH = isLineArt ? panelW * 0.04 : panelW * 0.12;
+  const padB = isLineArt ? panelH * 0.095 : panelH * 0.16;
   const svgW = panelW - 2 * padH;
   const svgH = panelH - padT - padB;
 
@@ -140,18 +152,27 @@ export function StreamFlowPanel({
         }),
       ]);
 
-    const slowLines = linesOnly;
-    const dA = slowLines ? LINES_ONLY_DUR_A_MS : DUR_A_MS;
-    const dB = slowLines ? LINES_ONLY_DUR_B_MS : DUR_B_MS;
-    const dC = slowLines ? LINES_ONLY_DUR_C_MS : DUR_C_MS;
-    const delA = slowLines ? LINES_ONLY_DELAY_A_MS : DELAY_A_MS;
-    const delB = slowLines ? LINES_ONLY_DELAY_B_MS : DELAY_B_MS;
-    const delC = slowLines ? LINES_ONLY_DELAY_C_MS : DELAY_C_MS;
+    const slowLines = isLineArt;
+    let durMult = 1;
+    let delMult = 1;
+    if (updateBackdrop === 'soft') {
+      durMult = 1.52;
+      delMult = 1.28;
+    } else if (updateBackdrop === 'forced') {
+      durMult = 1.28;
+      delMult = 1.12;
+    }
+    const dA = (slowLines ? LINES_ONLY_DUR_A_MS : DUR_A_MS) * durMult;
+    const dB = (slowLines ? LINES_ONLY_DUR_B_MS : DUR_B_MS) * durMult;
+    const dC = (slowLines ? LINES_ONLY_DUR_C_MS : DUR_C_MS) * durMult;
+    const delA = (slowLines ? LINES_ONLY_DELAY_A_MS : DELAY_A_MS) * delMult;
+    const delB = (slowLines ? LINES_ONLY_DELAY_B_MS : DELAY_B_MS) * delMult;
+    const delC = (slowLines ? LINES_ONLY_DELAY_C_MS : DELAY_C_MS) * delMult;
 
     Animated.parallel([mk(offA, dA, delA), mk(offB, dB, delB), mk(offC, dC, delC)]).start();
 
     return undefined;
-  }, [effectiveCalm, deferMotion, linesOnly, offA, offB, offC]);
+  }, [effectiveCalm, deferMotion, isLineArt, offA, offB, offC, updateBackdrop]);
 
   useEffect(() => {
     if (!typingAccent) {
@@ -299,10 +320,11 @@ export function StreamFlowPanel({
     </View>
   );
 
-  if (linesOnly) {
+  if (isLineArt) {
+    const lineLayerOpacity = updateBackdrop === 'soft' ? 0.78 : updateBackdrop === 'forced' ? 0.9 : 1;
     return (
       <View
-        style={[styles.panelLinesOnly, { width: panelW, height: panelH }]}
+        style={[styles.panelLinesOnly, { width: panelW, height: panelH, opacity: lineLayerOpacity }]}
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
       >
