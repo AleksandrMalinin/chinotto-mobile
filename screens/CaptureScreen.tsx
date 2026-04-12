@@ -5,6 +5,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import {
+  ActionSheetIOS,
   Alert,
   DevSettings,
   Keyboard,
@@ -64,6 +65,7 @@ import {
   getRecentEntries,
   saveEntry,
   searchEntriesForRecall,
+  setEntryPinned,
 } from '../storage/entryRepository';
 import {
   loadSyncHighlightSignals,
@@ -533,7 +535,17 @@ export function CaptureScreen({
   }, []);
 
   useEffect(() => {
+    if (!allowCaptureFocus) {
+      Keyboard.dismiss();
+      inputRef.current?.blur();
+    }
+  }, [allowCaptureFocus]);
+
+  useEffect(() => {
     if (!captureFocusNonce || screenshotActive) {
+      return;
+    }
+    if (!allowCaptureFocus) {
       return;
     }
     if (firstLaunchFocusTimerRef.current) {
@@ -549,7 +561,7 @@ export function CaptureScreen({
       inputRef.current?.focus();
     });
     return () => cancelAnimationFrame(id);
-  }, [captureFocusNonce, screenshotActive]);
+  }, [captureFocusNonce, screenshotActive, allowCaptureFocus]);
 
   useEffect(() => {
     if (!allowCaptureFocus || screenshotActive) {
@@ -977,6 +989,58 @@ export function CaptureScreen({
     setReadEntry(entry);
   }, []);
 
+  const onThoughtLongPress = useCallback(
+    (entry: Entry) => {
+      if (screenshotActive) {
+        return;
+      }
+      if (hapticsEnabled && Platform.OS !== 'web') {
+        void Haptics.selectionAsync().catch(() => {});
+      }
+      const isPinned = entry.pinned === true;
+      const apply = (next: boolean) => {
+        void setEntryPinned(entry.id, next)
+          .then(() => {
+            const patch = (e: Entry) =>
+              e.id === entry.id ? { ...e, pinned: next ? true : undefined } : e;
+            setEntries((prev) => prev.map(patch));
+            setSearchResults((prev) => prev.map(patch));
+            const sq = searchQueryRef.current.trim();
+            if (sq) {
+              void runSearch(sq);
+            }
+          })
+          .catch((err) => {
+            if (__DEV__) {
+              console.warn('setEntryPinned failed', err);
+            }
+            Alert.alert('Could not update', 'Please try again.');
+          });
+      };
+      const pinLabel = isPinned ? 'Unpin' : 'Pin';
+      if (Platform.OS === 'ios') {
+        ActionSheetIOS.showActionSheetWithOptions(
+          {
+            options: [pinLabel, 'Cancel'],
+            cancelButtonIndex: 1,
+            userInterfaceStyle: t.isDark ? 'dark' : 'light',
+          },
+          (buttonIndex) => {
+            if (buttonIndex === 0) {
+              apply(!isPinned);
+            }
+          },
+        );
+      } else {
+        Alert.alert('', '', [
+          { text: pinLabel, onPress: () => apply(!isPinned) },
+          { text: 'Cancel', style: 'cancel' },
+        ]);
+      }
+    },
+    [hapticsEnabled, runSearch, screenshotActive, t.isDark],
+  );
+
   const onVoiceTranscriptPartial = useCallback(
     (partial: string) => {
       if (screenshotActive) {
@@ -1197,6 +1261,7 @@ export function CaptureScreen({
                         autoFocus={
                           allowCaptureFocus && !screenshotActive && !deferKeyboardForFirstLaunchReveal
                         }
+                        showSoftInputOnFocus={allowCaptureFocus}
                       />
                     </View>
                     {showVoiceCapture ? (
@@ -1335,6 +1400,7 @@ export function CaptureScreen({
                   : undefined
               }
               onEntryPress={onStreamEntryPress}
+              onEntryLongPress={screenshotActive ? undefined : onThoughtLongPress}
               onEntryDelete={handleEntryDelete}
             />
             <Pressable

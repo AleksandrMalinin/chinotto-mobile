@@ -16,6 +16,11 @@ export type CaptureInputProps = {
   onBlur?: () => void;
   /** Default true; set false while a full-screen overlay (e.g. brand splash) is visible. */
   autoFocus?: boolean;
+  /**
+   * When false, focusing the field does not open the software keyboard (iOS/Android).
+   * Use with {@link autoFocus} off while splash / overlays are up.
+   */
+  showSoftInputOnFocus?: boolean;
 };
 
 export const CaptureInput = forwardRef<TextInput, CaptureInputProps>(
@@ -31,6 +36,7 @@ export const CaptureInput = forwardRef<TextInput, CaptureInputProps>(
       onFocus,
       onBlur,
       autoFocus = true,
+      showSoftInputOnFocus = true,
     },
     ref
   ) {
@@ -69,6 +75,7 @@ export const CaptureInput = forwardRef<TextInput, CaptureInputProps>(
         onBlur={onBlur}
         multiline
         autoFocus={autoFocus}
+        showSoftInputOnFocus={showSoftInputOnFocus}
         autoCorrect
         autoCapitalize="sentences"
         returnKeyType="done"
