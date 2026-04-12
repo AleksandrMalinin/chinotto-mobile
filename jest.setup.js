@@ -196,6 +196,27 @@ jest.mock('./sync/firestoreSyncAccessMirror', () => ({
   mirrorChinottoSyncAccessToFirestore: jest.fn(() => Promise.resolve()),
 }));
 
+/** RN Firebase is native-only; default JSON keeps update UI off in tests (matches `mockUpdateConfig`). */
+const mockChinottoAppUpdateRcJson = JSON.stringify({
+  enabled: false,
+  minSupportedVersion: '1.0.0',
+  latestVersion: '1.0.0',
+  forceUpdate: false,
+  iosStoreUrl: '',
+});
+
+jest.mock('@react-native-firebase/remote-config', () => ({
+  __esModule: true,
+  default: jest.fn(() => ({
+    setDefaults: jest.fn(() => Promise.resolve()),
+    setConfigSettings: jest.fn(() => Promise.resolve()),
+    fetchAndActivate: jest.fn(() => Promise.resolve(true)),
+    getValue: jest.fn(() => ({
+      asString: () => mockChinottoAppUpdateRcJson,
+    })),
+  })),
+}));
+
 jest.mock('react-native-svg', () => {
   const React = require('react');
   const { View } = require('react-native');
