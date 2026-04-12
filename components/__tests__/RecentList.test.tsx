@@ -1,4 +1,4 @@
-import { fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 
 jest.mock('../StreamFlowPanel', () => ({
   __esModule: true,
@@ -29,6 +29,72 @@ describe('RecentList', () => {
     expect(getByText('hello')).toBeTruthy();
   });
 
+  it('shows first pinned thought inline and opens it on tap', () => {
+    const d = new Date();
+    const todayIso = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 9, 0, 0).toISOString();
+    const laterIso = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 11, 0, 0).toISOString();
+    const pinned = { id: 'p1', text: 'pinned thought', createdAt: todayIso, pinned: true as const };
+    const unpinned = { id: 'u1', text: 'other today', createdAt: laterIso };
+    const onEntryPress = jest.fn();
+    const { getByTestId, getByText, queryByTestId } = render(
+      <RecentList entries={[unpinned, pinned]} visible onEntryDelete={jest.fn()} onEntryPress={onEntryPress} />
+    );
+    expect(getByText('pinned thought')).toBeTruthy();
+    expect(queryByTestId('recent-list-pinned-more')).toBeNull();
+    expect(getByText('Today')).toBeTruthy();
+    fireEvent.press(getByTestId('recent-entry-p1'));
+    expect(onEntryPress).toHaveBeenCalledWith(pinned);
+  });
+
+  it('shows +N for extra pinned and opens overlay from that line', () => {
+    const d = new Date();
+    const early = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 8, 0, 0).toISOString();
+    const mid = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 9, 0, 0).toISOString();
+    const late = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0).toISOString();
+    const pinOld = { id: 'p-old', text: 'older pin', createdAt: early, pinned: true as const };
+    const pinLead = { id: 'p-lead', text: 'newest pin', createdAt: mid, pinned: true as const };
+    const unpinned = { id: 'u1', text: 'stream row', createdAt: late };
+    const onEntryPress = jest.fn();
+    const { getByTestId, getByText, queryByText } = render(
+      <RecentList entries={[unpinned, pinOld, pinLead]} visible onEntryDelete={jest.fn()} onEntryPress={onEntryPress} />
+    );
+    expect(getByText('newest pin')).toBeTruthy();
+    expect(getByText('+1')).toBeTruthy();
+    expect(queryByText('older pin')).toBeNull();
+    act(() => {
+      fireEvent.press(getByTestId('recent-list-pinned-more'));
+    });
+    expect(getByText('older pin')).toBeTruthy();
+    act(() => {
+      fireEvent.press(getByTestId('recent-list-pinned-overlay-p-old'));
+    });
+    expect(onEntryPress).toHaveBeenCalledWith(pinOld);
+  });
+
+  it('invokes onEntryLongPress on pinned overlay rows like stream rows', () => {
+    const d = new Date();
+    const early = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 8, 0, 0).toISOString();
+    const mid = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 9, 0, 0).toISOString();
+    const late = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0).toISOString();
+    const pinOld = { id: 'p-old', text: 'older pin', createdAt: early, pinned: true as const };
+    const pinLead = { id: 'p-lead', text: 'newest pin', createdAt: mid, pinned: true as const };
+    const unpinned = { id: 'u1', text: 'stream row', createdAt: late };
+    const onEntryLongPress = jest.fn();
+    const { getByTestId } = render(
+      <RecentList
+        entries={[unpinned, pinOld, pinLead]}
+        visible
+        onEntryDelete={jest.fn()}
+        onEntryLongPress={onEntryLongPress}
+      />
+    );
+    act(() => {
+      fireEvent.press(getByTestId('recent-list-pinned-more'));
+    });
+    fireEvent(getByTestId('recent-list-pinned-overlay-p-old'), 'onLongPress');
+    expect(onEntryLongPress).toHaveBeenCalledWith(pinOld);
+  });
+
   it('renders nothing when not visible', () => {
     const { queryByTestId } = render(<RecentList entries={[entryToday('hello')]} visible={false} />);
 
@@ -44,6 +110,23 @@ describe('RecentList', () => {
 
     fireEvent.press(getByTestId(`recent-entry-${e.id}`));
     expect(onEntryPress).toHaveBeenCalledWith(e);
+  });
+
+  it('invokes onEntryLongPress when a row is long pressed', () => {
+    const e = entryToday('hold me');
+    const onEntryLongPress = jest.fn();
+    const { getByTestId } = render(
+      <RecentList
+        entries={[e]}
+        visible
+        onEntryPress={jest.fn()}
+        onEntryLongPress={onEntryLongPress}
+        onEntryDelete={jest.fn()}
+      />
+    );
+
+    fireEvent(getByTestId(`recent-entry-${e.id}`), 'onLongPress');
+    expect(onEntryLongPress).toHaveBeenCalledWith(e);
   });
 
   it('shows emptyHint when visible and entries are empty', () => {

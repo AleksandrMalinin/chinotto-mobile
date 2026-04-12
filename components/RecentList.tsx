@@ -13,8 +13,10 @@ import {
   Animated,
   Easing,
   type LayoutChangeEvent,
+  Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -33,7 +35,12 @@ import {
   useAppTheme,
 } from '../theme';
 import { replaceHttpUrlsWithCompactDisplay } from '../utils/extractHttpUrlsFromText';
-import { formatEntryTime, groupEntriesByDate } from '../utils/groupEntriesByDate';
+import {
+  buildStreamListModel,
+  formatEntryTime,
+  formatPinnedEntryTemporal,
+} from '../utils/groupEntriesByDate';
+import { chronologicallyNewestEntryId } from '../utils/streamEntryOrder';
 import {
   findActiveFlatIndex,
   findActiveFlatIndexFromWindowMeasurements,
@@ -44,8 +51,8 @@ import {
 import { StreamFlowPanel } from './StreamFlowPanel';
 
 /**
- * Time-grouped stream — section labels (`.stream-section-title`), entry rows with
- * hairline separators like desktop `.entry-row` / `var(--border)`, plus inline time.
+ * Stream — first **pinned** thought inline; optional **+N** before time opens overlay for the rest.
+ * Date sections for unpinned only. Row hairlines like desktop `.entry-row`.
  *
  * Delete: **swipe left** past threshold (reveals delete track, commits on open) — intentional gesture only;
  * local-first + tombstone queue (see `deleteEntry`).
@@ -59,6 +66,11 @@ export type RecentListProps = {
   listFooterHint?: string;
   /** Opens full-text read sheet (companion recall). */
   onEntryPress?: (entry: Entry) => void;
+  /**
+   * Long-press on a thought (e.g. Pin / Unpin). Primary tap stays onEntryPress.
+   * Omit in screenshot / deterministic scenes where action sheets are unwanted.
+   */
+  onEntryLongPress?: (entry: Entry) => void;
   onEntryDelete?: (entry: Entry) => void;
   /** Row id for a brief leading-edge trace (e.g. just saved from capture or share). */
   highlightEntryId?: string | null;
@@ -89,6 +101,8 @@ export type RecentListProps = {
 };
 
 const DELETE_ACTION_WIDTH = 76;
+/** Same threshold as stream rows — pin/unpin sheet. */
+const STREAM_ROW_LONG_PRESS_MS = 380;
 
 function measureInWindowPromise(view: View | null): Promise<StreamFocusWindowBox | null> {
   if (!view) return Promise.resolve(null);
@@ -167,7 +181,13 @@ type StreamRowProps = {
   /** Matches `CaptureScreen` scroll `paddingHorizontal` so rows can full-bleed under press/trace. */
   streamGutter: number;
   onEntryPress?: (entry: Entry) => void;
+  onEntryLongPress?: (entry: Entry) => void;
   onEntryDelete?: (entry: Entry) => void;
+  /** Pinned lead: show section-aligned date + time in the metadata column. */
+  useTemporalContext?: boolean;
+  /** Inline "+N" before time — opens overlay; only used with pinned preview row. */
+  inlinePinnedMoreCount?: number;
+  onPinnedMorePress?: () => void;
 };
 
 const RecentStreamRow = memo(function RecentStreamRowInner({
@@ -178,13 +198,18 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
   streamFocusReduceMotion = false,
   streamGutter,
   onEntryPress,
+  onEntryLongPress,
   onEntryDelete,
+  useTemporalContext = false,
+  inlinePinnedMoreCount,
+  onPinnedMorePress,
 }: StreamRowProps) {
   const [pressed, setPressed] = useState(false);
   const t = useAppTheme();
   const { colors, typography, isDark } = t;
   const { body } = typography;
   const lineDisplay = replaceHttpUrlsWithCompactDisplay(item.text);
+  const temporalLabel = useTemporalContext ? formatPinnedEntryTemporal(item.createdAt, new Date()) : null;
   const viewportFocus = streamFocusDelta !== undefined;
   /** List order only: first / newest stays the large type; scroll only changes opacity (highlight). */
   const showNewest = isNewest;
@@ -242,6 +267,138 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
     setPressed(false);
   }, []);
 
+  const pinned = item.pinned === true;
+
+  const a11yHint =
+    [
+      onEntryPress != null ? 'Double tap to read full text' : null,
+      onEntryLongPress != null ? 'Long press to pin or unpin' : null,
+      onEntryDelete != null ? 'Swipe left to delete' : null,
+    ]
+      .filter(Boolean)
+      .join('. ') || undefined;
+
+  const entryPressableProps = {
+    onPress: onEntryPress != null ? () => onEntryPress(item) : undefined,
+    onLongPress: onEntryLongPress != null ? () => onEntryLongPress(item) : undefined,
+    delayLongPress: STREAM_ROW_LONG_PRESS_MS,
+    onPressIn,
+    onPressOut,
+    delayPressIn: 0,
+    ...(Platform.OS === 'android' ? { android_ripple: null } : {}),
+  };
+
+  const rowPad = { paddingHorizontal: streamGutter + screenContentInnerPad };
+
+  const hasInlinePinnedMore =
+    inlinePinnedMoreCount != null && inlinePinnedMoreCount > 0 && onPinnedMorePress != null;
+
+  const bodyText = (
+    <Animated.Text
+      style={[
+        styles.line,
+        {
+          flex: 1,
+          color: t.sunlightMode
+            ? showNewest || (viewportFocus && streamFocusDelta === 0)
+              ? colors.entryBody
+              : colors.fgDim
+            : colors.entryBody,
+          fontFamily: showNewest ? fonts.medium : body.fontFamily,
+          fontSize: showNewest ? 17 : body.fontSize,
+          lineHeight: showNewest ? 26 : body.lineHeight,
+          letterSpacing: showNewest ? 0.17 : 0.16,
+          marginRight: hasInlinePinnedMore ? 4 : t.spacing.sm,
+          opacity: bodyOpacityAnim.current!,
+        },
+      ]}
+      numberOfLines={4}
+    >
+      {lineDisplay}
+    </Animated.Text>
+  );
+
+  const timeText = (
+    <Animated.Text
+      style={[
+        !useTemporalContext ? styles.time : null,
+        useTemporalContext && styles.timeTemporal,
+        {
+          color: colors.muted,
+          fontFamily: t.sunlightMode ? fonts.medium : fonts.regular,
+          fontSize: useTemporalContext ? 10 : 11,
+          lineHeight: useTemporalContext ? 14 : 15,
+          opacity: timeOpacityAnim.current!,
+          maxWidth: useTemporalContext && !hasInlinePinnedMore ? '44%' : undefined,
+        },
+      ]}
+      numberOfLines={useTemporalContext ? 2 : 1}
+    >
+      {useTemporalContext ? temporalLabel : formatEntryTime(item.createdAt)}
+    </Animated.Text>
+  );
+
+  const entryRowInner = hasInlinePinnedMore ? (
+    <View style={[styles.entryRow, useTemporalContext && styles.entryRowAlignCenter, rowPad]}>
+      <Pressable
+        testID={`recent-entry-${item.id}`}
+        accessible
+        accessibilityLabel={`${item.text}, ${temporalLabel ?? formatEntryTime(item.createdAt)}${pinned ? ', pinned' : ''}`}
+        accessibilityHint={a11yHint}
+        accessibilityActions={onEntryDelete != null ? [{ name: 'delete', label: 'Delete' }] : undefined}
+        onAccessibilityAction={
+          onEntryDelete != null
+            ? ({ nativeEvent }) => {
+                if (nativeEvent.actionName === 'delete') {
+                  onEntryDelete(item);
+                }
+              }
+            : undefined
+        }
+        {...entryPressableProps}
+        style={[styles.pinnedRowBodyHit, { minWidth: 0 }]}
+      >
+        {bodyText}
+      </Pressable>
+      <Pressable
+        testID="recent-list-pinned-more"
+        accessibilityRole="button"
+        accessibilityLabel={`Plus ${inlinePinnedMoreCount} pinned`}
+        accessibilityHint="Opens list of pinned thoughts"
+        onPress={onPinnedMorePress}
+        hitSlop={{ top: 6, bottom: 6, left: 4, right: 2 }}
+        style={styles.pinnedMoreInlineHit}
+        {...(Platform.OS === 'android' ? { android_ripple: null } : {})}
+      >
+        <Text
+          style={{
+            color: colors.accent,
+            fontFamily: fonts.medium,
+            fontSize: 15,
+            lineHeight: useTemporalContext ? 22 : 20,
+            letterSpacing: 0.25,
+          }}
+        >
+          +{inlinePinnedMoreCount}
+        </Text>
+      </Pressable>
+      <Pressable
+        accessible={false}
+        importantForAccessibility="no-hide-descendants"
+        accessibilityElementsHidden
+        {...entryPressableProps}
+        style={styles.pinnedRowTimeHitWithGap}
+      >
+        {timeText}
+      </Pressable>
+    </View>
+  ) : (
+    <View style={[styles.entryRow, useTemporalContext && styles.entryRowAlignCenter, rowPad]}>
+      {bodyText}
+      {timeText}
+    </View>
+  );
+
   const rowContent = (
     <View
       style={[
@@ -263,81 +420,32 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
           ]}
         />
       ) : null}
-      <Pressable
-        accessible={true}
-        accessibilityLabel={`${item.text}, ${formatEntryTime(item.createdAt)}`}
-        accessibilityHint={
-          [
-            onEntryPress != null ? 'Double tap to read full text' : null,
-            onEntryDelete != null ? 'Swipe left to delete' : null,
-          ]
-            .filter(Boolean)
-            .join('. ') || undefined
-        }
-        accessibilityActions={onEntryDelete != null ? [{ name: 'delete', label: 'Delete' }] : undefined}
-        onAccessibilityAction={
-          onEntryDelete != null
-            ? ({ nativeEvent }) => {
-                if (nativeEvent.actionName === 'delete') {
-                  onEntryDelete(item);
-                }
-              }
-            : undefined
-        }
-        testID={`recent-entry-${item.id}`}
-        onPress={onEntryPress != null ? () => onEntryPress(item) : undefined}
-        onPressIn={onPressIn}
-        onPressOut={onPressOut}
-        delayPressIn={0}
-        style={styles.pressableAboveTrace}
-        {...(Platform.OS === 'android' ? { android_ripple: null } : {})}
-      >
-        <View style={styles.entryBlock}>
-          <View
-            style={[
-              styles.entryRow,
-              { paddingHorizontal: streamGutter + screenContentInnerPad },
-            ]}
-          >
-            <Animated.Text
-              style={[
-                styles.line,
-                {
-                  flex: 1,
-                  color: t.sunlightMode
-                    ? showNewest || (viewportFocus && streamFocusDelta === 0)
-                      ? colors.entryBody
-                      : colors.fgDim
-                    : colors.entryBody,
-                  fontFamily: showNewest ? fonts.medium : body.fontFamily,
-                  fontSize: showNewest ? 17 : body.fontSize,
-                  lineHeight: showNewest ? 26 : body.lineHeight,
-                  letterSpacing: showNewest ? 0.17 : 0.16,
-                  marginRight: t.spacing.sm,
-                  opacity: bodyOpacityAnim.current!,
-                },
-              ]}
-              numberOfLines={4}
-            >
-              {lineDisplay}
-            </Animated.Text>
-            <Animated.Text
-              style={[
-                styles.time,
-                {
-                  color: colors.muted,
-                  fontFamily: t.sunlightMode ? fonts.medium : fonts.regular,
-                  fontSize: 11,
-                  lineHeight: 15,
-                  opacity: timeOpacityAnim.current!,
-                },
-              ]}
-            >
-              {formatEntryTime(item.createdAt)}
-            </Animated.Text>
-          </View>
+      {hasInlinePinnedMore ? (
+        <View style={styles.pressableAboveTrace} accessible={false}>
+          <View style={styles.entryBlock}>{entryRowInner}</View>
         </View>
-      </Pressable>
+      ) : (
+        <Pressable
+          accessible
+          accessibilityLabel={`${item.text}, ${temporalLabel ?? formatEntryTime(item.createdAt)}${pinned ? ', pinned' : ''}`}
+          accessibilityHint={a11yHint}
+          accessibilityActions={onEntryDelete != null ? [{ name: 'delete', label: 'Delete' }] : undefined}
+          onAccessibilityAction={
+            onEntryDelete != null
+              ? ({ nativeEvent }) => {
+                  if (nativeEvent.actionName === 'delete') {
+                    onEntryDelete(item);
+                  }
+                }
+              : undefined
+          }
+          testID={`recent-entry-${item.id}`}
+          {...entryPressableProps}
+          style={styles.pressableAboveTrace}
+        >
+          <View style={styles.entryBlock}>{entryRowInner}</View>
+        </Pressable>
+      )}
     </View>
   );
 
@@ -603,6 +711,7 @@ function RecentListInner({
   emptyHint,
   listFooterHint,
   onEntryPress,
+  onEntryLongPress,
   onEntryDelete,
   highlightEntryId = null,
   streamEmptyAmbient = false,
@@ -669,17 +778,37 @@ function RecentListInner({
     };
   }, [streamEmptyAmbient, streamEmptyAmbientSuppressed, emptyAmbientOpacity]);
 
-  const groups = useMemo(() => groupEntriesByDate(entries), [entries]);
-  const newestShownId = groups[0]?.items[0]?.id ?? null;
-  const orderedIds = useMemo(() => groups.flatMap((g) => g.items.map((e) => e.id)), [groups]);
+  const { pinnedLead, dayGroups } = useMemo(() => buildStreamListModel(entries), [entries]);
+  const mainStreamEntries = useMemo(() => dayGroups.flatMap((g) => g.items), [dayGroups]);
+  /** Newest-first among pinned (see `sortEntriesStreamOrder`); same as desktop stream lead. */
+  const pinnedPreview = pinnedLead[0] ?? null;
+  const pinnedMoreCount = pinnedLead.length > 1 ? pinnedLead.length - 1 : 0;
+  const entriesForLeadEmphasis = useMemo(() => {
+    return pinnedPreview != null ? [pinnedPreview, ...mainStreamEntries] : mainStreamEntries;
+  }, [pinnedPreview, mainStreamEntries]);
+  const newestShownId = useMemo(
+    () => chronologicallyNewestEntryId(entriesForLeadEmphasis),
+    [entriesForLeadEmphasis],
+  );
+  const orderedIds = useMemo(() => mainStreamEntries.map((e) => e.id), [mainStreamEntries]);
+  const [pinnedOverlayOpen, setPinnedOverlayOpen] = useState(false);
+  /** Modal is a separate layer — real backdrop blur cannot see the stream; a soft gradient reads calmer than a flat slab. */
+  const pinnedModalGradientColors = useMemo(
+    () =>
+      t.isDark
+        ? ['rgba(42, 44, 54, 0.52)', 'rgba(24, 25, 30, 0.9)', 'rgba(12, 12, 15, 0.94)']
+        : ['rgba(255, 255, 255, 0.97)', 'rgba(246, 247, 251, 0.99)', 'rgba(236, 238, 245, 0.99)'],
+    [t.isDark],
+  );
+  /** Day headers + unpinned rows only (pinned are not in this list). */
   const flatItems = useMemo(() => {
     const out: Array<
       | { kind: 'header'; label: string; sectionIndex: number; key: string }
       | { kind: 'entry'; entry: Entry; flatIndex: number; key: string }
     > = [];
     let globalFlatIndex = 0;
-    for (let s = 0; s < groups.length; s++) {
-      const section = groups[s];
+    for (let s = 0; s < dayGroups.length; s++) {
+      const section = dayGroups[s];
       out.push({
         kind: 'header',
         label: section.label,
@@ -697,7 +826,7 @@ function RecentListInner({
       }
     }
     return out;
-  }, [groups]);
+  }, [dayGroups]);
 
   useLayoutEffect(() => {
     if (!streamViewportFocusEnabled) {
@@ -901,12 +1030,44 @@ function RecentListInner({
       style={[styles.list, { paddingTop: listPaddingTop }]}
       onLayout={streamViewportFocusEnabled ? onListLayout : undefined}
     >
+      {pinnedPreview != null ? (
+        <View
+          style={[
+            styles.pinnedInlineWrap,
+            {
+              paddingTop: t.spacing.sm + 4,
+              paddingBottom: t.spacing.sm + 2,
+            },
+          ]}
+        >
+          <View style={styles.rowMeasureWrap}>
+            <RecentStreamRow
+              item={pinnedPreview}
+              isLastInSection
+              isNewest={pinnedPreview.id === newestShownId}
+              streamGutter={streamGutter}
+              onEntryPress={onEntryPress}
+              onEntryLongPress={onEntryLongPress}
+              onEntryDelete={onEntryDelete}
+              useTemporalContext
+              inlinePinnedMoreCount={pinnedMoreCount > 0 ? pinnedMoreCount : undefined}
+              onPinnedMorePress={pinnedMoreCount > 0 ? () => setPinnedOverlayOpen(true) : undefined}
+            />
+          </View>
+        </View>
+      ) : null}
       {flatItems.map((item, index) => {
         if (item.kind === 'header') {
           return (
             <View
               key={item.key}
-              style={item.sectionIndex > 0 ? { marginTop: t.spacing.sm } : undefined}
+              style={
+                item.sectionIndex > 0
+                  ? { marginTop: t.spacing.sm }
+                  : item.sectionIndex === 0 && pinnedPreview != null
+                    ? { marginTop: t.spacing.md + 6 }
+                    : undefined
+              }
             >
               <Text
                 accessibilityRole="header"
@@ -950,6 +1111,7 @@ function RecentListInner({
               streamFocusReduceMotion={reduceMotion}
               streamGutter={streamGutter}
               onEntryPress={onEntryPress}
+              onEntryLongPress={onEntryLongPress}
               onEntryDelete={onEntryDelete}
             />
           </View>
@@ -975,6 +1137,113 @@ function RecentListInner({
           {listFooterHint}
         </Text>
       ) : null}
+      <Modal
+        visible={pinnedOverlayOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPinnedOverlayOpen(false)}
+      >
+        <View style={styles.pinnedModalRoot}>
+          <Pressable
+            style={[StyleSheet.absoluteFillObject, styles.pinnedModalBackdrop]}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            onPress={() => setPinnedOverlayOpen(false)}
+          />
+          <View
+            style={[
+              styles.pinnedModalSheet,
+              {
+                maxHeight: Math.round(windowHeight * 0.72),
+                borderColor: t.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.07)',
+                ...Platform.select({
+                  ios: {
+                    shadowColor: '#000000',
+                    shadowOffset: { width: 0, height: 10 },
+                    shadowOpacity: 0.18,
+                    shadowRadius: 22,
+                  },
+                  android: { elevation: 10 },
+                  default: {},
+                }),
+              },
+            ]}
+          >
+            <LinearGradient
+              colors={pinnedModalGradientColors}
+              locations={[0, 0.45, 1]}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={StyleSheet.absoluteFillObject}
+            />
+            <ScrollView
+              style={styles.pinnedModalScroll}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.pinnedModalScrollContent}
+            >
+              {pinnedLead.map((entry, idx) => {
+                const line = replaceHttpUrlsWithCompactDisplay(entry.text);
+                const when = formatPinnedEntryTemporal(entry.createdAt);
+                const modalRowA11yHint =
+                  [
+                    onEntryPress != null ? 'Double tap to read full text' : null,
+                    onEntryLongPress != null ? 'Long press to pin or unpin' : null,
+                  ]
+                    .filter(Boolean)
+                    .join('. ') || undefined;
+                return (
+                  <Pressable
+                    key={entry.id}
+                    testID={`recent-list-pinned-overlay-${entry.id}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${entry.text}, ${when}`}
+                    accessibilityHint={modalRowA11yHint}
+                    onPress={() => {
+                      onEntryPress?.(entry);
+                      setPinnedOverlayOpen(false);
+                    }}
+                    onLongPress={onEntryLongPress != null ? () => onEntryLongPress(entry) : undefined}
+                    delayLongPress={STREAM_ROW_LONG_PRESS_MS}
+                    delayPressIn={0}
+                    style={[
+                      styles.pinnedModalRow,
+                      idx > 0 && {
+                        borderTopWidth: StyleSheet.hairlineWidth,
+                        borderTopColor: t.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)',
+                      },
+                    ]}
+                    {...(Platform.OS === 'android' ? { android_ripple: null } : {})}
+                  >
+                    <Text
+                      style={{
+                        color: colors.entryBody,
+                        fontFamily: fonts.regular,
+                        fontSize: 15,
+                        lineHeight: 22,
+                      }}
+                      numberOfLines={4}
+                    >
+                      {line}
+                    </Text>
+                    <Text
+                      style={{
+                        marginTop: 4,
+                        color: colors.muted,
+                        fontFamily: meta.fontFamily,
+                        fontSize: 11,
+                        lineHeight: 15,
+                      }}
+                    >
+                      {when}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1016,6 +1285,58 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   sectionLabel: {},
+  pinnedInlineWrap: {
+    width: '100%',
+    alignSelf: 'stretch',
+  },
+  /** Pinned preview uses two-line temporal on the right — center with body for balance. */
+  entryRowAlignCenter: {
+    alignItems: 'center',
+  },
+  pinnedRowBodyHit: {
+    flex: 1,
+  },
+  pinnedMoreInlineHit: {
+    flexShrink: 0,
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginRight: 10,
+  },
+  pinnedRowTimeHitWithGap: {
+    flexShrink: 0,
+    justifyContent: 'center',
+    alignSelf: 'center',
+    paddingLeft: 8,
+    marginLeft: 2,
+  },
+  pinnedModalRoot: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pinnedModalBackdrop: {
+    backgroundColor: 'rgba(0,0,0,0.36)',
+  },
+  pinnedModalSheet: {
+    width: '88%',
+    maxWidth: 400,
+    borderRadius: 22,
+    overflow: 'hidden',
+    zIndex: 1,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  pinnedModalScroll: {
+    backgroundColor: 'transparent',
+    zIndex: 2,
+  },
+  pinnedModalScrollContent: {
+    paddingVertical: 4,
+    paddingBottom: 20,
+  },
+  pinnedModalRow: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
   rowOuter: {
     width: '100%',
   },
@@ -1050,6 +1371,9 @@ const styles = StyleSheet.create({
   line: {},
   time: {
     marginTop: 2,
+  },
+  timeTemporal: {
+    textAlign: 'right',
   },
   deleteTrack: {
     justifyContent: 'center',
