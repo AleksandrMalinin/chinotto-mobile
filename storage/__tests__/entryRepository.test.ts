@@ -5,6 +5,7 @@ import { getDatabase } from '../db';
 import * as ingestSuppression from '../../sync/ingestSuppression';
 import { insertPendingSyncItem, removePendingSyncItemsForEntry } from '../../sync/syncQueue';
 import * as tombstoneOutbox from '../../sync/tombstoneOutbox';
+import { firebaseMergeEntryPinned } from '../../sync/firebaseSync';
 import {
   applyRemoteTombstoneDeletes,
   deleteEntry,
@@ -12,9 +13,11 @@ import {
   getEntryCount,
   getEntriesOlderThan,
   getRecentEntries,
+  ingestRemoteFirestoreRows,
   saveEntry,
   searchEntriesByText,
   searchEntriesForRecall,
+  setEntryPinned,
 } from '../entryRepository';
 
 jest.mock('expo-crypto', () => ({
@@ -42,6 +45,10 @@ jest.mock('../../sync/ingestSuppression', () => ({
   addFirestoreIngestSuppressionWithDb: jest.fn().mockResolvedValue(undefined),
 }));
 
+jest.mock('../../sync/firebaseSync', () => ({
+  firebaseMergeEntryPinned: jest.fn().mockResolvedValue(undefined),
+}));
+
 const mockGetDatabase = jest.mocked(getDatabase);
 const mockRandomUUID = jest.mocked(randomUUID);
 const mockInsertPendingSyncItem = jest.mocked(insertPendingSyncItem);
@@ -49,6 +56,7 @@ const mockRemovePending = jest.mocked(removePendingSyncItemsForEntry);
 const mockEnqueueTombstone = jest.mocked(tombstoneOutbox.enqueueSyncTombstoneWithDb);
 const mockAddSuppression = jest.mocked(ingestSuppression.addFirestoreIngestSuppressionWithDb);
 const mockIsFirebaseConfigured = jest.mocked(firebaseConfig.isFirebaseSyncConfigured);
+const mockFirebaseMergePinned = jest.mocked(firebaseMergeEntryPinned);
 
 describe('entryRepository', () => {
   const runAsync = jest.fn();
@@ -79,6 +87,8 @@ describe('entryRepository', () => {
     mockEnqueueTombstone.mockClear();
     mockAddSuppression.mockClear();
     mockIsFirebaseConfigured.mockReturnValue(false);
+    mockFirebaseMergePinned.mockClear();
+    mockFirebaseMergePinned.mockResolvedValue(undefined);
   });
 
   describe('saveEntry', () => {
@@ -92,7 +102,7 @@ describe('entryRepository', () => {
       expect(withTransactionAsync).toHaveBeenCalledTimes(1);
 
       expect(runAsync).toHaveBeenCalledWith(
-        'INSERT INTO entries (id, text, created_at) VALUES (?, ?, ?)',
+        'INSERT INTO entries (id, text, created_at, pinned) VALUES (?, ?, ?, 0)',
         entry.id,
         'hello',
         entry.createdAt
@@ -148,7 +158,7 @@ describe('entryRepository', () => {
   });
 
   describe('getRecentEntries', () => {
-    it('queries with limit, stable order (created_at desc, id desc)', async () => {
+    it('queries with limit, stable order (pinned first, then created_at desc, id desc)', async () => {
       getAllAsync.mockResolvedValueOnce([
         { id: 'a', text: 't', createdAt: '2025-01-01T00:00:00.000Z' },
       ]);
@@ -156,7 +166,9 @@ describe('entryRepository', () => {
       const rows = await getRecentEntries(10);
 
       expect(getAllAsync).toHaveBeenCalledWith(
-        expect.stringMatching(/ORDER BY created_at DESC,\s*id DESC/s),
+        expect.stringMatching(
+          /ORDER BY COALESCE\(pinned,\s*0\) DESC,\s*created_at DESC,\s*id DESC/s
+        ),
         10
       );
       expect(rows[0]).toEqual({
@@ -168,7 +180,7 @@ describe('entryRepository', () => {
   });
 
   describe('getEntriesOlderThan', () => {
-    it('pages after cursor with tie-break on id', async () => {
+    it('pages after cursor in pinned-first order (default unpinned cursor)', async () => {
       getAllAsync.mockResolvedValueOnce([]);
 
       await getEntriesOlderThan(
@@ -178,12 +190,33 @@ describe('entryRepository', () => {
 
       expect(getAllAsync).toHaveBeenCalledWith(
         expect.stringMatching(
-          /WHERE created_at < \? OR \(created_at = \? AND id < \?\).*ORDER BY created_at DESC,\s*id DESC/s
+          /WHERE COALESCE\(pinned,\s*0\) < \? OR \(.*ORDER BY COALESCE\(pinned,\s*0\) DESC,\s*created_at DESC,\s*id DESC/s
         ),
+        0,
+        0,
         '2025-01-02T12:00:00.000Z',
         '2025-01-02T12:00:00.000Z',
         'cursor-id',
         15
+      );
+    });
+
+    it('passes cursor pin rank for pinned cursor', async () => {
+      getAllAsync.mockResolvedValueOnce([]);
+
+      await getEntriesOlderThan(
+        { createdAt: '2025-01-02T12:00:00.000Z', id: 'cursor-id', pinned: true },
+        10
+      );
+
+      expect(getAllAsync).toHaveBeenCalledWith(
+        expect.any(String),
+        1,
+        1,
+        '2025-01-02T12:00:00.000Z',
+        '2025-01-02T12:00:00.000Z',
+        'cursor-id',
+        10
       );
     });
   });
@@ -242,7 +275,64 @@ describe('entryRepository', () => {
       await getAllEntries();
 
       expect(getAllAsync).toHaveBeenCalledWith(
-        expect.stringMatching(/ORDER BY created_at DESC,\s*id DESC/)
+        expect.stringMatching(
+          /ORDER BY COALESCE\(pinned,\s*0\) DESC,\s*created_at DESC,\s*id DESC/
+        )
+      );
+    });
+  });
+
+  describe('setEntryPinned', () => {
+    it('updates SQLite pinned flag', async () => {
+      await setEntryPinned('e1', true);
+
+      expect(withTransactionAsync).toHaveBeenCalledTimes(1);
+      expect(runAsync).toHaveBeenCalledWith('UPDATE entries SET pinned = ? WHERE id = ?', 1, 'e1');
+      expect(mockFirebaseMergePinned).not.toHaveBeenCalled();
+    });
+
+    it('rejects when no row matches', async () => {
+      runAsync.mockResolvedValueOnce({ changes: 0, lastInsertRowId: 0 });
+
+      await expect(setEntryPinned('missing', true)).rejects.toThrow('Entry not found');
+      expect(mockFirebaseMergePinned).not.toHaveBeenCalled();
+    });
+
+    it('merges pinned on Firestore when sync is configured', async () => {
+      mockIsFirebaseConfigured.mockReturnValue(true);
+
+      await setEntryPinned('e1', false);
+
+      expect(mockFirebaseMergePinned).toHaveBeenCalledWith('e1', false);
+    });
+  });
+
+  describe('ingestRemoteFirestoreRows', () => {
+    it('skips ids present in firestore_ingest_suppressed_ids', async () => {
+      getFirstAsync.mockResolvedValueOnce({ n: 1 });
+
+      const n = await ingestRemoteFirestoreRows([
+        { id: 'x', text: 't', createdAt: '2025-01-01T00:00:00.000Z', pinned: true },
+      ]);
+
+      expect(n).toBe(0);
+      expect(runAsync).not.toHaveBeenCalled();
+    });
+
+    it('upserts with ON CONFLICT pinned merge', async () => {
+      getFirstAsync.mockResolvedValueOnce(undefined);
+
+      const n = await ingestRemoteFirestoreRows([
+        { id: 'x', text: 't', createdAt: '2025-01-01T00:00:00.000Z', pinned: true },
+      ]);
+
+      expect(n).toBe(1);
+      expect(runAsync).toHaveBeenCalledWith(
+        expect.stringMatching(/ON CONFLICT\(id\) DO UPDATE SET pinned = excluded\.pinned/s),
+        'x',
+        't',
+        '2025-01-01T00:00:00.000Z',
+        1
       );
     });
   });
