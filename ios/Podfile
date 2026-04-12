@@ -20,6 +20,11 @@ platform :ios, podfile_properties['ios.deploymentTarget'] || '15.1'
 
 prepare_react_native_project!
 
+# Matches expo-build-properties ios.useFrameworks = static. Without this, RNFB pods default to
+# static_framework = false and Clang can mis-resolve RCTBridgeModule across RNFBApp / RNFBAnalytics.
+# https://rnfirebase.io/#altering-cocoapods-to-use-frameworks
+$RNFirebaseAsStaticFramework = true
+
 target 'Chinotto' do
   use_expo_modules!
 
@@ -61,6 +66,28 @@ target 'Chinotto' do
       :mac_catalyst_enabled => false,
       :ccache_enabled => ccache_enabled?(podfile_properties),
     )
+
+    # React Native Firebase (and similar) import React headers from inside framework modules;
+    # Xcode 16+ treats that as an error unless this is set. Apply after react_native_post_install
+    # so nothing overwrites it — Pods project, every pod target, and app/extension user targets.
+    installer.pods_project.build_configurations.each do |config|
+      config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+    end
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+      end
+    end
+    installer.aggregate_targets.each do |aggregate_target|
+      user_project = aggregate_target.user_project
+      next unless user_project
+
+      user_project.targets.each do |target|
+        target.build_configurations.each do |config|
+          config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+        end
+      end
+    end
   end
 
 end
