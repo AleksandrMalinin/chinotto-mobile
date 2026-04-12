@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'react';
+import { useCallback, useEffect, useRef, useState, type ComponentRef, type RefObject } from 'react';
 
 import { track, type SyncModalSurface } from '../analytics/analytics';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -23,7 +23,7 @@ import {
   type LayoutAnimationConfig,
 } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AmbientBackground } from '../components/AmbientBackground';
 import { CaptureInput } from '../components/CaptureInput';
@@ -114,6 +114,8 @@ function animateSearchLayout() {
 const PAGE_SIZE = 20;
 /** Near bottom of scroll content → fetch next page. */
 const SCROLL_END_THRESHOLD_PX = 160;
+/** After scrolling the stream this far, show the subtle “Write” affordance (scroll-to-capture). */
+const STREAM_WRITE_PEEK_MIN_SCROLL_Y = 140;
 const SEARCH_DEBOUNCE_MS = 250;
 const SEARCH_MAX_RESULTS = 300;
 type SettingsRoute = 'settings' | 'manifesto' | 'app_icon';
@@ -268,6 +270,7 @@ export function CaptureScreen({
   const analyticsGateReportedRef = useRef(false);
   const { width: windowWidth } = useWindowDimensions();
   const t = useAppTheme();
+  const insets = useSafeAreaInsets();
   const gutter = screenContentGutter(windowWidth);
 
   const screenshotActive = screenshot != null;
@@ -349,6 +352,55 @@ export function CaptureScreen({
         setSearchExpanded(false);
       }
     }, 220);
+  }, []);
+
+  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;
+    setStreamScrollY(contentOffset.y);
+    setStreamViewportHeight(layoutMeasurement.height);
+
+    if (!deepScrollRecordedRef.current && contentOffset.y >= SYNC_HIGHLIGHT_STREAM_SCROLL_DEPTH_PX) {
+      deepScrollRecordedRef.current = true;
+      void recordStreamDeepScrolledForSyncHighlight();
+      setSyncHighlightTick((n) => n + 1);
+    }
+
+    if (searchActiveRef.current) {
+      return;
+    }
+    if (!hasMoreRef.current || loadingMoreRef.current) {
+      return;
+    }
+    if (layoutMeasurement.height + contentOffset.y < contentSize.height - SCROLL_END_THRESHOLD_PX) {
+      return;
+    }
+
+    const list = entriesRef.current;
+    if (list.length === 0) {
+      return;
+    }
+
+    loadingMoreRef.current = true;
+    const last = list[list.length - 1];
+    void (async () => {
+      try {
+        const batch = await getEntriesOlderThan(last, PAGE_SIZE + 1);
+        const more = batch.length > PAGE_SIZE;
+        const page = batch.slice(0, PAGE_SIZE);
+        setEntries((prev) => {
+          const ids = new Set(prev.map((x) => x.id));
+          const merged = page.filter((row) => !ids.has(row.id));
+          return [...prev, ...merged];
+        });
+        setHasMore(more);
+      } catch (err) {
+        if (__DEV__) {
+          console.warn('getEntriesOlderThan failed', err);
+        }
+      } finally {
+        loadingMoreRef.current = false;
+      }
+    })();
   }, []);
 
   const runSearch = useCallback(async (q: string) => {
@@ -925,55 +977,6 @@ export function CaptureScreen({
     setReadEntry(entry);
   }, []);
 
-  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;
-    setStreamScrollY(contentOffset.y);
-    setStreamViewportHeight(layoutMeasurement.height);
-
-    if (!deepScrollRecordedRef.current && contentOffset.y >= SYNC_HIGHLIGHT_STREAM_SCROLL_DEPTH_PX) {
-      deepScrollRecordedRef.current = true;
-      void recordStreamDeepScrolledForSyncHighlight();
-      setSyncHighlightTick((n) => n + 1);
-    }
-
-    if (searchActiveRef.current) {
-      return;
-    }
-    if (!hasMoreRef.current || loadingMoreRef.current) {
-      return;
-    }
-    if (layoutMeasurement.height + contentOffset.y < contentSize.height - SCROLL_END_THRESHOLD_PX) {
-      return;
-    }
-
-    const list = entriesRef.current;
-    if (list.length === 0) {
-      return;
-    }
-
-    loadingMoreRef.current = true;
-    const last = list[list.length - 1];
-    void (async () => {
-      try {
-        const batch = await getEntriesOlderThan(last, PAGE_SIZE + 1);
-        const more = batch.length > PAGE_SIZE;
-        const page = batch.slice(0, PAGE_SIZE);
-        setEntries((prev) => {
-          const ids = new Set(prev.map((x) => x.id));
-          const merged = page.filter((row) => !ids.has(row.id));
-          return [...prev, ...merged];
-        });
-        setHasMore(more);
-      } catch (err) {
-        if (__DEV__) {
-          console.warn('getEntriesOlderThan failed', err);
-        }
-      } finally {
-        loadingMoreRef.current = false;
-      }
-    })();
-  }, []);
-
   const onVoiceTranscriptPartial = useCallback(
     (partial: string) => {
       if (screenshotActive) {
@@ -1027,6 +1030,16 @@ export function CaptureScreen({
     void setFirstLaunchComposerHasFocused();
     setComposerHasFocusedOnce(true);
   }, [composerHasFocusedOnce]);
+
+  const onWritePeekPress = useCallback(() => {
+    if (hapticsEnabled && Platform.OS !== 'web') {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    }
+    streamScrollViewRef.current?.scrollTo({ y: 0, animated: true });
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+  }, [hapticsEnabled]);
 
   const handleSubmit = useCallback(() => {
     if (screenshotActive) {
@@ -1094,6 +1107,9 @@ export function CaptureScreen({
   /** Ring geometry: align **outer ring** with search field (gutter only); composer is inset +`screenContentInnerPad`. */
   const headerLogoAlignStyle = { marginLeft: -chinottoLogoLeadingOutset(headerLogoSize) };
 
+  const showWritePeekAffordance =
+    entries.length > 0 && !screenshotActive && streamScrollY >= STREAM_WRITE_PEEK_MIN_SCROLL_Y;
+
   const showCaptureSyncHeader = Platform.OS === 'ios' && isFirebaseSyncConfigured();
 
   return (
@@ -1143,154 +1159,156 @@ export function CaptureScreen({
               ) : null}
             </View>
           </View>
-          <ScrollView
-            ref={streamScrollViewRef}
-            style={styles.scrollFlex}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-            nestedScrollEnabled
-            scrollEventThrottle={16}
-            onScroll={handleScroll}
-            onLayout={(e) => setStreamViewportHeight(e.nativeEvent.layout.height)}
-            contentContainerStyle={[
-              styles.scrollContent,
-              {
-                flexGrow: 1,
-              },
-            ]}
-          >
-            {/*
-              Gutter on composer + search affordance. Stream stays full width (see RecentList).
-            */}
-            <View style={{ paddingHorizontal: gutter }}>
-              <View style={styles.composerBlock}>
-                <View style={styles.composerInputRow}>
-                  <View style={styles.composerInputWrap}>
-                    <CaptureInput
-                      ref={inputRef}
-                      value={text}
-                      onChangeText={setText}
-                      onFocus={onCaptureComposerFocus}
-                      onSubmit={handleSubmit}
-                      minHeight={composerMinHeight}
-                      maxHeight={composerMaxHeight}
-                      placeholder="Jot a thought…"
-                      placeholderTextColor={capturePlaceholderColor}
-                      autoFocus={
-                        allowCaptureFocus && !screenshotActive && !deferKeyboardForFirstLaunchReveal
-                      }
-                    />
-                  </View>
-                  {showVoiceCapture ? (
-                    <VoiceMicButton
-                      phase={voicePhase}
-                      theme={t}
-                      onPress={() => {
-                        if (voicePhase === 'listening') {
-                          stopVoiceCaptureSession();
-                        } else {
-                          voiceCaptureBaseRef.current = text;
-                          void startVoiceCaptureSession();
+          <View style={styles.captureStreamStack}>
+            <ScrollView
+              testID="capture-stream-scroll"
+              ref={streamScrollViewRef}
+              style={styles.scrollFlex}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+              nestedScrollEnabled
+              scrollEventThrottle={16}
+              onScroll={handleScroll}
+              onLayout={(e) => setStreamViewportHeight(e.nativeEvent.layout.height)}
+              contentContainerStyle={[
+                styles.scrollContent,
+                {
+                  flexGrow: 1,
+                },
+              ]}
+            >
+              {/*
+                Gutter on composer + search affordance. Stream stays full width (see RecentList).
+              */}
+              <View style={{ paddingHorizontal: gutter }}>
+                <View style={styles.composerBlock}>
+                  <View style={styles.composerInputRow}>
+                    <View style={styles.composerInputWrap}>
+                      <CaptureInput
+                        ref={inputRef}
+                        value={text}
+                        onChangeText={setText}
+                        onFocus={onCaptureComposerFocus}
+                        onSubmit={handleSubmit}
+                        minHeight={composerMinHeight}
+                        maxHeight={composerMaxHeight}
+                        placeholder="Jot a thought…"
+                        placeholderTextColor={capturePlaceholderColor}
+                        autoFocus={
+                          allowCaptureFocus && !screenshotActive && !deferKeyboardForFirstLaunchReveal
                         }
-                      }}
-                    />
-                  ) : null}
-                </View>
-              </View>
-              {entries.length > 0 ? (
-                <View style={{ marginTop: t.spacing.lg }}>
-                  {searchExpanded ? (
-                    <View
-                      style={[
-                        styles.searchPill,
-                        styles.searchPillExpanded,
-                        {
-                          backgroundColor: searchSurface,
-                          borderColor: searchFocused ? searchBorderFocus : searchBorderIdle,
-                          borderWidth: searchBorderWidth,
-                        },
-                      ]}
-                    >
-                      <Ionicons name="search" size={15} color={searchIconColor} style={styles.searchPillIcon} />
-                      <TextInput
-                        ref={searchInputRef}
-                        testID="stream-search-input"
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                        onFocus={onSearchFocus}
-                        onBlur={onSearchBlur}
-                        placeholder="Find in stream…"
-                        placeholderTextColor={searchPlaceholderColor}
-                        accessibilityLabel="Find in stream"
-                        style={[
-                          styles.searchFieldExpanded,
-                          {
-                            fontFamily: fonts.regular,
-                            color: searchFieldFg,
-                          },
-                        ]}
-                        keyboardAppearance={t.isDark ? 'dark' : 'light'}
-                        returnKeyType="search"
-                        selectionColor={t.colors.accent}
-                        {...(Platform.OS === 'ios' ? { clearButtonMode: 'while-editing' as const } : {})}
                       />
-                      <Pressable
-                        testID="stream-search-collapse"
-                        accessibilityLabel="Close search"
-                        accessibilityRole="button"
-                        hitSlop={8}
-                        onPress={collapseSearch}
-                        style={({ pressed }) => [
-                          styles.searchCloseOrb,
-                          {
-                            backgroundColor: pressed ? searchPressedSurface : 'transparent',
-                          },
-                        ]}
-                      >
-                        <Ionicons name="close" size={18} color={t.colors.metaFg} />
-                      </Pressable>
                     </View>
-                  ) : (
-                    <Pressable
-                      testID="stream-search-toggle"
-                      accessibilityLabel="Find in stream"
-                      accessibilityRole="button"
-                      onPress={expandSearch}
-                      style={({ pressed }) => [
-                        styles.searchPill,
-                        styles.searchPillCollapsed,
-                        {
-                          backgroundColor: pressed ? searchPressedSurface : searchSurface,
-                          borderColor: searchBorderIdle,
-                          borderWidth: searchBorderWidth,
-                          opacity: pressed ? 0.96 : 1,
-                        },
-                      ]}
-                      android_ripple={{
-                        color: t.sunlightMode ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.03)',
-                        borderless: false,
-                      }}
-                    >
-                      <Ionicons name="search" size={15} color={searchIconColor} style={styles.searchPillIcon} />
-                      <Text
+                    {showVoiceCapture ? (
+                      <VoiceMicButton
+                        phase={voicePhase}
+                        theme={t}
+                        onPress={() => {
+                          if (voicePhase === 'listening') {
+                            stopVoiceCaptureSession();
+                          } else {
+                            voiceCaptureBaseRef.current = text;
+                            void startVoiceCaptureSession();
+                          }
+                        }}
+                      />
+                    ) : null}
+                  </View>
+                </View>
+                {entries.length > 0 ? (
+                  <View style={{ marginTop: t.spacing.sm }}>
+                    {searchExpanded ? (
+                      <View
                         style={[
-                          styles.searchPillHint,
+                          styles.searchPill,
+                          styles.searchPillExpanded,
                           {
-                            color: searchIconColor,
-                            fontFamily: fonts.regular,
-                            fontSize: t.typography.meta.fontSize,
-                            lineHeight: 18,
+                            backgroundColor: searchSurface,
+                            borderColor: searchFocused ? searchBorderFocus : searchBorderIdle,
+                            borderWidth: searchBorderWidth,
                           },
                         ]}
-                        numberOfLines={1}
                       >
-                        Find in stream…
-                      </Text>
-                    </Pressable>
-                  )}
-                </View>
-              ) : null}
-            </View>
+                        <Ionicons name="search" size={15} color={searchIconColor} style={styles.searchPillIcon} />
+                        <TextInput
+                          ref={searchInputRef}
+                          testID="stream-search-input"
+                          value={searchQuery}
+                          onChangeText={setSearchQuery}
+                          onFocus={onSearchFocus}
+                          onBlur={onSearchBlur}
+                          placeholder="Find in stream…"
+                          placeholderTextColor={searchPlaceholderColor}
+                          accessibilityLabel="Find in stream"
+                          style={[
+                            styles.searchFieldExpanded,
+                            {
+                              fontFamily: fonts.regular,
+                              color: searchFieldFg,
+                            },
+                          ]}
+                          keyboardAppearance={t.isDark ? 'dark' : 'light'}
+                          returnKeyType="search"
+                          selectionColor={t.colors.accent}
+                          {...(Platform.OS === 'ios' ? { clearButtonMode: 'while-editing' as const } : {})}
+                        />
+                        <Pressable
+                          testID="stream-search-collapse"
+                          accessibilityLabel="Close search"
+                          accessibilityRole="button"
+                          hitSlop={8}
+                          onPress={collapseSearch}
+                          style={({ pressed }) => [
+                            styles.searchCloseOrb,
+                            {
+                              backgroundColor: pressed ? searchPressedSurface : 'transparent',
+                            },
+                          ]}
+                        >
+                          <Ionicons name="close" size={18} color={t.colors.metaFg} />
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <Pressable
+                        testID="stream-search-toggle"
+                        accessibilityLabel="Find in stream"
+                        accessibilityRole="button"
+                        onPress={expandSearch}
+                        style={({ pressed }) => [
+                          styles.searchPill,
+                          styles.searchPillCollapsed,
+                          {
+                            backgroundColor: pressed ? searchPressedSurface : searchSurface,
+                            borderColor: searchBorderIdle,
+                            borderWidth: searchBorderWidth,
+                            opacity: pressed ? 0.96 : 1,
+                          },
+                        ]}
+                        android_ripple={{
+                          color: t.sunlightMode ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.03)',
+                          borderless: false,
+                        }}
+                      >
+                        <Ionicons name="search" size={15} color={searchIconColor} style={styles.searchPillIcon} />
+                        <Text
+                          style={[
+                            styles.searchPillHint,
+                            {
+                              color: searchIconColor,
+                              fontFamily: fonts.regular,
+                              fontSize: t.typography.meta.fontSize,
+                              lineHeight: 18,
+                            },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          Find in stream…
+                        </Text>
+                      </Pressable>
+                    )}
+                  </View>
+                ) : null}
+              </View>
             <RecentList
               entries={searchTrimmed.length > 0 ? searchResults : entries}
               visible
@@ -1299,7 +1317,7 @@ export function CaptureScreen({
               streamEmptyAmbientSuppressed={streamEmptyAmbientSuppressed}
               streamScrollY={streamScrollY}
               streamViewportHeight={streamViewportHeight}
-              streamScrollViewRef={streamScrollViewRef}
+              streamScrollViewRef={streamScrollViewRef as unknown as RefObject<View | null>}
               streamViewportFocusEnabled={
                 searchTrimmed.length > 0 ? searchResults.length > 0 : entries.length > 0
               }
@@ -1324,7 +1342,39 @@ export function CaptureScreen({
               accessible={false}
               onPress={Keyboard.dismiss}
             />
-          </ScrollView>
+            </ScrollView>
+            {showWritePeekAffordance ? (
+              <Pressable
+                testID="capture-chrome-peek"
+                accessibilityLabel="Write"
+                accessibilityHint="Scrolls back to capture"
+                accessibilityRole="button"
+                hitSlop={10}
+                onPress={onWritePeekPress}
+                style={({ pressed }) => [
+                  styles.streamWritePeek,
+                  {
+                    right: gutter,
+                    bottom: Math.max(insets.bottom, 10) + 6,
+                    borderColor: searchBorderIdle,
+                    backgroundColor: pressed ? searchPressedSurface : searchSurface,
+                    opacity: pressed ? 0.92 : 0.78,
+                  },
+                ]}
+              >
+                <Text
+                  style={{
+                    fontFamily: fonts.regular,
+                    fontSize: t.typography.meta.fontSize,
+                    letterSpacing: 0.35,
+                    color: t.colors.metaFg,
+                  }}
+                >
+                  Write
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
       {settingsRoute === 'settings' ? (
@@ -1434,6 +1484,20 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   flex: { flex: 1 },
+  captureStreamStack: {
+    flex: 1,
+    position: 'relative',
+  },
+  streamWritePeek: {
+    position: 'absolute',
+    zIndex: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   scrollFlex: {
     flex: 1,
   },

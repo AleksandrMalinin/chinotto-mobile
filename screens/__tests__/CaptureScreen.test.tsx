@@ -389,6 +389,82 @@ describe('CaptureScreen', () => {
     expect(queryByTestId('stream-search-toggle')).toBeNull();
   });
 
+  it('shows Write peek after the stream scrolls past the capture area', async () => {
+    jest
+      .mocked(entryRepository.getRecentEntries)
+      .mockImplementation(() => Promise.resolve([STREAM_SEARCH_SEED_ENTRY]));
+    const { findByTestId, getByTestId, queryByTestId } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <CaptureScreen />
+      </SafeAreaProvider>
+    );
+
+    await findByTestId('capture-input');
+    await waitFor(() => {
+      expect(getByTestId('capture-stream-scroll')).toBeTruthy();
+    });
+    const scrollView = getByTestId('capture-stream-scroll');
+    fireEvent.scroll(scrollView, {
+      nativeEvent: {
+        contentOffset: { x: 0, y: 0 },
+        layoutMeasurement: { height: 600, width: 390 },
+        contentSize: { height: 2000, width: 390 },
+      },
+    });
+    fireEvent.scroll(scrollView, {
+      nativeEvent: {
+        contentOffset: { x: 0, y: 200 },
+        layoutMeasurement: { height: 600, width: 390 },
+        contentSize: { height: 2000, width: 390 },
+      },
+    });
+
+    await waitFor(() => {
+      expect(queryByTestId('capture-chrome-peek')).toBeTruthy();
+    });
+  });
+
+  it('Write peek scrolls toward capture and focuses the field', async () => {
+    jest
+      .mocked(entryRepository.getRecentEntries)
+      .mockImplementation(() => Promise.resolve([STREAM_SEARCH_SEED_ENTRY]));
+    const focusSpy = jest.spyOn(TextInput.prototype, 'focus');
+    try {
+      const { findByTestId, getByTestId } = render(
+        <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+          <CaptureScreen />
+        </SafeAreaProvider>
+      );
+
+      await findByTestId('capture-input');
+      const scrollView = getByTestId('capture-stream-scroll');
+      fireEvent.scroll(scrollView, {
+        nativeEvent: {
+          contentOffset: { x: 0, y: 0 },
+          layoutMeasurement: { height: 600, width: 390 },
+          contentSize: { height: 2000, width: 390 },
+        },
+      });
+      fireEvent.scroll(scrollView, {
+        nativeEvent: {
+          contentOffset: { x: 0, y: 200 },
+          layoutMeasurement: { height: 600, width: 390 },
+          contentSize: { height: 2000, width: 390 },
+        },
+      });
+      await waitFor(() => {
+        expect(getByTestId('capture-chrome-peek')).toBeTruthy();
+      });
+      const callsBefore = focusSpy.mock.calls.length;
+      fireEvent.press(getByTestId('capture-chrome-peek'));
+      await waitFor(() => {
+        expect(focusSpy.mock.calls.length).toBeGreaterThan(callsBefore);
+      });
+    } finally {
+      focusSpy.mockRestore();
+    }
+  });
+
   it('shows search only after tapping the search toggle', async () => {
     jest.mocked(Haptics.impactAsync).mockClear();
     jest
