@@ -14,11 +14,21 @@ import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useIncomingShare } from 'expo-sharing';
-import { AccessibilityInfo, DevSettings, LogBox, Platform, StyleSheet, Text, View } from 'react-native';
+import {
+  AccessibilityInfo,
+  DevSettings,
+  Linking,
+  LogBox,
+  Platform,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BrandSplash } from './components/BrandSplash';
+import { UpdateScreen } from './components/UpdateScreen';
 import { STREAM_HIGHLIGHT_CLEAR_AFTER_MS } from './components/RecentList';
 import { CaptureScreen } from './screens/CaptureScreen';
 import { loadSubscriptionState } from './monetization/subscriptionState';
@@ -36,6 +46,7 @@ import { startBackgroundSync } from './sync/syncEngine';
 import { useScreenshotSceneLink } from './linking/useScreenshotSceneLink';
 import { useSyncDeepLink } from './linking/useSyncDeepLink';
 import { isScreenshotMode } from './src/features/screenshotMode';
+import { useAppUpdateCheck } from './src/services/appUpdate/useAppUpdateCheck';
 import { initDatabase } from './storage/db';
 import {
   getDisplayChromePreference,
@@ -214,6 +225,70 @@ export default function App() {
   } = useIncomingShare();
 
   const screenshotScene = useScreenshotSceneLink();
+
+  const { gate: appUpdateGate, dismissSoft: dismissAppUpdateSoft } = useAppUpdateCheck({
+    enabled: !isScreenshotMode(),
+  });
+
+  const [devAppUpdatePreview, setDevAppUpdatePreview] = useState<'soft' | 'forced' | null>(null);
+
+  const showDevAppUpdate = __DEV__ && devAppUpdatePreview != null;
+  const showProdAppUpdate = appUpdateGate != null;
+  const updateModalVisible = showDevAppUpdate || showProdAppUpdate;
+  const updateModalMode = showDevAppUpdate
+    ? devAppUpdatePreview!
+    : appUpdateGate?.kind === 'soft'
+      ? 'soft'
+      : 'forced';
+  const updateModalTitle = showDevAppUpdate
+    ? devAppUpdatePreview === 'forced'
+      ? 'Update required'
+      : 'New version available'
+    : (appUpdateGate?.title ?? '');
+  const updateModalMessage = showDevAppUpdate
+    ? devAppUpdatePreview === 'forced'
+      ? 'A newer version is needed.'
+      : 'Stay current.'
+    : (appUpdateGate?.message ?? '');
+  const updateModalStoreUrl = showDevAppUpdate
+    ? Platform.OS === 'ios'
+      ? 'https://apps.apple.com/'
+      : Platform.OS === 'android'
+        ? 'https://play.google.com/store/apps/details?id=com.chinotto.mobile'
+        : null
+    : (appUpdateGate?.storeUrl ?? null);
+
+  const onAppUpdateOpenStore = useCallback(() => {
+    let url = appUpdateGate?.storeUrl ?? null;
+    if ((url == null || url === '') && __DEV__ && devAppUpdatePreview != null) {
+      url =
+        Platform.OS === 'ios'
+          ? 'https://apps.apple.com/'
+          : Platform.OS === 'android'
+            ? 'https://play.google.com/store/apps/details?id=com.chinotto.mobile'
+            : null;
+    }
+    if (url == null || url === '') {
+      return;
+    }
+    void Linking.openURL(url).catch((err) => {
+      if (__DEV__) {
+        console.warn('App update store URL failed', err);
+      }
+    });
+  }, [appUpdateGate?.storeUrl, devAppUpdatePreview]);
+
+  const onAppUpdateLater = useCallback(() => {
+    if (__DEV__ && devAppUpdatePreview != null) {
+      if (devAppUpdatePreview === 'soft') {
+        setDevAppUpdatePreview(null);
+      }
+      return;
+    }
+    if (appUpdateGate?.kind === 'soft') {
+      dismissAppUpdateSoft();
+    }
+  }, [appUpdateGate?.kind, devAppUpdatePreview, dismissAppUpdateSoft]);
 
   const onBrandFinished = useCallback(() => {
     setPhase('main');
@@ -527,7 +602,12 @@ export default function App() {
           <View style={{ flex: 1 }}>
             <StatusBar style="light" />
             <CaptureScreen
-              allowCaptureFocus={phase === 'main' && !showAnalyticsOptIn}
+              allowCaptureFocus={
+                phase === 'main' &&
+                !showAnalyticsOptIn &&
+                appUpdateGate?.kind !== 'forced' &&
+                devAppUpdatePreview !== 'forced'
+              }
               remoteIngestVersion={remoteIngestVersion}
               externalEntriesEpoch={externalEntriesEpoch}
               captureFocusNonce={captureFocusNonce}
@@ -543,6 +623,7 @@ export default function App() {
               onAnalyticsOptInChange={onAnalyticsOptInChange}
               onAnalyticsPresentationGateReady={onCaptureShellReadyForAnalytics}
               onResetAnalyticsPrompt={__DEV__ && Platform.OS === 'ios' ? resetAnalyticsPromptForDev : undefined}
+              onDevPreviewAppUpdate={__DEV__ && Platform.OS === 'ios' ? setDevAppUpdatePreview : undefined}
             />
             {phase === 'brand' ? <BrandSplash onFinished={onBrandFinished} /> : null}
             <AnalyticsOptInModal
@@ -551,6 +632,15 @@ export default function App() {
                 setShowAnalyticsOptIn(false);
                 setAnalyticsEnabled(isOptIn());
               }}
+            />
+            <UpdateScreen
+              visible={updateModalVisible}
+              mode={updateModalMode}
+              title={updateModalTitle}
+              message={updateModalMessage}
+              storeUrl={updateModalStoreUrl}
+              onUpdatePress={onAppUpdateOpenStore}
+              onLaterPress={updateModalMode === 'soft' ? onAppUpdateLater : undefined}
             />
             <ShareSavedAck visible={shareSavedAck} />
           </View>
