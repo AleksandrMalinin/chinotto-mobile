@@ -10,7 +10,7 @@
 
 | Symbol | Meaning |
 |--------|---------|
-| **✅** | **Done** — true until the code or product changes (update `docs/sync/sync.md` § Changelog when you change behavior). |
+| **✅** | **Done** — true until the code or product changes (update **mobile** `docs/sync/sync.md` or **desktop** `chinotto-app/docs/sync.md` § Changelog when you change behavior). |
 | **☐** | **Not done / not verified** — flip to **✅** when satisfied for **this** release (or leave ☐ to mean “still open”). |
 | **⭕** | **Optional** — never blocks ship. |
 
@@ -18,7 +18,7 @@
 
 ## 1. Codebase status — `chinotto-app` (desktop)
 
-*These are **already implemented** in this repo. If something regresses, fix the code and update **`docs/sync/sync.md` § Changelog — not this table.*
+*These are **already implemented** in **chinotto-app**. If something regresses, fix the code and update **`chinotto-app/docs/sync.md` § Changelog** — not this table.*
 
 | Item | Status | Notes |
 |------|:------:|-------|
@@ -26,11 +26,13 @@
 | Live ingest **`limit(500)`** + tombstone query **`limit(1000)`** + `deletedAt` ordering | ✅ | Same query shape as mobile `sync.md` |
 | Tombstone **`getDocs`** backup (sign-in, each ingest snapshot, ~12s poll) + `lastTombstoneQueryDocIds` | ✅ | WKWebView reliability |
 | **Suppression** table + **tombstone outbox** + flush with `setDoc` merge | ✅ | SQLite + `entryApi` |
-| **`delete_local_entries_for_sync`** IPC: top-level **`entryIds`** (not nested `args`) | ✅ | `docs/sync/sync.md` § Desktop IPC |
+| **`delete_local_entries_for_sync`** IPC: top-level **`entryIds`** (not nested `args`) | ✅ | `chinotto-app/docs/sync.md` § Desktop IPC |
 | **Push** after create + **Cmd+Z restore** (`deleteField` on `deletedAt`) | ✅ | `App.tsx` |
+| **Push** after local **text** save (detail / stream / unmount flush) + Firestore **`updatedAt`** | ✅ | `syncSavedEntryTextToRemote` + `desktopFirestoreSync.ts` |
 | **Push** from menu bar **tray** (`#tray-capture`) when sync on | ✅ | `TrayCapturePanel.tsx` |
+| **Ingest** `INSERT` sets **`updated_at`** for new rows from cloud | ✅ | Rust `db/mod.rs` |
 | **`normalizeFirestoreCreatedAtForIngest`** (ISO, `Timestamp`, `{seconds}`) | ✅ | `desktopFirestoreSync.test.ts` |
-| Vitest + Rust tests for ingest / tombstone / outbox | ✅ | See `docs/sync/sync.md` § Tests |
+| Vitest + Rust tests for ingest / tombstone / outbox | ✅ | See `chinotto-app/docs/sync.md` § Tests |
 
 **Mobile (`chinotto-mobile`):** Phase 2 is **assumed shipped** per mobile `docs/sync/sync.md` (ingest, outbox, suppression, `linkWithCredential`, etc.). This table does not track mobile code — only verify in **§3** when you cut a mobile release.
 
@@ -57,11 +59,12 @@
 | Item | Status | Scope | Notes |
 |------|:------:|-------|-------|
 | **Create → other device** (latency OK) | ☐ | Both | |
+| **Desktop expands thought → mobile** shows longer **`text`** same `id` (no reorder) | ☐ | Both | Phase 2+ §8.7 |
 | **Delete → other device** | ☐ | Both | |
 | **Local delete** does not resurrect | ☐ | Both | Suppression + tombstone |
 | **Undo / restore** still pushes active doc (desktop) | ☐ | Desktop | `deleteField` on `deletedAt` |
 | Mobile **anonymous → Apple**: **uid** stable (`linkWithCredential`) | ☐ | Mobile | `sync-apple-qa.md` |
-| **Two-device QA** pass | ☐ | Both | Mobile `sync-apple-qa.md`; desktop `docs/sync/sync.md` § Troubleshooting |
+| **Two-device QA** pass | ☐ | Both | Mobile `sync-apple-qa.md`; desktop `chinotto-app/docs/sync.md` § Troubleshooting |
 
 ---
 
@@ -81,7 +84,7 @@
 
 | Item | Status | Scope | Notes |
 |------|:------:|-------|-------|
-| **`docs/sync/sync.md` § Changelog** updated after last sync change | ⭕ | Desktop | |
+| **`chinotto-app/docs/sync.md` § Changelog** updated after last desktop sync change | ⭕ | Desktop | |
 | **`AGENTS.md` / README** link to mobile `docs/sync/sync.md` | ⭕ | Desktop | |
 | Unify **`[ChinottoSync]`** vs **`[chinotto sync]`** | ⭕ | Both | |
 | E2E automated sync tests | ⭕ | Both | |
@@ -91,7 +94,7 @@
 
 ## 6. Out of scope (do not block)
 
-- Cross-device **edit** sync — `docs/sync/sync.md` § Limits.  
+- **Concurrent** edits to the same entry on two writers with explicit conflict UX — Phase **2+** is desktop-led text merge + mobile **`text`** apply only; see `docs/sync/sync.md` §8.7 and desktop `docs/sync.md` § Limits.  
 - Tombstone window **>1000** — rare edge case.  
 - Desktop **extra** tombstone `getDocs` vs mobile — intentional.
 
