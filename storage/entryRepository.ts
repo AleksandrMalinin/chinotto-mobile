@@ -81,14 +81,18 @@ export async function applyRemoteTombstoneDeletes(entryIds: string[]): Promise<n
   });
 }
 
-/** Insert remote-active rows if not present and not suppressed (desktop → mobile). */
+/**
+ * Apply remote-active rows from Firestore (desktop → mobile).
+ * Insert when `id` is new; **update `text` only** when the row already exists (same `id`, same `created_at` contract).
+ * Skips suppressed ids. Return value counts rows **inserted or updated** (for ingest refresh coalescing).
+ */
 export async function ingestRemoteFirestoreRows(rows: Pick<Entry, 'id' | 'text' | 'createdAt'>[]): Promise<number> {
   if (rows.length === 0) {
     return 0;
   }
   return runSerializedDb(async () => {
     const db = await getDatabase();
-    let inserted = 0;
+    let applied = 0;
     for (const row of rows) {
       const suppressed = await db.getFirstAsync<{ n: number }>(
         `SELECT 1 AS n FROM firestore_ingest_suppressed_ids WHERE id = ? LIMIT 1`,
@@ -97,17 +101,26 @@ export async function ingestRemoteFirestoreRows(rows: Pick<Entry, 'id' | 'text' 
       if (suppressed != null) {
         continue;
       }
-      const res = await db.runAsync(
+      const insertRes = await db.runAsync(
         `INSERT OR IGNORE INTO entries (id, text, created_at) VALUES (?, ?, ?)`,
         row.id,
         row.text,
         row.createdAt
       );
-      if (res.changes > 0) {
-        inserted += 1;
+      if (insertRes.changes > 0) {
+        applied += 1;
+        continue;
+      }
+      const updateRes = await db.runAsync(
+        `UPDATE entries SET text = ? WHERE id = ?`,
+        row.text,
+        row.id
+      );
+      if (updateRes.changes > 0) {
+        applied += 1;
       }
     }
-    return inserted;
+    return applied;
   });
 }
 

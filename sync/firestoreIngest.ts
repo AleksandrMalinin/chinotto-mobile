@@ -87,7 +87,7 @@ function tombstonedIdsFromDocs(docs: QueryDocumentSnapshot<DocumentData>[]): str
 
 /**
  * Paginates older Firestore docs (same ordering as the live listener) so history beyond the snapshot
- * `limit` still reaches SQLite. Idempotent with `INSERT OR IGNORE`; safe to overlap the first page.
+ * `limit` still reaches SQLite. Inserts new ids; updates existing **`text`** (see `ingestRemoteFirestoreRows`); safe to overlap the first page.
  */
 export async function runFirestoreIngestBackfill(
   coll: CollectionReference<DocumentData>,
