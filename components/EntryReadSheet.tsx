@@ -1,5 +1,5 @@
 import * as Clipboard from 'expo-clipboard';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Linking,
   Modal,
@@ -30,6 +30,13 @@ export function EntryReadSheet({ visible, entry, onClose }: EntryReadSheetProps)
   const { colors, typography, spacing, radius } = t;
   const { body, meta } = typography;
   const [copied, setCopied] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+
+  const comfortableReading = (entry?.text.length ?? 0) >= 380;
+  const scrollMaxHeight = Math.min(
+    windowHeight * (comfortableReading ? 0.62 : 0.58),
+    comfortableReading ? 560 : 520
+  );
 
   const httpUrls = useMemo(
     () => (entry != null ? extractHttpUrlsFromText(entry.text) : []),
@@ -44,6 +51,12 @@ export function EntryReadSheet({ visible, entry, onClose }: EntryReadSheetProps)
       setCopied(false);
     }
   }, [visible]);
+
+  useEffect(() => {
+    if (visible && entry != null) {
+      scrollRef.current?.scrollTo({ y: 0, animated: false });
+    }
+  }, [visible, entry?.id]);
 
   const handleOpenLink = useCallback(async () => {
     if (firstHttpUrl == null) {
@@ -113,82 +126,89 @@ export function EntryReadSheet({ visible, entry, onClose }: EntryReadSheetProps)
             },
           ]}
         >
-          <View style={[styles.toolbar, { paddingHorizontal: spacing.lg, paddingTop: spacing.md }]}>
-            <View style={styles.toolbarMeta}>
+          <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.md }}>
+            <View style={styles.toolbarTopRow}>
               <Text
                 style={[
                   styles.metaTime,
                   {
+                    flex: 1,
+                    minWidth: 0,
+                    marginRight: spacing.sm,
                     color: colors.metaFg,
                     fontFamily: meta.fontFamily,
                     fontSize: meta.fontSize,
+                    lineHeight: 20,
                   },
                 ]}
+                numberOfLines={1}
               >
                 {formatEntryTime(entry.createdAt)}
               </Text>
-              {linkHost != null ? (
-                <Text
-                  testID="entry-read-link-host"
-                  accessibilityLabel={`Link from ${linkHost}`}
-                  style={[
-                    styles.metaHost,
-                    {
-                      color: colors.sectionFg,
-                      fontFamily: meta.fontFamily,
-                      fontSize: 12,
-                    },
-                  ]}
-                  numberOfLines={1}
-                >
-                  {linkHost}
-                </Text>
-              ) : null}
-            </View>
-            <View style={styles.toolbarActions}>
-              {firstHttpUrl != null ? (
+              <View style={styles.toolbarActions}>
+                {firstHttpUrl != null ? (
+                  <Pressable
+                    testID="entry-read-open-link"
+                    onPress={() => void handleOpenLink()}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      linkCount > 1 ? 'Open first link in browser' : 'Open link in browser'
+                    }
+                    hitSlop={10}
+                    style={({ pressed }) => [styles.actionBtn, { opacity: pressed ? 0.65 : 1 }]}
+                  >
+                    <Text
+                      style={{
+                        color: colors.fgDim,
+                        fontFamily: fonts.medium,
+                        fontSize: 15,
+                        lineHeight: 20,
+                        letterSpacing: 0.2,
+                      }}
+                    >
+                      {linkCount > 1 ? 'Open first' : 'Open'}
+                    </Text>
+                  </Pressable>
+                ) : null}
                 <Pressable
-                  testID="entry-read-open-link"
-                  onPress={() => void handleOpenLink()}
+                  testID="entry-read-copy"
+                  onPress={() => void handleCopy()}
                   accessibilityRole="button"
-                  accessibilityLabel={
-                    linkCount > 1 ? 'Open first link in browser' : 'Open link in browser'
-                  }
+                  accessibilityLabel={copied ? 'Copied' : 'Copy text'}
                   hitSlop={10}
                   style={({ pressed }) => [styles.actionBtn, { opacity: pressed ? 0.65 : 1 }]}
                 >
                   <Text
                     style={{
-                      color: colors.fgDim,
+                      color: copied ? colors.muted : colors.fgDim,
                       fontFamily: fonts.medium,
                       fontSize: 15,
+                      lineHeight: 20,
                       letterSpacing: 0.2,
                     }}
                   >
-                    {linkCount > 1 ? 'Open first' : 'Open'}
+                    {copied ? 'Copied' : 'Copy'}
                   </Text>
                 </Pressable>
-              ) : null}
-              <Pressable
-                testID="entry-read-copy"
-                onPress={() => void handleCopy()}
-                accessibilityRole="button"
-                accessibilityLabel={copied ? 'Copied' : 'Copy text'}
-                hitSlop={10}
-                style={({ pressed }) => [styles.actionBtn, { opacity: pressed ? 0.65 : 1 }]}
-              >
-                <Text
-                  style={{
-                    color: copied ? colors.muted : colors.fgDim,
-                    fontFamily: fonts.medium,
-                    fontSize: 15,
-                    letterSpacing: 0.2,
-                  }}
-                >
-                  {copied ? 'Copied' : 'Copy'}
-                </Text>
-              </Pressable>
+              </View>
             </View>
+            {linkHost != null ? (
+              <Text
+                testID="entry-read-link-host"
+                accessibilityLabel={`Link from ${linkHost}`}
+                style={[
+                  styles.metaHost,
+                  {
+                    color: colors.sectionFg,
+                    fontFamily: meta.fontFamily,
+                    fontSize: 12,
+                  },
+                ]}
+                numberOfLines={1}
+              >
+                {linkHost}
+              </Text>
+            ) : null}
           </View>
           {linkCount > 1 ? (
             <View
@@ -252,16 +272,19 @@ export function EntryReadSheet({ visible, entry, onClose }: EntryReadSheetProps)
             </View>
           ) : null}
           <ScrollView
-            style={[styles.scroll, { maxHeight: Math.min(windowHeight * 0.58, 520) }]}
+            ref={scrollRef}
+            testID="entry-read-scroll"
+            style={[styles.scroll, { maxHeight: scrollMaxHeight }]}
             contentContainerStyle={{
               paddingHorizontal: spacing.lg,
               paddingTop: spacing.sm,
-              paddingBottom: spacing.lg,
+              paddingBottom: comfortableReading ? spacing.lg + spacing.sm : spacing.lg,
             }}
             keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={comfortableReading}
           >
             <Text
+              testID="entry-read-body"
               selectable
               style={[
                 styles.bodyText,
@@ -269,7 +292,7 @@ export function EntryReadSheet({ visible, entry, onClose }: EntryReadSheetProps)
                   color: colors.entryBody,
                   fontFamily: body.fontFamily,
                   fontSize: 17,
-                  lineHeight: 26,
+                  lineHeight: comfortableReading ? 28 : 26,
                   letterSpacing: 0.15,
                 },
               ]}
@@ -295,15 +318,10 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: 0,
   },
-  toolbar: {
+  toolbarTopRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  toolbarMeta: {
-    flex: 1,
-    marginRight: 12,
-    minWidth: 0,
   },
   metaTime: {},
   metaHost: {
@@ -323,7 +341,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   actionBtn: {
-    paddingVertical: 6,
+    paddingVertical: 4,
     paddingHorizontal: 4,
   },
   scroll: {},

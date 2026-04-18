@@ -101,6 +101,33 @@ describe('EntryReadSheet', () => {
     });
   });
 
+  it('uses comfortable reading layout when entry text is long', () => {
+    const longText = 'word '.repeat(90);
+    const entry = {
+      id: 'e-long',
+      text: longText,
+      createdAt: sampleEntry.createdAt,
+    };
+    const { getByTestId } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <EntryReadSheet visible entry={entry} onClose={jest.fn()} />
+      </SafeAreaProvider>
+    );
+
+    expect(getByTestId('entry-read-scroll').props.showsVerticalScrollIndicator).toBe(true);
+    expect(getByTestId('entry-read-body').props.children).toBe(longText);
+  });
+
+  it('keeps compact read layout for shorter entries', () => {
+    const { getByTestId } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <EntryReadSheet visible entry={sampleEntry} onClose={jest.fn()} />
+      </SafeAreaProvider>
+    );
+
+    expect(getByTestId('entry-read-scroll').props.showsVerticalScrollIndicator).toBe(false);
+  });
+
   it('Open uses first URL when several are present', async () => {
     const entry = {
       id: 'e3',

@@ -46,6 +46,7 @@ import { StreamFlowPanel } from './StreamFlowPanel';
 /**
  * Time-grouped stream — section labels (`.stream-section-title`), entry rows with
  * hairline separators like desktop `.entry-row` / `var(--border)`, plus inline time.
+ * Each row shows **two lines** of body text (ellipsis); full text opens via `onEntryPress`.
  *
  * Delete: **swipe left** past threshold (reveals delete track, commits on open) — intentional gesture only;
  * local-first + tombstone queue (see `deleteEntry`).
@@ -317,7 +318,7 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
                   opacity: bodyOpacityAnim.current!,
                 },
               ]}
-              numberOfLines={4}
+              numberOfLines={2}
             >
               {lineDisplay}
             </Animated.Text>
@@ -1039,17 +1040,17 @@ const styles = StyleSheet.create({
    */
   entryBlock: {
     width: '100%',
-    paddingVertical: 15,
+    paddingVertical: 13,
   },
   entryRow: {
     width: '100%',
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'baseline',
     justifyContent: 'space-between',
   },
   line: {},
   time: {
-    marginTop: 2,
+    marginTop: -2,
   },
   deleteTrack: {
     justifyContent: 'center',
