@@ -122,13 +122,6 @@ export type EnableSyncModalProps = {
    * Parent should bump when opening the sheet from the dev menu.
    */
   devPostSyncPreviewNonce?: number;
-  /**
-   * Marketing / App Store screenshots: show the post-entitlement “Continue with Apple” step
-   * (skip paywall and subscription wait UI in this sheet).
-   */
-  marketingPreviewAppleConnectStep?: boolean;
-  /** When true, primary actions do not run (deterministic screenshot frames). */
-  marketingPreviewFreezeActions?: boolean;
   /** Design tokens */
   fg: string;
   fgDim: string;
@@ -146,8 +139,6 @@ export function EnableSyncModal({
   subscriptionHydrated,
   onSubscriptionUnlocked,
   devPostSyncPreviewNonce,
-  marketingPreviewAppleConnectStep = false,
-  marketingPreviewFreezeActions = false,
   fg,
   fgDim,
   muted,
@@ -284,12 +275,8 @@ export function EnableSyncModal({
 
   const showEnableFlow = authPhase === 'signed_out';
   const showSubscriptionWait =
-    !marketingPreviewAppleConnectStep &&
-    showEnableFlow &&
-    isPaywallEnabled() &&
-    !subscriptionHydrated;
+    showEnableFlow && isPaywallEnabled() && !subscriptionHydrated;
   const showPlusPaywall =
-    !marketingPreviewAppleConnectStep &&
     showEnableFlow &&
     isPaywallEnabled() &&
     subscriptionHydrated &&
@@ -325,7 +312,7 @@ export function EnableSyncModal({
   const showSyncTitle =
     !postSyncSuccess &&
     (authPhase !== 'signed_out' || (!showPlusPaywall && !showSubscriptionWait));
-  const interactionLocked = busy || marketingPreviewFreezeActions;
+  const interactionLocked = busy;
 
   const sheetShadowLift = sunlightMode
     ? Platform.select({

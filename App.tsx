@@ -43,9 +43,7 @@ import {
 } from './sync/remoteIngestStreamNotify';
 import { resolvePushEntryForSync } from './sync/pushEntryForSync';
 import { startBackgroundSync } from './sync/syncEngine';
-import { useScreenshotSceneLink } from './linking/useScreenshotSceneLink';
 import { useSyncDeepLink } from './linking/useSyncDeepLink';
-import { isScreenshotMode } from './src/features/screenshotMode';
 import { useAppUpdateCheck } from './src/services/appUpdate/useAppUpdateCheck';
 import { initDatabase } from './storage/db';
 import {
@@ -224,10 +222,8 @@ export default function App() {
     refreshSharePayloads,
   } = useIncomingShare();
 
-  const screenshotScene = useScreenshotSceneLink();
-
   const { gate: appUpdateGate, dismissSoft: dismissAppUpdateSoft } = useAppUpdateCheck({
-    enabled: !isScreenshotMode(),
+    enabled: true,
   });
 
   const [devAppUpdatePreview, setDevAppUpdatePreview] = useState<'soft' | 'forced' | null>(null);
@@ -343,7 +339,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!analyticsInitDone || phase !== 'main' || !captureShellReadyForAnalytics || isScreenshotMode()) {
+    if (!analyticsInitDone || phase !== 'main' || !captureShellReadyForAnalytics) {
       return undefined;
     }
     if (!isUmamiConfigured()) {
@@ -550,9 +546,6 @@ export default function App() {
     if (!fontsLoaded || !dbReady) {
       return;
     }
-    if (isScreenshotMode()) {
-      return;
-    }
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     void (async () => {
@@ -570,26 +563,6 @@ export default function App() {
       }
     };
   }, [fontsLoaded, dbReady]);
-
-  useEffect(() => {
-    if (!fontsLoaded || !dbReady || !isScreenshotMode()) {
-      return;
-    }
-    setPhase('main');
-  }, [fontsLoaded, dbReady, screenshotScene]);
-
-  /**
-   * Screenshot mode skips {@link BrandSplash}, which normally calls `SplashScreen.hideAsync()`.
-   * Without this, the native splash never dismisses.
-   */
-  useEffect(() => {
-    if (!isScreenshotMode() || !fontsLoaded || !dbReady) {
-      return;
-    }
-    if (phase === 'main') {
-      void SplashScreen.hideAsync();
-    }
-  }, [phase, fontsLoaded, dbReady]);
 
   if (!fontsLoaded || !dbReady || !chromeReady || !displayChromeReady || phase === 'boot') {
     return null;
@@ -616,7 +589,6 @@ export default function App() {
               onScheduleStreamHighlight={scheduleStreamHighlight}
               subscriptionHydrated={subscriptionLoaded}
               onSubscriptionUnlocked={() => setFirestoreIngestEpoch((n) => n + 1)}
-              screenshot={isScreenshotMode() ? { scene: screenshotScene } : undefined}
               syncModalVisible={syncModalVisible}
               onSyncModalVisibleChange={setSyncModalVisible}
               analyticsEnabled={analyticsEnabled}

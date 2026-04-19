@@ -24,7 +24,7 @@ const APP_VERSION = Constants.expoConfig?.version ?? '0';
  */
 const UMAMI_HOSTNAME = process.env.EXPO_PUBLIC_UMAMI_HOSTNAME?.trim() || 'chinotto.mobile';
 
-export type SyncModalSurface = 'header' | 'settings' | 'deeplink' | 'screenshot' | 'dev_menu';
+export type SyncModalSurface = 'header' | 'settings' | 'deeplink' | 'dev_menu';
 
 export type AnalyticsEvent =
   | { event: 'sync_modal_opened'; surface?: SyncModalSurface }

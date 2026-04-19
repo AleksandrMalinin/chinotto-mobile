@@ -17,7 +17,6 @@ function ctx(partial: Partial<SyncHighlightContext>): SyncHighlightContext {
   return {
     authPhase: 'signed_out',
     syncFlowOpen: false,
-    screenshotActive: false,
     totalThoughtCount: 0,
     signals: { ...baseSignals },
     syncHeaderCtaTapped: false,

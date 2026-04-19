@@ -12,7 +12,7 @@ export function getRuntimeAppVersion(): string {
 }
 
 export type UseAppUpdateCheckOptions = {
-  /** When false, skips network/mock fetch entirely (e.g. screenshot / automation). */
+  /** When false, skips network/mock fetch entirely (e.g. tests / automation). */
   enabled?: boolean;
   fetchConfig?: UpdateConfigFetcher;
   getCurrentVersion?: () => string;

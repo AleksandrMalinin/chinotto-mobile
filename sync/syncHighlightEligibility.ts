@@ -13,7 +13,6 @@ export type SyncHighlightContext = {
   authPhase: SyncHighlightAuthPhase;
   /** True while sync modal/sheet is visible. */
   syncFlowOpen: boolean;
-  screenshotActive: boolean;
   /** Total rows in local DB (not just current page). */
   totalThoughtCount: number;
   signals: SyncHighlightSignals;
@@ -31,12 +30,8 @@ export type SyncHighlightEligibility = {
  * Conservative when signals are weak — prefer not to shimmer.
  */
 export function getSyncHighlightEligibility(ctx: SyncHighlightContext): SyncHighlightEligibility {
-  const { authPhase, syncFlowOpen, screenshotActive, totalThoughtCount, signals, syncHeaderCtaTapped, nowMs } =
-    ctx;
+  const { authPhase, syncFlowOpen, totalThoughtCount, signals, syncHeaderCtaTapped, nowMs } = ctx;
 
-  if (screenshotActive) {
-    return { shouldShimmer: false };
-  }
   if (syncFlowOpen) {
     return { shouldShimmer: false };
   }

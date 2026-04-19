@@ -198,30 +198,6 @@ describe('EnableSyncModal', () => {
     expect(getByText(/Uploads are waiting/)).toBeTruthy();
   });
 
-  it('marketing preview shows post-paywall Apple step and does not run Apple when frozen', async () => {
-    paywallGate.enabled = true;
-    mockGetEntitlement.mockReturnValue(false);
-    jest.mocked(enableAppleSyncWithFirebase).mockClear();
-
-    const { getByText, queryByText } = render(
-      <EnableSyncModal
-        visible
-        onClose={jest.fn()}
-        onEnabled={jest.fn()}
-        authPhase="signed_out"
-        marketingPreviewAppleConnectStep
-        marketingPreviewFreezeActions
-        {...baseProps}
-      />
-    );
-
-    await flushPaywallPrefetch();
-
-    expect(getByText('Use Apple to connect your devices.')).toBeTruthy();
-    expect(queryByText('Continue on another device')).toBeNull();
-    expect(enableAppleSyncWithFirebase).not.toHaveBeenCalled();
-  });
-
   it('drains sync queue and tombstone outbox after Apple sign-in succeeds, then shows desktop hint', async () => {
     const onEnabled = jest.fn();
     const onClose = jest.fn();
