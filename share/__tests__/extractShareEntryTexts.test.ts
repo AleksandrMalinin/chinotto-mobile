@@ -147,7 +147,7 @@ describe('composeIncomingShareCaptureText', () => {
         contentType: 'website',
         originalName: null,
         contentSize: null,
-      } as ResolvedSharePayload,
+      } as unknown as ResolvedSharePayload,
     ];
     expect(composeIncomingShareCaptureText(resolved, [])).toBe('http://www.warp.dev.html');
   });

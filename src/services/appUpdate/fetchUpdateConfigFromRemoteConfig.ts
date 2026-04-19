@@ -11,6 +11,7 @@ import remoteConfig from '@react-native-firebase/remote-config';
 
 import { mockUpdateConfig } from './mockUpdateConfig';
 import { parseUpdateConfigJson } from './parseUpdateConfigJson';
+import type { UpdateConfig } from './types';
 
 /** Remote Config parameter key — single JSON object string. */
 export const APP_UPDATE_REMOTE_CONFIG_KEY = 'chinotto_app_update_json';

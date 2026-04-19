@@ -5,7 +5,7 @@ import {
 } from '../syncPurchaseFlow';
 
 const mockGetCachedHasSyncEntitlement = jest.fn(() => false);
-const mockRefresh = jest.fn(() => Promise.resolve(null));
+const mockRefresh = jest.fn((..._args: unknown[]) => Promise.resolve(null));
 const mockLoadOffering = jest.fn();
 const mockPurchase = jest.fn();
 

@@ -289,7 +289,6 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
         onPress={onEntryPress != null ? () => onEntryPress(item) : undefined}
         onPressIn={onPressIn}
         onPressOut={onPressOut}
-        delayPressIn={0}
         style={styles.pressableAboveTrace}
         {...(Platform.OS === 'android' ? { android_ripple: null } : {})}
       >

@@ -11,8 +11,8 @@ jest.mock('../firebaseAuth', () => ({
   getOrInitAuth: jest.fn(),
 }));
 
-const mockInitFirestore = jest.fn();
-const mockGetFirestore = jest.fn(() => fallbackDb);
+const mockInitFirestore = jest.fn((..._args: unknown[]) => undefined as never);
+const mockGetFirestore = jest.fn((..._args: unknown[]) => fallbackDb);
 
 jest.mock('firebase/firestore', () => ({
   doc: jest.fn(),

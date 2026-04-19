@@ -125,7 +125,7 @@ describe('loadCurrentChinottoOffering', () => {
           },
         ],
       },
-    } as PurchasesPackage;
+    } as unknown as PurchasesPackage;
     const offering = {
       identifier: 'default',
       serverDescription: '',
@@ -164,7 +164,7 @@ describe('loadCurrentChinottoOffering', () => {
         identifier: 'monthly',
         priceString: '$4.99',
       },
-    } as PurchasesPackage;
+    } as unknown as PurchasesPackage;
     const offering = {
       identifier: 'default',
       serverDescription: '',
@@ -212,7 +212,7 @@ describe('loadCurrentChinottoOffering', () => {
           periodUnit: 'WEEK',
         },
       },
-    } as PurchasesPackage;
+    } as unknown as PurchasesPackage;
     const offering = {
       identifier: 'default',
       serverDescription: '',

@@ -2,6 +2,7 @@ import {
   NativeEventEmitter,
   NativeModules,
   type EmitterSubscription,
+  type NativeModule,
   Platform,
 } from 'react-native';
 
@@ -17,7 +18,9 @@ type VoiceCaptureNativeType = {
 
 const NativeVoiceCapture = NativeModules.VoiceCaptureModule as VoiceCaptureNativeType | undefined;
 
-const emitter = NativeVoiceCapture ? new NativeEventEmitter(NativeVoiceCapture as object) : null;
+const emitter = NativeVoiceCapture
+  ? new NativeEventEmitter(NativeVoiceCapture as unknown as NativeModule)
+  : null;
 
 export const voiceCaptureSupported = Platform.OS === 'ios' && NativeVoiceCapture != null;
 

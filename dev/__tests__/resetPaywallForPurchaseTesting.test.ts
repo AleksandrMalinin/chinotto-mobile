@@ -11,15 +11,16 @@ jest.mock('../../src/services/purchases/revenueCat', () => ({
 }));
 
 describe('resetPaywallForPurchaseTesting', () => {
-  const originalDev = global.__DEV__;
+  const devGlobal = globalThis as typeof globalThis & { __DEV__?: boolean };
+  const originalDev = devGlobal.__DEV__;
 
   beforeEach(() => {
-    (global as { __DEV__: boolean }).__DEV__ = true;
+    devGlobal.__DEV__ = true;
     jest.clearAllMocks();
   });
 
   afterEach(() => {
-    (global as { __DEV__: boolean }).__DEV__ = originalDev;
+    devGlobal.__DEV__ = originalDev;
   });
 
   it('logs out RevenueCat then clears local paywall flags', async () => {
@@ -39,7 +40,7 @@ describe('resetPaywallForPurchaseTesting', () => {
   });
 
   it('no-op when __DEV__ is false', async () => {
-    (global as { __DEV__: boolean }).__DEV__ = false;
+    devGlobal.__DEV__ = false;
 
     await resetPaywallForPurchaseTesting();
 

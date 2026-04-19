@@ -7,7 +7,7 @@ import { devRevenueCatLogOutAndRefreshEntitlementCache } from '../revenueCat';
 
 const emptyInfo = {
   entitlements: { active: {}, all: {} },
-} as CustomerInfo;
+} as unknown as CustomerInfo;
 
 jest.mock('react-native-purchases', () => ({
   __esModule: true,
@@ -20,16 +20,17 @@ jest.mock('react-native-purchases', () => ({
 }));
 
 describe('devRevenueCatLogOutAndRefreshEntitlementCache', () => {
-  const originalDev = global.__DEV__;
+  const devGlobal = globalThis as typeof globalThis & { __DEV__?: boolean };
+  const originalDev = devGlobal.__DEV__;
 
   beforeEach(() => {
-    (global as { __DEV__: boolean }).__DEV__ = true;
+    devGlobal.__DEV__ = true;
     syncEntitlementCacheFromCustomerInfo({
       entitlements: {
         active: { [CHINOTTO_PRO_ENTITLEMENT_ID]: { identifier: CHINOTTO_PRO_ENTITLEMENT_ID } },
         all: {},
       },
-    } as CustomerInfo);
+    } as unknown as CustomerInfo);
     jest.mocked(Purchases.isAnonymous).mockResolvedValue(false);
     jest.mocked(Purchases.logOut).mockResolvedValue(emptyInfo);
     jest.mocked(Purchases.invalidateCustomerInfoCache).mockResolvedValue(undefined);
@@ -37,7 +38,7 @@ describe('devRevenueCatLogOutAndRefreshEntitlementCache', () => {
   });
 
   afterEach(() => {
-    (global as { __DEV__: boolean }).__DEV__ = originalDev;
+    devGlobal.__DEV__ = originalDev;
     syncEntitlementCacheFromCustomerInfo(null);
     jest.clearAllMocks();
   });
@@ -66,7 +67,7 @@ describe('devRevenueCatLogOutAndRefreshEntitlementCache', () => {
   });
 
   it('is a no-op when __DEV__ is false', async () => {
-    (global as { __DEV__: boolean }).__DEV__ = false;
+    devGlobal.__DEV__ = false;
 
     await devRevenueCatLogOutAndRefreshEntitlementCache();
 

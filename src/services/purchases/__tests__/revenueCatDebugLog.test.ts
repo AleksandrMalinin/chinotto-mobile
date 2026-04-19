@@ -17,7 +17,7 @@ describe('logRevenueCatSubscriptionsAndProducts', () => {
       activeSubscriptions: ['chinotto.pro.monthly'],
       allPurchasedProductIdentifiers: ['chinotto.pro.monthly'],
       originalAppUserId: '$RCAnonymousID:test',
-    } as CustomerInfo);
+    } as unknown as CustomerInfo);
     mockGetOfferings.mockResolvedValue({
       current: {
         identifier: 'default',
