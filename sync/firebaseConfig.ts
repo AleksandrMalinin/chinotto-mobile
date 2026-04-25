@@ -5,7 +5,8 @@
 export function isFirebaseSyncConfigured(): boolean {
   const apiKey = process.env.EXPO_PUBLIC_FIREBASE_API_KEY?.trim();
   const projectId = process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID?.trim();
-  return Boolean(apiKey && projectId);
+  const appId = process.env.EXPO_PUBLIC_FIREBASE_APP_ID?.trim();
+  return Boolean(apiKey && projectId && appId);
 }
 
 export function getFirebaseWebOptions() {

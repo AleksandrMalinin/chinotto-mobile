@@ -133,7 +133,7 @@ service cloud.firestore {
 |--------|------|
 | `sync/firebaseConfig.ts` | `EXPO_PUBLIC_FIREBASE_*`; `isFirebaseSyncConfigured()`. |
 | `sync/firebaseSync.ts` | Firebase app, Firestore (**memory** cache), `getOrInitApp()`, `firebasePushEntry(entry)`. |
-| `sync/pushEntryForSync.ts` | `resolvePushEntryForSync()` → Firestore or mock. |
+| `sync/pushEntryForSync.ts` | `resolvePushEntryForSync()` → Firestore push when configured; otherwise explicit failure (queue remains pending). |
 | `sync/syncQueue.ts` / `syncEngine.ts` | Persistent queue, `processSyncQueue`, background interval; tombstone flush after each tick. |
 | `sync/tombstoneOutbox.ts` / `tombstoneFlush.ts` | Durable tombstone outbox (coalesced per `entry_id`); `flushSyncTombstoneOutbox` → Firestore `setDoc` + merge (`deletedAt`). |
 | `sync/firestoreSyncAccessMirror.ts` | Mirrors paid sync access to `users/{uid}.chinottoSyncAccess` and optional `sync_desktop_sessions/{ds}` for desktop QR sessions. |
@@ -270,7 +270,7 @@ users/{firebaseUid}/entries/{entryId}
 
 1. **Local:** in one DB transaction (or equivalent): remove row from `entries` (and cascades). **During rollout:** if suppression is still used, record `entryId` in `firestore_ingest_suppressed_ids` (desktop) or equivalent bridge on mobile if applicable.  
 2. **Queue:** append **`{ "op": "tombstone", "entryId": "<string>" }`** (same id as Firestore doc id and SQLite id).  
-3. **Async flush:** worker sends Firestore **`updateDoc`** with **`deletedAt: serverTimestamp()`** (idempotent if already set).
+3. **Async flush:** worker sends Firestore **`setDoc` + `{ merge: true }`** with **`deletedAt: serverTimestamp()`** (idempotent if already set; missing remote docs still receive tombstone).
 
 **Rationale:** local-first, instant UI; offline devices hold the op until connectivity; suppression (while enabled) blocks stale active remote docs from reappearing before the tombstone lands.
 
@@ -350,5 +350,5 @@ Record **implementation** and cross-repo **alignment** changes for **mobile** he
 ## Practical checklist
 
 1. **Console:** Rules (§3); **Authentication** → enable **Apple** (and optional Anonymous only for dev/legacy). **Phase 2:** extend rules for **`deletedAt`** tombstone updates (§8).  
-2. **Mobile:** `.env` from `.env.example`; `npx expo prebuild` / dev build after adding Apple plugin; restart Metro after env changes. **Phase 2:** tombstone queue + `updateDoc` flush per §8.  
+2. **Mobile:** `.env` from `.env.example`; `npx expo prebuild` / dev build after adding Apple plugin; restart Metro after env changes. **Phase 2:** tombstone queue + **`setDoc` merge** flush per §8.  
 3. **Desktop:** Same project, same **`uid`**, listener + local merge by `id`. **Phase 2:** ingest tombstones + suppression bridge per §8. **Ops / IPC / tests:** [Chinotto `docs/sync.md`](https://github.com/AleksandrMalinin/chinotto/blob/main/docs/sync.md).

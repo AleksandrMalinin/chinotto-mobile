@@ -64,19 +64,29 @@ export function initRevenueCat(): void {
     );
 
     if (Platform.OS === 'ios') {
+      const iosKey = REVENUECAT_IOS_API_KEY;
+      if (iosKey === '') {
+        if (__DEV__ && !quiet) {
+          console.warn(
+            '[RevenueCat] iOS key missing. Set EXPO_PUBLIC_REVENUECAT_IOS_API_KEY (appl_...) to enable Purchases.',
+          );
+        }
+        return;
+      }
       if (
         !quiet &&
         !__DEV__ &&
         isPaywallEnabled() &&
-        REVENUECAT_IOS_API_KEY.startsWith('test_')
+        iosKey.startsWith('test_')
       ) {
         console.error(
           '[RevenueCat] Paywall is on but the embedded iOS key is test_* — set EXPO_PUBLIC_REVENUECAT_IOS_API_KEY (appl_…) on EAS and rebuild. Purchases will not work in this binary.',
         );
+        return;
       }
       const storeKitVersion = iosStoreKitVersionFromEnv();
       Purchases.configure({
-        apiKey: REVENUECAT_IOS_API_KEY,
+        apiKey: iosKey,
         ...(storeKitVersion != null ? { storeKitVersion } : {}),
       });
     } else if (Platform.OS === 'android') {

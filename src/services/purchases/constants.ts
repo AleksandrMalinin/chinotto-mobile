@@ -29,7 +29,7 @@ export const CHINOTTO_PACKAGE_KIND_ORDER: readonly ChinottoPackageKind[] = [
 ] as const;
 
 /**
- * iOS public SDK key. Override via `EXPO_PUBLIC_REVENUECAT_IOS_API_KEY` for production / other envs.
+ * iOS public SDK key from env.
+ * Must be set per build target (`appl_*` for production).
  */
-export const REVENUECAT_IOS_API_KEY =
-  process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ?? 'test_qrJRQDJwlTvrHvSbLqajDIRDXix';
+export const REVENUECAT_IOS_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY?.trim() ?? '';
