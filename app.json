@@ -90,7 +90,9 @@
               "displayName": "Chinotto",
               "description": "Open capture to jot a thought.",
               "supportedFamilies": [
-                "systemSmall"
+                "systemSmall",
+                "systemMedium",
+                "systemLarge"
               ]
             }
           ]
