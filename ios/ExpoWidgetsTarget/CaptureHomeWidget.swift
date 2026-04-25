@@ -108,6 +108,7 @@ private struct CaptureHomeWidgetView: View {
         smallLayout
       }
     }
+    .unredacted()
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     .padding(paddingInsets)
     .widgetURL(captureDeepLink)
