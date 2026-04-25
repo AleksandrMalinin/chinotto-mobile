@@ -57,4 +57,5 @@ For the real path, use **Enable sync** → Continue with Apple (and paywall/tria
 ## 5. Related docs
 
 - [sync.md](./sync.md) — Firestore layout, tombstones, backfill, limits.
-- Optional local `docs/product/PRODUCT_STATE.md` (gitignored) — shipped-behavior snapshot if you keep one.
+- [product-spec.md](../product/product-spec.md) — product source of truth (intent + shipped scope).
+- [product-brief.md](../product/product-brief.md) — one-page external-facing overview.

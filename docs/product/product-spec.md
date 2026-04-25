@@ -9,6 +9,10 @@ It exists to ensure that thoughts are never lost — regardless of where they oc
 Mobile is not a full thinking environment.  
 It is a **capture layer and lightweight recall surface**.
 
+This document covers both:
+- product intent and guardrails
+- current shipped behavior on `main` (high level)
+
 ---
 
 ## Philosophy
@@ -34,6 +38,26 @@ Chinotto is a single system with two surfaces:
 - Capture
 - Quick recall
 - Ubiquitous access
+
+---
+
+## Current shipped scope (`main`)
+
+This section is the "what exists now" snapshot for first-time readers.
+
+- **Capture-first shell:** brief brand splash, then direct capture state
+- **Capture input:** fast add flow with local-first persistence
+- **Recent stream:** lightweight reverse-chronological recall surface
+- **Search:** text search over entries
+- **Share in (iOS):** capture text from other apps via share extension
+- **Optional sync:** Sign in with Apple + Firebase-backed sync (capture does not depend on auth)
+- **Widget path (iOS):** home widget entry point into quick capture
+- **Update policy gate:** Remote Config-driven app-update screen support (soft/forced modes)
+- **Monetization plumbing:** RevenueCat integration and entitlement sync flows
+
+Platform status:
+- **iOS is primary and shipping target**
+- Android parity is deferred
 
 ---
 
@@ -198,7 +222,6 @@ No additional structure.
 ## Future considerations (carefully)
 
 - Voice capture (natural extension)
-- Search (minimal)
 - Better recall UX
 
 All must pass:

@@ -19,7 +19,7 @@ Use this index to find the right doc quickly.
 ## Product
 
 - `docs/product/product-spec.md` - product intent and UX guardrails
-- `docs/product/PRODUCT_STATE.md` - current shipped behavior snapshot
+- `docs/product/product-brief.md` - one-page external-facing product brief
 - Shortcut folder index: `docs/product/README.md`
 
 ## Engineering
