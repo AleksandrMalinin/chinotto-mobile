@@ -2,30 +2,51 @@ import { useEffect } from 'react';
 import * as Linking from 'expo-linking';
 
 import { isExperimentalIosHomeWidgetEnabled } from '../constants/experimentalIosHomeWidget';
-
-import { isCaptureWidgetDeepLink } from './isCaptureWidgetDeepLink';
+import { parseWidgetDeepLink } from './parseWidgetDeepLink';
 
 /**
- * Bumps a counter when the widget capture URL opens the app so capture can focus.
+ * Handles widget deep links:
+ * - `chinotto://capture`
+ * - `chinotto://capture?mode=voice`
+ * - `chinotto://thought/<id>`
  */
-export function useCaptureWidgetDeepLinkFocus(onCaptureDeepLink: () => void): void {
+export function useCaptureWidgetDeepLinkFocus(options: {
+  onCaptureDeepLink: () => void;
+  onVoiceCaptureDeepLink?: () => void;
+  onThoughtDeepLink?: (thoughtId: string) => void;
+}): void {
+  const { onCaptureDeepLink, onVoiceCaptureDeepLink, onThoughtDeepLink } = options;
+
   useEffect(() => {
-    const bumpIfCapture = (url: string | null) => {
-      if (isExperimentalIosHomeWidgetEnabled() && isCaptureWidgetDeepLink(url)) {
-        onCaptureDeepLink();
+    const handleWidgetDeepLink = (url: string | null) => {
+      if (!isExperimentalIosHomeWidgetEnabled()) {
+        return;
       }
+      const action = parseWidgetDeepLink(url);
+      if (!action) {
+        return;
+      }
+      if (action.type === 'capture') {
+        if (action.mode === 'voice') {
+          onVoiceCaptureDeepLink?.();
+        } else {
+          onCaptureDeepLink();
+        }
+        return;
+      }
+      onThoughtDeepLink?.(action.thoughtId);
     };
 
     const sub = Linking.addEventListener('url', ({ url }) => {
-      bumpIfCapture(url);
+      handleWidgetDeepLink(url);
     });
 
     void Linking.getInitialURL().then((url) => {
-      bumpIfCapture(url);
+      handleWidgetDeepLink(url);
     });
 
     return () => {
       sub.remove();
     };
-  }, [onCaptureDeepLink]);
+  }, [onCaptureDeepLink, onVoiceCaptureDeepLink, onThoughtDeepLink]);
 }

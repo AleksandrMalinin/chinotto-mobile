@@ -16,6 +16,8 @@ import { StatusBar } from 'expo-status-bar';
 import { useIncomingShare } from 'expo-sharing';
 import {
   AccessibilityInfo,
+  AppState,
+  type AppStateStatus,
   DevSettings,
   Linking,
   LogBox,
@@ -57,6 +59,7 @@ import { incrementAppLaunchCountForSyncHighlight } from './storage/syncHighlight
 import { useAdaptiveChromeBlend } from './hooks/useAdaptiveChromeBlend';
 import { isFirebaseSyncConfigured } from './sync/firebaseConfig';
 import { mirrorChinottoSyncAccessToFirestore } from './sync/firestoreSyncAccessMirror';
+import { refreshWidgetThoughtsFromLocalDb } from './widgets/widgetThoughtsBridge';
 import { useCaptureWidgetDeepLinkFocus } from './widgets/useCaptureWidgetDeepLinkFocus';
 import { useExperimentalIosHomeWidgetRegistration } from './widgets/useExperimentalIosHomeWidget';
 import { AdaptiveChromeContext, useAppTheme } from './theme';
@@ -200,6 +203,8 @@ export default function App() {
   const shareAckPendingRef = useRef(false);
   const [externalEntriesEpoch, setExternalEntriesEpoch] = useState(0);
   const [captureFocusNonce, setCaptureFocusNonce] = useState(0);
+  const [voiceCaptureRequestNonce, setVoiceCaptureRequestNonce] = useState(0);
+  const [thoughtEntryRequestId, setThoughtEntryRequestId] = useState<string | null>(null);
   const [streamHighlightEntryId, setStreamHighlightEntryId] = useState<string | null>(null);
   const streamHighlightClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [syncEntryRequestNonce, setSyncEntryRequestNonce] = useState(0);
@@ -321,6 +326,26 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!dbReady) {
+      return;
+    }
+    void refreshWidgetThoughtsFromLocalDb();
+  }, [dbReady]);
+
+  useEffect(() => {
+    if (!dbReady) {
+      return undefined;
+    }
+    const onChange = (state: AppStateStatus) => {
+      if (state === 'active') {
+        void refreshWidgetThoughtsFromLocalDb();
+      }
+    };
+    const sub = AppState.addEventListener('change', onChange);
+    return () => sub.remove();
+  }, [dbReady]);
+
+  useEffect(() => {
     phaseRef.current = phase;
   }, [phase]);
 
@@ -403,11 +428,26 @@ export default function App() {
 
   useExperimentalIosHomeWidgetRegistration();
 
-  useCaptureWidgetDeepLinkFocus(
-    useCallback(() => {
+  useCaptureWidgetDeepLinkFocus({
+    onCaptureDeepLink: useCallback(() => {
       setCaptureFocusNonce((n) => n + 1);
-    }, [])
-  );
+    }, []),
+    onVoiceCaptureDeepLink: useCallback(() => {
+      setCaptureFocusNonce((n) => n + 1);
+      setVoiceCaptureRequestNonce((n) => n + 1);
+    }, []),
+    onThoughtDeepLink: useCallback((thoughtId: string) => {
+      setThoughtEntryRequestId((current) => {
+        if (current === thoughtId) {
+          return null;
+        }
+        return thoughtId;
+      });
+      requestAnimationFrame(() => {
+        setThoughtEntryRequestId(thoughtId);
+      });
+    }, []),
+  });
 
   const bumpSyncEntryFromDeepLink = useCallback((_url: string) => {
     setSyncEntryRequestNonce((n) => n + 1);
@@ -605,6 +645,8 @@ export default function App() {
               remoteIngestVersion={remoteIngestVersion}
               externalEntriesEpoch={externalEntriesEpoch}
               captureFocusNonce={captureFocusNonce}
+              voiceCaptureRequestNonce={voiceCaptureRequestNonce}
+              thoughtEntryRequestId={thoughtEntryRequestId}
               syncEntryRequestNonce={syncEntryRequestNonce}
               streamHighlightEntryId={streamHighlightEntryId}
               onScheduleStreamHighlight={scheduleStreamHighlight}

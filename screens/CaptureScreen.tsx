@@ -58,6 +58,7 @@ import {
 import {
   deleteEntry,
   getEntriesOlderThan,
+  getEntryById,
   getEntryCount,
   getRecentEntries,
   saveEntry,
@@ -77,6 +78,7 @@ import {
 } from '../storage/syncHeaderShimmerPrefs';
 import { getHapticsEnabled } from '../storage/settingsPrefs';
 import { isFirebaseSyncConfigured } from '../sync/firebaseConfig';
+import { syncRecentThoughtsToWidget } from '../widgets/widgetThoughtsBridge';
 import { getOrInitAuth } from '../sync/firebaseAuth';
 import { getPendingSyncCount } from '../sync/syncQueue';
 import { mirrorChinottoSyncAccessToFirestore } from '../sync/firestoreSyncAccessMirror';
@@ -135,6 +137,10 @@ export type CaptureScreenProps = {
   externalEntriesEpoch?: number;
   /** Increment when the app should move focus to capture (e.g. home screen widget open). */
   captureFocusNonce?: number;
+  /** Increment when widget requests direct voice mode (chinotto://capture?mode=voice). */
+  voiceCaptureRequestNonce?: number;
+  /** Entry id from widget deep link (chinotto://thought/<id>) to open in read sheet. */
+  thoughtEntryRequestId?: string | null;
   /** Row id receiving the transient “just landed” tint (capture or share). */
   streamHighlightEntryId?: string | null;
   /** Schedule/clear handled in parent so manual capture and share share one timer. */
@@ -174,6 +180,8 @@ export function CaptureScreen({
   remoteIngestVersion = 0,
   externalEntriesEpoch = 0,
   captureFocusNonce = 0,
+  voiceCaptureRequestNonce = 0,
+  thoughtEntryRequestId = null,
   streamHighlightEntryId = null,
   onScheduleStreamHighlight,
   subscriptionHydrated = true,
@@ -231,6 +239,8 @@ export function CaptureScreen({
   const stuckPollsRef = useRef(0);
   const lastSyncEntryNonceRef = useRef(0);
   const authPhaseRef = useRef(authRestorePhase);
+  const lastVoiceRequestNonceRef = useRef(0);
+  const lastThoughtRequestIdRef = useRef<string | null>(null);
   /** Calm delay before running {@link runEnableSyncShimmerProbe} when eligibility may have flipped. */
   const syncHighlightScheduleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Retries while {@link AuthRestorePhase} is still `restoring` when the shimmer probe runs. */
@@ -446,6 +456,10 @@ export function CaptureScreen({
     void refreshEntries();
   }, [refreshEntries, remoteIngestVersion, externalEntriesEpoch]);
 
+  useEffect(() => {
+    void syncRecentThoughtsToWidget(entries);
+  }, [entries]);
+
   /** Empty stream — nothing to recall; clear search so UI never offers find-in-stream alone. */
   useEffect(() => {
     if (entries.length > 0) {
@@ -489,6 +503,23 @@ export function CaptureScreen({
     });
     return () => cancelAnimationFrame(id);
   }, [captureFocusNonce]);
+
+  useEffect(() => {
+    if (!thoughtEntryRequestId || thoughtEntryRequestId === lastThoughtRequestIdRef.current) {
+      return;
+    }
+    lastThoughtRequestIdRef.current = thoughtEntryRequestId;
+    void (async () => {
+      const entry = await getEntryById(thoughtEntryRequestId);
+      if (!entry) {
+        return;
+      }
+      setReadEntry(entry);
+      requestAnimationFrame(() => {
+        inputRef.current?.blur();
+      });
+    })();
+  }, [thoughtEntryRequestId]);
 
   useEffect(() => {
     if (!allowCaptureFocus) {
@@ -920,6 +951,26 @@ export function CaptureScreen({
   });
 
   const showVoiceCapture = voiceCaptureNativeReady;
+
+  useEffect(() => {
+    if (!voiceCaptureRequestNonce || voiceCaptureRequestNonce <= lastVoiceRequestNonceRef.current) {
+      return;
+    }
+    lastVoiceRequestNonceRef.current = voiceCaptureRequestNonce;
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+    if (showVoiceCapture && voicePhase !== 'listening') {
+      voiceCaptureBaseRef.current = text;
+      void startVoiceCaptureSession();
+    }
+  }, [
+    showVoiceCapture,
+    startVoiceCaptureSession,
+    text,
+    voiceCaptureRequestNonce,
+    voicePhase,
+  ]);
 
   /** Empty-stream art fades while the user composes so capture stays visually primary. */
   const streamEmptyAmbientSuppressed =

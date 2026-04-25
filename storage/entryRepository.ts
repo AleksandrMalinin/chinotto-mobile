@@ -139,6 +139,20 @@ export async function getRecentEntries(limit: number): Promise<Entry[]> {
   });
 }
 
+export async function getEntryById(entryId: string): Promise<Entry | null> {
+  return runSerializedDb(async () => {
+    const db = await getDatabase();
+    const row = await db.getFirstAsync<Entry>(
+      `SELECT id, text, created_at AS createdAt
+       FROM entries
+       WHERE id = ?
+       LIMIT 1`,
+      entryId
+    );
+    return row ?? null;
+  });
+}
+
 /** Total local thoughts — used for sync highlight relevance (not limited to current stream page). */
 export async function getEntryCount(): Promise<number> {
   return runSerializedDb(async () => {

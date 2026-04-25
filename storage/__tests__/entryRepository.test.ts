@@ -9,6 +9,7 @@ import {
   applyRemoteTombstoneDeletes,
   deleteEntry,
   getAllEntries,
+  getEntryById,
   getEntryCount,
   getEntriesOlderThan,
   getRecentEntries,
@@ -164,6 +165,24 @@ describe('entryRepository', () => {
         text: 't',
         createdAt: '2025-01-01T00:00:00.000Z',
       });
+    });
+  });
+
+  describe('getEntryById', () => {
+    it('returns row by id when present', async () => {
+      getFirstAsync.mockResolvedValueOnce({
+        id: 'e1',
+        text: 'hello',
+        createdAt: '2025-01-01T00:00:00.000Z',
+      });
+
+      const row = await getEntryById('e1');
+
+      expect(getFirstAsync).toHaveBeenCalledWith(
+        expect.stringMatching(/WHERE id = \?/),
+        'e1'
+      );
+      expect(row?.id).toBe('e1');
     });
   });
 
