@@ -22,7 +22,7 @@ private let chinottoLogoMarkGlow = Color(red: 198 / 255, green: 206 / 255, blue:
 
 /// Capture header trio (all sizes): more air logo→title, title + tagline tighter together.
 private let smallLogoToCaptureGap: CGFloat = 18
-private let smallCaptureToTaglineGap: CGFloat = 4
+private let smallCaptureToTaglineGap: CGFloat = 2
 
 /// Medium information block: up to 3 newest thoughts (payload sorted newest-first).
 private let mediumThoughtsVisibleMax = 3
@@ -61,7 +61,7 @@ struct CaptureHomeWidget: Widget {
     }
     .configurationDisplayName("Chinotto")
     .description("Open capture to jot a thought.")
-    .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+    .supportedFamilies([.systemSmall, .systemMedium])
   }
 }
 

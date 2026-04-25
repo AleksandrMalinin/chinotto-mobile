@@ -91,8 +91,7 @@
               "description": "Open capture to jot a thought.",
               "supportedFamilies": [
                 "systemSmall",
-                "systemMedium",
-                "systemLarge"
+                "systemMedium"
               ]
             }
           ]
