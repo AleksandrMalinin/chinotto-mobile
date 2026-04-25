@@ -35,6 +35,7 @@ import { loadSubscriptionState } from './monetization/subscriptionState';
 import { bootstrapRevenueCat } from './src/services/purchases/initRevenueCat';
 import { isRevenueCatQuietMode } from './src/services/purchases/revenueCatQuiet';
 import { composeIncomingShareCaptureText } from './share/extractShareEntryTexts';
+import { shouldDeferShareAck } from './share/shareAckTiming';
 import { shouldRunMobileFirestoreIngest } from './sync/ingestGate';
 import { startMobileFirestoreIngest } from './sync/firestoreIngest';
 import {
@@ -191,9 +192,12 @@ export default function App() {
   const [firestoreIngestEpoch, setFirestoreIngestEpoch] = useState(0);
   const [remoteIngestVersion, setRemoteIngestVersion] = useState(0);
   const [phase, setPhase] = useState<AppPhase>('boot');
+  const phaseRef = useRef<AppPhase>('boot');
   /** Bumps each time we start handling a non-empty share — avoids stale async after re-renders. */
   const shareSaveSessionRef = useRef(0);
   const [shareSavedAck, setShareSavedAck] = useState(false);
+  /** When share save finishes during brand splash, defer toast until `main` (after splash). */
+  const shareAckPendingRef = useRef(false);
   const [externalEntriesEpoch, setExternalEntriesEpoch] = useState(0);
   const [captureFocusNonce, setCaptureFocusNonce] = useState(0);
   const [streamHighlightEntryId, setStreamHighlightEntryId] = useState<string | null>(null);
@@ -315,6 +319,10 @@ export default function App() {
   useEffect(() => {
     void initDatabase().finally(() => setDbReady(true));
   }, []);
+
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
 
   useEffect(() => {
     const url = process.env.EXPO_PUBLIC_UMAMI_URL?.trim() || null;
@@ -460,8 +468,12 @@ export default function App() {
         if (savedEntryId != null) {
           scheduleStreamHighlight(savedEntryId);
         }
-        setShareSavedAck(true);
-        AccessibilityInfo.announceForAccessibility?.('Thought saved from share');
+        if (shouldDeferShareAck(phaseRef.current)) {
+          shareAckPendingRef.current = true;
+        } else {
+          setShareSavedAck(true);
+          AccessibilityInfo.announceForAccessibility?.('Thought saved from share');
+        }
       })();
     }, SHARE_SAVE_DEBOUNCE_MS);
     return () => clearTimeout(id);
@@ -474,6 +486,15 @@ export default function App() {
     refreshSharePayloads,
     scheduleStreamHighlight,
   ]);
+
+  useEffect(() => {
+    if (phase !== 'main' || !shareAckPendingRef.current) {
+      return;
+    }
+    shareAckPendingRef.current = false;
+    setShareSavedAck(true);
+    AccessibilityInfo.announceForAccessibility?.('Thought saved from share');
+  }, [phase]);
 
   useEffect(() => {
     if (!shareSavedAck) {
