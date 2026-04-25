@@ -60,10 +60,6 @@ INTERNAL_MOBILE_DESKTOP_STATE.md
 .env.production
 .env.staging
 
-# Firebase native config files (if you add native SDKs later; not used by current JS-only setup)
-google-services.json
-GoogleService-Info.plist
-
 # macOS
 .DS_Store
 
