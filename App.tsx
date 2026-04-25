@@ -393,7 +393,7 @@ export default function App() {
     })();
   }, []);
 
-  useExperimentalIosHomeWidgetRegistration(dbReady);
+  useExperimentalIosHomeWidgetRegistration();
 
   useCaptureWidgetDeepLinkFocus(
     useCallback(() => {

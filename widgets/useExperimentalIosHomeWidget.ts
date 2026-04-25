@@ -8,9 +8,9 @@ import { registerCaptureHomeWidget } from './registerCaptureHomeWidget';
 /**
  * Registers the home screen widget layout when the experimental widget is enabled.
  */
-export function useExperimentalIosHomeWidgetRegistration(dbReady: boolean): void {
+export function useExperimentalIosHomeWidgetRegistration(): void {
   useEffect(() => {
-    if (Platform.OS !== 'ios' || !dbReady || !isExperimentalIosHomeWidgetEnabled()) {
+    if (Platform.OS !== 'ios' || !isExperimentalIosHomeWidgetEnabled()) {
       return;
     }
     try {
@@ -20,5 +20,5 @@ export function useExperimentalIosHomeWidgetRegistration(dbReady: boolean): void
         console.warn('registerCaptureHomeWidget failed', err);
       }
     }
-  }, [dbReady]);
+  }, []);
 }
