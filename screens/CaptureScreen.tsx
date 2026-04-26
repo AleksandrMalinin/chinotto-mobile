@@ -10,6 +10,7 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   LayoutAnimation,
+  Linking,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
@@ -940,6 +941,25 @@ export function CaptureScreen({
     [hapticsEnabled],
   );
 
+  const onVoiceCaptureError = useCallback((code: string) => {
+    if (code !== 'permission_denied') {
+      return;
+    }
+    Alert.alert(
+      'Microphone access is off',
+      'Enable microphone and speech recognition in iOS Settings to use voice capture.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Open Settings',
+          onPress: () => {
+            void Linking.openSettings().catch(() => {});
+          },
+        },
+      ],
+    );
+  }, []);
+
   const {
     phase: voicePhase,
     start: startVoiceCaptureSession,
@@ -948,6 +968,7 @@ export function CaptureScreen({
   } = useVoiceCapture({
     onTranscriptPartial: onVoiceTranscriptPartial,
     onTranscriptFinal: onVoiceTranscriptFinal,
+    onError: onVoiceCaptureError,
   });
 
   const showVoiceCapture = voiceCaptureNativeReady;
