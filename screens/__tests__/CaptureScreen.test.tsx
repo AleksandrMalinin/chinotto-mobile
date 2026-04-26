@@ -27,6 +27,11 @@ jest.mock('../../sync/firebaseConfig', () => ({
   isFirebaseSyncConfigured: jest.fn(() => false),
 }));
 
+const demoStreamModeState = { enabled: false };
+jest.mock('../../src/features/demoStreamMode', () => ({
+  isDemoStreamMode: () => demoStreamModeState.enabled,
+}));
+
 jest.mock('../../sync/tombstoneFlush', () => ({
   flushSyncTombstoneOutbox: jest.fn(() => Promise.resolve()),
 }));
@@ -773,6 +778,7 @@ describe('CaptureScreen enable sync label shimmer', () => {
 
 describe('CaptureScreen sync auth restore', () => {
   beforeEach(() => {
+    demoStreamModeState.enabled = false;
     jest.spyOn(console, 'log').mockImplementation(() => {});
     jest.mocked(firebaseConfig.isFirebaseSyncConfigured).mockReturnValue(true);
     jest.mocked(firebaseAuthModule.getOrInitAuth).mockReturnValue({ currentUser: null } as never);
@@ -782,6 +788,7 @@ describe('CaptureScreen sync auth restore', () => {
   });
 
   afterEach(() => {
+    demoStreamModeState.enabled = false;
     jest.restoreAllMocks();
   });
 
@@ -952,6 +959,7 @@ describe('CaptureScreen sync auth restore', () => {
   });
 
   it('shows Enable sync in header after restore when user is anonymous only', async () => {
+    demoStreamModeState.enabled = false;
     let listener: ((user: unknown) => void) | undefined;
     mockOnAuthStateChanged.mockImplementation((_auth, cb) => {
       listener = cb;
@@ -981,6 +989,7 @@ describe('CaptureScreen sync auth restore', () => {
   });
 
   it('shows Enable sync in header after restore completes with no signed-in user', async () => {
+    demoStreamModeState.enabled = false;
     let listener: ((user: unknown) => void) | undefined;
     mockOnAuthStateChanged.mockImplementation((_auth, cb) => {
       listener = cb;
@@ -1003,5 +1012,29 @@ describe('CaptureScreen sync auth restore', () => {
     const headerCta = getByTestId('sync-header-cta');
     expect(headerCta).toBeTruthy();
     expect(within(headerCta).getAllByText('Enable sync').length).toBeGreaterThan(0);
+  });
+
+  it('demo stream mode shows Sync on in header while user is still signed out', async () => {
+    demoStreamModeState.enabled = true;
+    let listener: ((user: unknown) => void) | undefined;
+    mockOnAuthStateChanged.mockImplementation((_auth, cb) => {
+      listener = cb;
+      return jest.fn();
+    });
+
+    const { getByTestId, findByTestId, getByText } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <CaptureScreen />
+      </SafeAreaProvider>
+    );
+
+    await findByTestId('capture-input');
+
+    await act(async () => {
+      listener?.(null);
+    });
+
+    expect(getByTestId('sync-header-cta')).toBeTruthy();
+    expect(getByText('Sync on')).toBeTruthy();
   });
 });

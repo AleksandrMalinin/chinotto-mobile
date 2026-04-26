@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ComponentRef, type RefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef, type RefObject } from 'react';
 
 import { track, type SyncModalSurface } from '../analytics/analytics';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -47,8 +47,10 @@ import {
 } from '../src/services/icons/appIcon';
 import { getAppIconVariant, type AppIconVariantId } from '../src/services/icons/iconVariants';
 import type { Entry } from '../types/entry';
+import { mergeDemoStreamWithEntries, isDemoStreamEntryId } from '../dev/demoStreamEntries';
 import { resetPaywallForPurchaseTesting } from '../dev/resetPaywallForPurchaseTesting';
 import { showDevMenu } from '../dev/showDevMenu';
+import { isDemoStreamMode } from '../src/features/demoStreamMode';
 import {
   clearFirstLaunchEmptyCaptureRevealDone,
   getFirstLaunchComposerHasFocused,
@@ -199,6 +201,11 @@ export function CaptureScreen({
 }: CaptureScreenProps = {}) {
   const [text, setText] = useState('');
   const [entries, setEntries] = useState<Entry[]>([]);
+  const demoStreamMode = isDemoStreamMode();
+  const streamDisplayEntries = useMemo(
+    () => mergeDemoStreamWithEntries(entries, demoStreamMode),
+    [entries, demoStreamMode],
+  );
   const [hasMore, setHasMore] = useState(true);
   const [syncModalVisibleInternal, setSyncModalVisibleInternal] = useState(false);
   const syncModalControlled = onSyncModalVisibleChange != null;
@@ -546,7 +553,7 @@ export function CaptureScreen({
     };
 
     const shouldDeferEmptyKeyboard =
-      entries.length === 0 &&
+      streamDisplayEntries.length === 0 &&
       (firstLaunchRevealDone !== true || !composerHasFocusedOnce);
 
     if (firstLaunchRevealDone === true) {
@@ -558,7 +565,7 @@ export function CaptureScreen({
       return;
     }
 
-    if (entries.length > 0) {
+    if (streamDisplayEntries.length > 0) {
       void setFirstLaunchEmptyCaptureRevealDone();
       setFirstLaunchRevealDone(true);
       finishSplashFocus();
@@ -572,7 +579,7 @@ export function CaptureScreen({
     allowCaptureFocus,
     firstLaunchRevealDone,
     composerHasFocusedOnce,
-    entries.length,
+    streamDisplayEntries.length,
     firstLaunchRevealDevResetNonce,
   ]);
 
@@ -731,6 +738,9 @@ export function CaptureScreen({
 
   /** Optimistic UI: row disappears immediately; SQLite + tombstone outbox stay non-blocking. */
   const handleEntryDelete = useCallback((entry: Entry) => {
+    if (isDemoStreamEntryId(entry.id)) {
+      return;
+    }
     setReadEntry((current) => (current?.id === entry.id ? null : current));
     setEntries((prev) => prev.filter((e) => e.id !== entry.id));
     setSearchResults((prev) => prev.filter((e) => e.id !== entry.id));
@@ -1002,7 +1012,7 @@ export function CaptureScreen({
    * (first install stays tap-to-type; later opens can be capture-first).
    */
   const deferKeyboardForFirstLaunchReveal =
-    entries.length === 0 && (firstLaunchRevealDone !== true || !composerHasFocusedOnce);
+    streamDisplayEntries.length === 0 && (firstLaunchRevealDone !== true || !composerHasFocusedOnce);
 
   const onCaptureComposerFocus = useCallback(() => {
     if (composerHasFocusedOnce) {
@@ -1085,7 +1095,7 @@ export function CaptureScreen({
   const headerLogoAlignStyle = { marginLeft: -chinottoLogoLeadingOutset(headerLogoSize) };
 
   const showWritePeekAffordance =
-    entries.length > 0 && streamScrollY >= STREAM_WRITE_PEEK_MIN_SCROLL_Y;
+    streamDisplayEntries.length > 0 && streamScrollY >= STREAM_WRITE_PEEK_MIN_SCROLL_Y;
 
   const showCaptureSyncHeader = Platform.OS === 'ios' && isFirebaseSyncConfigured();
 
@@ -1125,9 +1135,9 @@ export function CaptureScreen({
               </Pressable>
               {showCaptureSyncHeader ? (
                 <SyncHeaderStatus
-                  phase={authRestorePhase}
-                  uploadPending={authRestorePhase === 'signed_in' && uploadPending}
-                  uploadStuck={authRestorePhase === 'signed_in' && uploadStuck}
+                  phase={demoStreamMode ? 'signed_in' : authRestorePhase}
+                  uploadPending={!demoStreamMode && authRestorePhase === 'signed_in' && uploadPending}
+                  uploadStuck={!demoStreamMode && authRestorePhase === 'signed_in' && uploadStuck}
                   onPress={openSyncModalFromHeader}
                   enableSyncLabelShimmer={enableSyncLabelShimmer}
                   onEnableSyncLabelShimmerComplete={onEnableSyncLabelShimmerComplete}
@@ -1190,7 +1200,7 @@ export function CaptureScreen({
                     ) : null}
                   </View>
                 </View>
-                {entries.length > 0 ? (
+                {streamDisplayEntries.length > 0 ? (
                   <View>
                     {searchExpanded ? (
                       <View
@@ -1285,22 +1295,22 @@ export function CaptureScreen({
                 ) : null}
               </View>
             <RecentList
-              entries={searchTrimmed.length > 0 ? searchResults : entries}
+              entries={searchTrimmed.length > 0 ? searchResults : streamDisplayEntries}
               visible
               deferEmptyStreamMotion={!allowCaptureFocus}
-              streamEmptyAmbient={searchTrimmed.length === 0 && entries.length === 0}
+              streamEmptyAmbient={searchTrimmed.length === 0 && streamDisplayEntries.length === 0}
               streamEmptyAmbientSuppressed={streamEmptyAmbientSuppressed}
               streamScrollY={streamScrollY}
               streamViewportHeight={streamViewportHeight}
               streamScrollViewRef={streamScrollViewRef as unknown as RefObject<View | null>}
               streamViewportFocusEnabled={
-                searchTrimmed.length > 0 ? searchResults.length > 0 : entries.length > 0
+                searchTrimmed.length > 0 ? searchResults.length > 0 : streamDisplayEntries.length > 0
               }
               highlightEntryId={searchTrimmed.length > 0 ? null : streamHighlightEntryId}
               emptyHint={
                 searchTrimmed.length > 0
                   ? 'Nothing matches that search.'
-                  : entries.length === 0
+                  : streamDisplayEntries.length === 0
                     ? 'Write it down.\nIt stays.'
                     : undefined
               }
