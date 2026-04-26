@@ -190,6 +190,33 @@ service cloud.firestore {
 
 ---
 
+## 5.1 iOS home widget payload contract (mobile)
+
+Widget UI is read-only and fed from app-local storage in the shared app group (not directly from Firestore).
+
+- **App group id:** `group.com.chinotto.mobile`
+- **UserDefaults key:** `chinotto_widget_recent_thoughts_v1`
+- **Payload shape:** JSON string, newest-first
+
+```json
+{
+  "thoughts": [
+    { "id": "<entry-id>", "text": "<entry-text>" }
+  ]
+}
+```
+
+Rules:
+- `thoughts` must be ordered newest-first before writing payload.
+- Rows with empty `id` or blank `text` are ignored by the widget renderer.
+- App writes payload first, then requests widget timeline reload.
+
+Deep links used by widget surfaces:
+- Header/action area → `chinotto://capture`
+- Thought row tap → `chinotto://thought/<id>`
+
+---
+
 ## 6. Product philosophy & cross-device identity
 
 **Principles:** No Chinotto accounts / no signup-password product; personal tool; sync connects **your** devices, not a social graph.

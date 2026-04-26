@@ -48,7 +48,13 @@ pnpm android
 - **Stream** — recent thoughts in reverse chronological order
 - **Search** — find thoughts by text
 - **Share in** — capture from other apps
+- **iOS Home Widget** — Small / Medium / Large sizes with quick capture entry and recent thoughts preview
 - **Sync** (optional) — keep thoughts in sync across devices
+
+### Widget interactions (iOS)
+
+- Tap the header/action area → opens capture (`chinotto://capture`)
+- Tap a thought row → opens that thought (`chinotto://thought/<id>`)
 
 ## Related
 

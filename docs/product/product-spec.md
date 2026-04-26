@@ -138,8 +138,11 @@ Purpose:
 
 ### 3. Widget capture (critical extension)
 
-- Tap widget → opens directly into input
-- Input is already focused
+- iOS home widget supports **Small / Medium / Large** families
+- Widget keeps the same capture-first contract:
+  - header/action area opens capture (`chinotto://capture`)
+  - thought rows open the selected thought (`chinotto://thought/<id>`)
+- Input is focused as soon as boot allows after launch from widget
 
 Ideal (if supported):
 - Inline capture directly in widget
