@@ -44,9 +44,9 @@ const DOT_LABEL_GAP = 8;
  * Classic dark (not sunlight): cooler, softer than the previous 0.94 “chrome white” — still above sectionFg.
  * (Do not wrap signed_out in extra View opacity — it multiplies and kills contrast.)
  */
-const ENABLE_SYNC_LABEL_DARK = 'rgba(180, 188, 208, 0.58)';
+const ENABLE_SYNC_LABEL_DARK = 'rgba(198, 206, 255, 0.9)';
 /** Brighter than standard dark — matches high-legibility Sunlight shell (`fg` reads near-white). */
-const ENABLE_SYNC_LABEL_SUNLIGHT = 'rgba(255,255,255,0.9)';
+const ENABLE_SYNC_LABEL_SUNLIGHT = 'rgba(214,220,255,0.94)';
 const ENABLE_SYNC_LABEL_LIGHT = 'rgba(0,0,0,0.32)';
 
 /** Rest opacity: was 0.88 — small lift so the control reads as UI, not background. */
@@ -54,9 +54,9 @@ const CTA_REST_OPACITY = 0.92;
 const CTA_PRESSED_OPACITY = 0.62;
 
 /** Same gradient as empty-stream headline; extra-dim so the header CTA whispers (standard dark). */
-const ENABLE_SYNC_HEADLINE_GRADIENT_OPACITY = 0.58;
+const ENABLE_SYNC_HEADLINE_GRADIENT_OPACITY = 0.88;
 /** Sunlight: lift gradient shell so the CTA does not read as muted as standard mode. */
-const ENABLE_SYNC_HEADLINE_GRADIENT_OPACITY_SUNLIGHT = 0.84;
+const ENABLE_SYNC_HEADLINE_GRADIENT_OPACITY_SUNLIGHT = 0.92;
 
 /** Lavender from the shell palette; deliberately not a “success” green. */
 const SYNC_DOT_FILL = 'rgba(148, 156, 212, 0.58)';

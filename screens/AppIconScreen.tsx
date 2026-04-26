@@ -57,7 +57,7 @@ export function AppIconScreen({
                 hitSlop={12}
                 style={({ pressed }) => [{ opacity: pressed ? 0.92 : 1 }]}
               >
-                <ChinottoLogo size={headerLogoSize} color={t.colors.fgDim} style={headerLogoAlignStyle} />
+                <ChinottoLogo size={headerLogoSize} color={t.colors.logoMark} style={headerLogoAlignStyle} />
               </Pressable>
             </View>
           </View>

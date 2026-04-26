@@ -82,7 +82,7 @@ export function SettingsScreen({
               >
                 <ChinottoLogo
                   size={headerLogoSize}
-                  color={t.colors.fgDim}
+                  color={t.colors.logoMark}
                   style={headerLogoAlignStyle}
                 />
               </Pressable>

@@ -29,6 +29,8 @@ export const colorsDark = {
   sectionFg: 'rgba(255,255,255,0.32)',
   /** Timestamps, metadata — `--meta-fg` */
   metaFg: 'rgba(255,255,255,0.55)',
+  /** Chinotto mark in top headers (slightly brighter/lavender than meta, still calm). */
+  logoMark: 'rgba(198,206,255,0.9)',
   /** Capture composer placeholder — slightly quieter than `metaFg`. */
   capturePlaceholder: 'rgba(255,255,255,0.48)',
   border: 'rgba(255,255,255,0.07)',
@@ -72,6 +74,7 @@ export const colorsSunlight = {
   muted: 'rgba(255,255,255,0.72)',
   sectionFg: 'rgba(255,255,255,0.78)',
   metaFg: 'rgba(255,255,255,0.78)',
+  logoMark: 'rgba(214,220,255,0.94)',
   capturePlaceholder: 'rgba(255,255,255,0.72)',
   border: 'rgba(255,255,255,0.26)',
   borderFocus: 'rgba(200,208,255,0.72)',
@@ -97,6 +100,7 @@ export const colorsLight = {
   muted: '#8e8e96',
   sectionFg: 'rgba(0,0,0,0.28)',
   metaFg: 'rgba(0,0,0,0.45)',
+  logoMark: 'rgba(96,108,188,0.74)',
   capturePlaceholder: 'rgba(0,0,0,0.38)',
   border: 'rgba(0,0,0,0.08)',
   borderFocus: 'rgba(100,110,180,0.42)',
