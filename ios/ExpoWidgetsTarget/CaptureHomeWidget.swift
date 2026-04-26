@@ -61,7 +61,7 @@ struct CaptureHomeWidget: Widget {
     }
     .configurationDisplayName("Chinotto")
     .description("Open capture to jot a thought.")
-    .supportedFamilies([.systemSmall, .systemMedium])
+    .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
   }
 }
 
