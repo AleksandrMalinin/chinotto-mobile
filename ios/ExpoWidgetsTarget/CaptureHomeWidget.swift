@@ -23,9 +23,13 @@ private let chinottoLogoMarkGlow = Color(red: 198 / 255, green: 206 / 255, blue:
 /// Capture header trio (all sizes): more air logo→title, title + tagline tighter together.
 private let smallLogoToCaptureGap: CGFloat = 18
 private let smallCaptureToTaglineGap: CGFloat = 2
+private let smallLogoSize: CGFloat = 21
+private let smallLogoToTextGap: CGFloat = 16
 
-/// Medium information block: up to 3 newest thoughts (payload sorted newest-first).
-private let mediumThoughtsVisibleMax = 3
+/// Medium information block: up to 2 newest thoughts (payload sorted newest-first).
+private let mediumThoughtsVisibleMax = 2
+private let mediumHeaderToThoughtsGap: CGFloat = 16
+private let mediumHeaderTextSize: CGFloat = 19
 
 // Shared “thought plaque” chrome (medium right column + large tray) — same fill/stroke/radius.
 private let thoughtPlaqueCornerRadius: CGFloat = 20
@@ -34,17 +38,19 @@ private let thoughtPlaqueStrokeOpacity: Double = 0.06
 private let thoughtPlaqueStrokeWidth: CGFloat = 0.75
 // Medium plaque insets — tuned; do not change when adjusting large-only layout.
 private let mediumThoughtPlaqueEdgeV: CGFloat = 12
-private let mediumThoughtPlaqueEdgeH: CGFloat = 16
+private let mediumThoughtPlaqueEdgeH: CGFloat = 12
 private let mediumThoughtPlaqueRowSpacing: CGFloat = 10
 
 // Large-only: logo, header↔tray gap, plaque inner rhythm (edge padding ≥ row spacing).
 private let largeLogoSize: CGFloat = 30
-private let largeHeaderToTraySpacing: CGFloat = 24
+private let largeHeaderToTraySpacing: CGFloat = 20
+private let largeHeaderDividerOpacity: Double = 0.1
+private let largeHeaderDividerBottomSpacing: CGFloat = 20
 private let largeThoughtPlaqueEdgeV: CGFloat = 10
 private let largeThoughtPlaqueEdgeH: CGFloat = 16
 private let largeThoughtRowSpacing: CGFloat = 6
-private let largeThoughtLinkVerticalPad: CGFloat = 5
-private let largeThoughtRowMinHeight: CGFloat = 34
+private let largeThoughtLinkVerticalPad: CGFloat = 4
+private let largeThoughtRowMinHeight: CGFloat = 31
 
 // Logo scale: small baseline 18 → medium (unchanged).
 private let mediumLogoSize: CGFloat = 22
@@ -127,10 +133,10 @@ private struct CaptureHomeWidgetView: View {
     case .systemSmall:
       return EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16)
     case .systemMedium:
-      return EdgeInsets(top: 15, leading: 17, bottom: 15, trailing: 17)
+      return EdgeInsets(top: 14, leading: 10, bottom: 14, trailing: 10)
     case .systemLarge:
       // Bottom at least side inset so the tray never feels clipped at the foot.
-      return EdgeInsets(top: 17, leading: 17, bottom: 21, trailing: 17)
+      return EdgeInsets(top: 17, leading: 17, bottom: 17, trailing: 17)
     default:
       return EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16)
     }
@@ -140,8 +146,8 @@ private struct CaptureHomeWidgetView: View {
 
   private var smallLayout: some View {
     VStack(alignment: .leading, spacing: 0) {
-      ChinottoLogoMark(size: 18)
-      Spacer().frame(height: smallLogoToCaptureGap)
+      ChinottoLogoMark(size: smallLogoSize)
+      Spacer().frame(height: smallLogoToTextGap)
       captureTitle(fontSize: 26)
       Spacer().frame(height: smallCaptureToTaglineGap)
       supportingLine
@@ -149,69 +155,46 @@ private struct CaptureHomeWidgetView: View {
     }
   }
 
-  // MARK: Medium — capture (left) + soft glass thoughts (right); right column wider for text
+  // MARK: Medium — top capture header + soft thoughts container below
 
   private var mediumLayout: some View {
-    GeometryReader { geo in
-      let spacing: CGFloat = 14
-      let dividerWidth: CGFloat = 1
-      let usable = max(0, geo.size.width - spacing - dividerWidth)
-      // Slightly wider capture column for larger logo (~65% right for thoughts).
-      let leftWidth = floor(usable * 0.35)
-      let rightWidth = usable - leftWidth
+    VStack(alignment: .leading, spacing: 0) {
+      HStack(alignment: .center, spacing: 10) {
+        ChinottoLogoMark(size: mediumLogoSize, brandLift: true)
 
-      HStack(alignment: .top, spacing: spacing) {
-        VStack(alignment: .leading, spacing: 0) {
-          // Align top inset with the Capture↔tagline gap so the mark doesn’t hug the widget top.
-          Spacer().frame(height: smallCaptureToTaglineGap)
-          ChinottoLogoMark(size: mediumLogoSize, brandLift: true)
-          Spacer().frame(height: smallLogoToCaptureGap)
-          captureTitle(fontSize: 26)
-          Spacer().frame(height: smallCaptureToTaglineGap)
-          supportingLine
-          Spacer().frame(height: smallCaptureToTaglineGap)
-          Spacer(minLength: 0)
-        }
-        .frame(width: leftWidth, alignment: .topLeading)
+        mediumCaptureActionLine
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
 
-        Capsule()
-          .fill(
-            LinearGradient(
-              colors: [
-                Color.white.opacity(0.12),
-                Color.white.opacity(0.04),
-              ],
-              startPoint: .top,
-              endPoint: .bottom
-            )
-          )
-          .frame(width: dividerWidth)
-          .frame(maxHeight: .infinity)
-          .padding(.vertical, 6)
+      Spacer().frame(height: mediumHeaderToThoughtsGap)
 
-        Group {
-          if thoughts.isEmpty {
-            mediumSoftInformationContainer {
-              emptyThoughtsHintMedium
-            }
-          } else {
-            mediumSoftInformationContainer {
-              VStack(alignment: .leading, spacing: mediumThoughtPlaqueRowSpacing) {
-                ForEach(Array(thoughts.prefix(mediumThoughtsVisibleMax).enumerated()), id: \.element.id) { index, thought in
-                  thoughtLinkLine(
-                    thought: thought,
-                    fontSize: mediumThoughtFontSize(index: index),
-                    weight: index == 0 ? .medium : .regular,
-                    foregroundOpacity: mediumThoughtForegroundOpacity(index: index),
-                    design: .rounded
-                  )
+      Group {
+        if thoughts.isEmpty {
+          mediumSoftInformationContainer {
+            emptyThoughtsHintMedium
+          }
+        } else {
+          mediumSoftInformationContainer {
+            VStack(alignment: .leading, spacing: mediumThoughtPlaqueRowSpacing) {
+              ForEach(Array(thoughts.prefix(mediumThoughtsVisibleMax).enumerated()), id: \.element.id) { index, thought in
+                if index > 0 {
+                  Rectangle()
+                    .fill(Color.white.opacity(0.08))
+                    .frame(height: thoughtPlaqueStrokeWidth)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 1)
                 }
+                thoughtLinkLine(
+                  thought: thought,
+                  fontSize: mediumThoughtFontSize(index: index),
+                  weight: index == 0 ? .medium : .regular,
+                  foregroundOpacity: mediumThoughtForegroundOpacity(index: index),
+                  design: .rounded
+                )
               }
             }
           }
         }
-        .frame(width: rightWidth, alignment: .topLeading)
-        .frame(maxHeight: .infinity, alignment: .topLeading)
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
@@ -219,17 +202,15 @@ private struct CaptureHomeWidgetView: View {
 
   private func mediumThoughtFontSize(index: Int) -> CGFloat {
     switch index {
-    case 0: return 14
-    case 1: return 13.5
-    default: return 13
+    case 0: return 14.5
+    default: return 13.5
     }
   }
 
   private func mediumThoughtForegroundOpacity(index: Int) -> Double {
     switch index {
-    case 0: return 1.0
-    case 1: return 0.82
-    default: return 0.72
+    case 0: return 0.98
+    default: return 0.82
     }
   }
 
@@ -239,6 +220,38 @@ private struct CaptureHomeWidgetView: View {
       .foregroundStyle(Color(red: 154 / 255, green: 154 / 255, blue: 167 / 255).opacity(0.32))
       .lineLimit(1)
       .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
+  private var mediumCaptureActionLine: some View {
+    HStack(alignment: .firstTextBaseline, spacing: 4) {
+      Text("Capture")
+        .font(.system(size: mediumHeaderTextSize, weight: .semibold))
+        .foregroundStyle(Color.white.opacity(0.97))
+        .lineLimit(1)
+        .minimumScaleFactor(0.88)
+
+      Text("your thought")
+        .font(.system(size: mediumHeaderTextSize - 2, weight: .regular))
+        .foregroundStyle(Color.white.opacity(0.7))
+        .lineLimit(1)
+        .minimumScaleFactor(0.88)
+    }
+  }
+
+  private var largeCaptureActionLine: some View {
+    HStack(alignment: .center, spacing: 5) {
+      Text("Capture")
+        .font(.system(size: 27, weight: .semibold))
+        .foregroundStyle(Color.white.opacity(0.97))
+        .lineLimit(1)
+        .minimumScaleFactor(0.88)
+
+      Text("your thought")
+        .font(.system(size: 24, weight: .regular))
+        .foregroundStyle(Color.white.opacity(0.7))
+        .lineLimit(1)
+        .minimumScaleFactor(0.88)
+    }
   }
 
   /// Same plaque chrome as large tray (fill + hairline stroke, continuous radius).
@@ -271,20 +284,29 @@ private struct CaptureHomeWidgetView: View {
       let visible = Array(thoughts.prefix(visibleCount))
 
       VStack(alignment: .leading, spacing: 0) {
-        VStack(alignment: .leading, spacing: 0) {
-          ChinottoLogoMark(size: largeLogoSize, brandLift: true)
-          Spacer().frame(height: smallLogoToCaptureGap)
-          captureTitle(fontSize: 27)
-          Spacer().frame(height: smallCaptureToTaglineGap)
-          supportingLine
-        }
-        .padding(.bottom, largeHeaderToTraySpacing)
+        Spacer(minLength: 0)
 
-        if visible.isEmpty {
-          emptyThoughtsHint
-            .padding(.top, 6)
-        } else {
-          largeThoughtsTray(rows: visible)
+        VStack(alignment: .leading, spacing: 0) {
+          VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: 10) {
+              ChinottoLogoMark(size: largeLogoSize, brandLift: true)
+              largeCaptureActionLine
+            }
+          }
+          .padding(.bottom, largeHeaderToTraySpacing)
+
+          Rectangle()
+            .fill(Color.white.opacity(largeHeaderDividerOpacity))
+            .frame(height: thoughtPlaqueStrokeWidth)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.bottom, largeHeaderDividerBottomSpacing)
+
+          if visible.isEmpty {
+            emptyThoughtsHint
+              .frame(maxWidth: .infinity, alignment: .leading)
+          } else {
+            largeThoughtsTray(rows: visible)
+          }
         }
 
         Spacer(minLength: 0)
@@ -297,11 +319,11 @@ private struct CaptureHomeWidgetView: View {
   private func largeThoughtLineBudget(for totalHeight: CGFloat) -> Int {
     switch totalHeight {
     case ..<268:
-      return 3
-    case ..<312:
       return 4
-    default:
+    case ..<312:
       return 5
+    default:
+      return 6
     }
   }
 
