@@ -26,6 +26,7 @@
 		A1B2C3E42F00112233445566 /* WatchSessionBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3E52F00112233445566 /* WatchSessionBridge.swift */; };
 		A1B2C3E62F00112233445566 /* WatchInboxModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3E72F00112233445566 /* WatchInboxModule.swift */; };
 		A1B2C3E82F00112233445566 /* WatchInboxModule.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3E92F00112233445566 /* WatchInboxModule.m */; };
+		A1B2C3EA2F00112233445566 /* VoiceCaptureCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3EB2F00112233445566 /* VoiceCaptureCore.swift */; };
 		A56C9ADE7C9B4DBAAD1A4369 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7386FB1F3F524E5A95E847F0 /* Constants.swift */; };
 		B8424F7C89EE483B8A001E42 /* ExpoWidgetsTarget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 83D5F7D606124199A7566CEC /* ExpoWidgetsTarget.appex */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
@@ -99,6 +100,7 @@
 		A1B2C3E52F00112233445566 /* WatchSessionBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WatchSessionBridge.swift; path = Chinotto/WatchSessionBridge.swift; sourceTree = "<group>"; };
 		A1B2C3E72F00112233445566 /* WatchInboxModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WatchInboxModule.swift; path = Chinotto/WatchInboxModule.swift; sourceTree = "<group>"; };
 		A1B2C3E92F00112233445566 /* WatchInboxModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = WatchInboxModule.m; path = Chinotto/WatchInboxModule.m; sourceTree = "<group>"; };
+		A1B2C3EB2F00112233445566 /* VoiceCaptureCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VoiceCaptureCore.swift; path = Shared/VoiceCaptureCore.swift; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = Chinotto/SplashScreen.storyboard; sourceTree = "<group>"; };
 		AAC2E2AD85464F659D7B60CC /* Info.plist */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = text.plist.xml; name = Info.plist; path = Info.plist; sourceTree = "<group>"; };
 		AFD8A87C948A481D8EE20C11 /* GoogleService-Info.plist */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = text.plist.xml; name = "GoogleService-Info.plist"; path = "Chinotto/GoogleService-Info.plist"; sourceTree = "<group>"; };
@@ -156,6 +158,7 @@
 				A1B2C3E52F00112233445566 /* WatchSessionBridge.swift */,
 				A1B2C3E92F00112233445566 /* WatchInboxModule.m */,
 				A1B2C3E72F00112233445566 /* WatchInboxModule.swift */,
+				A1B2C3EB2F00112233445566 /* VoiceCaptureCore.swift */,
 				F11748442D0722820044C1D9 /* Chinotto-Bridging-Header.h */,
 				BB2F792B24A3F905000567C9 /* Supporting */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
@@ -682,6 +685,7 @@
 				A1B2C3E42F00112233445566 /* WatchSessionBridge.swift in Sources */,
 				A1B2C3E62F00112233445566 /* WatchInboxModule.swift in Sources */,
 				A1B2C3E82F00112233445566 /* WatchInboxModule.m in Sources */,
+				A1B2C3EA2F00112233445566 /* VoiceCaptureCore.swift in Sources */,
 				18E79BF99FF8378BD583438A /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
