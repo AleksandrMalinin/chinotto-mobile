@@ -5,8 +5,28 @@ import WatchConnectivity
 final class WatchSessionBridge: NSObject, WCSessionDelegate {
   static let shared = WatchSessionBridge()
 
+  private weak var inbox: WatchInboxModule?
+  private var pendingPayloads: [[String: Any]] = []
+  private let lock = NSLock()
+
   private override init() {
     super.init()
+  }
+
+  /// Called by `WatchInboxModule.init` once React Native instantiates the module.
+  /// Drains any payloads received before the module existed (e.g. cold-launch background WC delivery).
+  func attachInbox(_ module: WatchInboxModule) {
+    lock.lock()
+    inbox = module
+    let drained = pendingPayloads
+    pendingPayloads.removeAll()
+    lock.unlock()
+    if !drained.isEmpty {
+      log("Draining \(drained.count) buffered payload(s) to WatchInboxModule")
+    }
+    for body in drained {
+      module.deliver(body)
+    }
   }
 
   /// Activates the default `WCSession` once iOS finishes launching. Safe to call multiple times.
@@ -57,6 +77,25 @@ final class WatchSessionBridge: NSObject, WCSessionDelegate {
       "Received payload op=\(payload.op) id=\(payload.id) "
         + "createdAt=\(payload.createdAt) text.length=\(payload.text.count)"
     )
+    forward(payload)
+  }
+
+  private func forward(_ payload: ValidatedWatchPayload) {
+    let body: [String: Any] = [
+      "op": payload.op,
+      "id": payload.id,
+      "text": payload.text,
+      "createdAt": payload.createdAt,
+    ]
+    lock.lock()
+    if let inbox {
+      lock.unlock()
+      inbox.deliver(body)
+    } else {
+      pendingPayloads.append(body)
+      lock.unlock()
+      log("Buffered payload — WatchInboxModule not yet attached")
+    }
   }
 
   // MARK: - Logging
