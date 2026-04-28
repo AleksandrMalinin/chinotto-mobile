@@ -1,4 +1,5 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Linking } from 'react-native';
 
 const mockClipboardSetString = jest.fn((_text: string) => Promise.resolve());
 
@@ -113,10 +114,12 @@ describe('EnableSyncModal', () => {
     jest.mocked(processSyncQueue).mockClear();
     jest.mocked(flushSyncTombstoneOutbox).mockClear();
     mockMirrorChinottoSyncAccess.mockClear();
+    jest.spyOn(Linking, 'openURL').mockResolvedValue();
   });
 
   afterEach(() => {
     consoleLogSpy.mockRestore();
+    jest.restoreAllMocks();
   });
 
   const baseProps = {
@@ -305,6 +308,35 @@ describe('EnableSyncModal', () => {
     expect(getByText('Local by default. Sync is optional.')).toBeTruthy();
     expect(getByLabelText('Enable sync with selected plan')).toBeTruthy();
     expect(getByLabelText('Not now')).toBeTruthy();
+  });
+
+  it('shows legal links and opens Terms/Privacy URLs from paywall', async () => {
+    paywallGate.enabled = true;
+    mockGetEntitlement.mockReturnValue(false);
+
+    const { getByLabelText, getByText } = render(
+      <EnableSyncModal
+        visible
+        onClose={jest.fn()}
+        onEnabled={jest.fn()}
+        authPhase="signed_out"
+        {...baseProps}
+      />
+    );
+
+    await flushPaywallPrefetch();
+
+    expect(getByText('By continuing, you agree to:')).toBeTruthy();
+    expect(getByText('Terms of Use')).toBeTruthy();
+    expect(getByText('Privacy Policy')).toBeTruthy();
+
+    fireEvent.press(getByLabelText('Open Terms of Use'));
+    expect(Linking.openURL).toHaveBeenCalledWith(
+      'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/',
+    );
+
+    fireEvent.press(getByLabelText('Open Privacy Policy'));
+    expect(Linking.openURL).toHaveBeenCalledWith('https://getchinotto.app/privacy');
   });
 
   it('runs openSyncPurchaseFlow then reveals Apple when Continue is pressed on paywall', async () => {

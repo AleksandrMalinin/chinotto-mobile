@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -102,6 +103,8 @@ function buildTempRcOfferingsDebugText(
 
 /** Web app URL for “continue on desktop” (replace when a dedicated download page exists). */
 export const CHINOTTO_DESKTOP_WEB_URL = 'https://getchinotto.app/';
+const APPLE_STANDARD_EULA_URL = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
+const CHINOTTO_PRIVACY_POLICY_URL = 'https://getchinotto.app/privacy';
 
 export type SyncModalAuthPhase = 'restoring' | 'signed_in' | 'signed_out';
 
@@ -268,6 +271,14 @@ export function EnableSyncModal({
       onClose();
     }
   }, [busy, onClose]);
+
+  const openLegalUrl = useCallback((url: string) => {
+    void Linking.openURL(url).catch((err) => {
+      if (__DEV__) {
+        console.warn('open legal url failed', err);
+      }
+    });
+  }, []);
 
   if (Platform.OS !== 'ios') {
     return null;
@@ -593,6 +604,34 @@ export function EnableSyncModal({
                   </Text>
                 )}
               </Pressable>
+              <View style={styles.legalWrap}>
+                <Text style={[styles.legalIntro, { color: muted, fontFamily: fonts.regular }]}>
+                  By continuing, you agree to:
+                </Text>
+                <View style={styles.legalRow}>
+                  <Pressable
+                    accessibilityRole="link"
+                    accessibilityLabel="Open Terms of Use"
+                    hitSlop={8}
+                    onPress={() => openLegalUrl(APPLE_STANDARD_EULA_URL)}
+                  >
+                    <Text style={[styles.legalLink, { color: muted, fontFamily: fonts.regular }]}>
+                      Terms of Use
+                    </Text>
+                  </Pressable>
+                  <Text style={[styles.legalDot, { color: muted, fontFamily: fonts.regular }]}>•</Text>
+                  <Pressable
+                    accessibilityRole="link"
+                    accessibilityLabel="Open Privacy Policy"
+                    hitSlop={8}
+                    onPress={() => openLegalUrl(CHINOTTO_PRIVACY_POLICY_URL)}
+                  >
+                    <Text style={[styles.legalLink, { color: muted, fontFamily: fonts.regular }]}>
+                      Privacy Policy
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Restore purchases"
@@ -881,6 +920,34 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.22,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 0 },
+  },
+  legalWrap: {
+    marginTop: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  legalIntro: {
+    fontSize: 11,
+    lineHeight: 14,
+    textAlign: 'center',
+    opacity: 0.8,
+  },
+  legalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  legalLink: {
+    fontSize: 11,
+    lineHeight: 14,
+    textDecorationLine: 'underline',
+  },
+  legalDot: {
+    fontSize: 11,
+    lineHeight: 14,
+    marginHorizontal: 6,
+    opacity: 0.72,
   },
   body: {
     fontSize: 16,
