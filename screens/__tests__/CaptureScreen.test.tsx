@@ -330,6 +330,42 @@ describe('CaptureScreen', () => {
     }
   });
 
+  it('defers captureFocusNonce focus until allowCaptureFocus becomes true', async () => {
+    const focusSpy = jest.spyOn(TextInput.prototype, 'focus');
+    try {
+      const { rerender, findByTestId } = render(
+        <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+          <CaptureScreen captureFocusNonce={0} allowCaptureFocus={false} />
+        </SafeAreaProvider>
+      );
+      await findByTestId('capture-input');
+      const afterMount = focusSpy.mock.calls.length;
+
+      rerender(
+        <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+          <CaptureScreen captureFocusNonce={1} allowCaptureFocus={false} />
+        </SafeAreaProvider>
+      );
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(focusSpy.mock.calls.length).toBe(afterMount);
+
+      rerender(
+        <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+          <CaptureScreen captureFocusNonce={1} allowCaptureFocus />
+        </SafeAreaProvider>
+      );
+
+      await waitFor(() => {
+        expect(focusSpy.mock.calls.length).toBeGreaterThan(afterMount);
+      });
+    } finally {
+      focusSpy.mockRestore();
+    }
+  });
+
   it('opens read sheet with full entry text when a recent row is pressed', async () => {
     const remoteEntry = {
       id: 'row-1',

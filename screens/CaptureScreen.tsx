@@ -497,6 +497,12 @@ export function CaptureScreen({
     if (!captureFocusNonce) {
       return;
     }
+    if (!allowCaptureFocus) {
+      // Widget/deep-link may request capture while brand splash is still visible.
+      // Keep the intent pending and focus only after the splash handoff allows input.
+      splashFocusPendingRef.current = true;
+      return;
+    }
     if (firstLaunchFocusTimerRef.current) {
       clearTimeout(firstLaunchFocusTimerRef.current);
       firstLaunchFocusTimerRef.current = null;
@@ -510,7 +516,7 @@ export function CaptureScreen({
       inputRef.current?.focus();
     });
     return () => cancelAnimationFrame(id);
-  }, [captureFocusNonce]);
+  }, [captureFocusNonce, allowCaptureFocus]);
 
   useEffect(() => {
     if (!thoughtEntryRequestId || thoughtEntryRequestId === lastThoughtRequestIdRef.current) {
