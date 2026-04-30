@@ -125,6 +125,21 @@ service cloud.firestore {
 
 **Phase 2 — Rules:** extend so the authenticated user may **update** their entry documents to set **`deletedAt`** (tombstone), in addition to create/read. **Phase 2+:** the same user may **`setDoc` + `merge`** on an existing entry doc to change **`text`** and set **`updatedAt`** (desktop thought continuation); **`createdAt`** must not be changed in client writes. Mobile remains read-only for body edits in v1; no multi-writer conflict rules beyond last merge wins in Firestore.
 
+### Account deletion (mobile in-app; App Store 5.1.1(v))
+
+Chinotto **mobile** exposes **Settings → Account → Delete Account** when the user is **signed in with sync** (iOS, Firebase configured). This satisfies **in-app account deletion** for apps that offer Sign in with Apple / Firebase identity. It is **separate** from per-entry **tombstone** delete sync (**§8**): here the **Firebase Auth user** is removed and **all** Firestore data under that `uid` is removed from the client while still authenticated.
+
+**Normative behavior (mobile, this repo):**
+
+1. **Firestore:** Delete every document under `users/{firebaseUid}/entries/*` (batched deletes), then delete the parent document **`users/{firebaseUid}`** (including `chinottoSyncAccess` if present). Implementation: `sync/deleteUserFirestoreData.ts`.
+2. **Firebase Auth:** `deleteUser(currentUser)`. If Firebase returns **`auth/requires-recent-login`**, the user completes **Sign in with Apple** again, then deletion is retried (`auth/reauthenticateApple.ts`, `sync/deleteChinottoAccount.ts`). If the account is already gone (**`auth/user-not-found`** / invalid token), treat as success: sign out locally and clear sync operational state.
+3. **Local SQLite:** **Does not** delete local capture rows (`entries`). **Does** clear sync **operational** state only: pending `sync_queue` rows, all `sync_tombstone_outbox` rows, and any stashed desktop QR session id (`sync/accountDeletionCleanup.ts`, `sync/syncQueue.ts`, `sync/tombstoneOutbox.ts`).
+4. **Subscriptions:** The app **does not** cancel App Store subscriptions programmatically. The deletion UI includes subscription disclosure and a **Manage Subscription** shortcut (system / App Store).
+
+**Other clients (same Firebase project, e.g. desktop):** After deletion, that **`uid` no longer exists** in Auth and the **`users/{uid}`** subtree is empty / inaccessible. Clients still holding a session **must** handle listener and request failures (**`permission-denied`**, signed-out / invalid token) and fall back to **local-only** without losing local thoughts. Implement or verify in **`chinotto-app`**; keep [`chinotto/docs/sync.md`](https://github.com/AleksandrMalinin/chinotto/blob/main/docs/sync.md) aligned with this subsection.
+
+**Rules note:** The §3 rules block already restricts `users/{userId}` and `entries` to `request.auth.uid == userId`. Bulk delete + `deleteUser` is performed as that user; after `deleteUser`, that identity cannot write those paths anymore.
+
 ---
 
 ## 4. Mobile implementation (this repo)
@@ -142,9 +157,16 @@ service cloud.firestore {
 | `sync/firestoreIngest.ts` | `startMobileFirestoreIngest` — `onSnapshot` ingest + remote tombstones; **`runFirestoreIngestBackfill`** paginates `getDocs` after sign-in to load older rows beyond the live snapshot `limit`. |
 | `storage/entryRepository.ts` | `deleteEntry`, `applyRemoteTombstoneDeletes`, `ingestRemoteFirestoreRows` (insert new ids **or** `UPDATE` local `text` when id exists — §8.7). |
 | `auth/appleFirebaseAuth.ts` | `applyAppleCredentialToFirebase` — anonymous → **`linkWithCredential`**, else **`signInWithCredential`**. |
-| `auth/enableAppleSync.ts` | Sign in with Apple (nonce + `OAuthProvider('apple.com')`) + Firebase. |
+| `auth/appleSignInCredential.ts` | Shared Sign in with Apple → Firebase **`OAuthProvider('apple.com')`** credential (nonce). Used by enable-sync and account-deletion reauth. |
+| `auth/enableAppleSync.ts` | Sign in with Apple + Firebase (`createFirebaseAppleCredential` + `applyAppleCredentialToFirebase`). |
+| `auth/reauthenticateApple.ts` | `reauthenticateCurrentUserWithApple` — before sensitive `deleteUser` when Firebase requires a recent login. |
+| `sync/deleteUserFirestoreData.ts` | Deletes `users/{uid}/entries/*` in batches, then `users/{uid}` (account removal). |
+| `sync/deleteChinottoAccount.ts` | Orchestrates Firestore wipe + `deleteUser` + recent-login handoff + local sync cleanup. |
+| `sync/accountDeletionCleanup.ts` | Clears sync queue / tombstone outbox / stashed desktop session after account removal (local entries untouched). |
 | `components/EnableSyncModal.tsx` | “Enable sync” / “Continue with Apple” (iOS only). |
-| `screens/CaptureScreen.tsx` | Header **Sync** (iOS + configured Firebase); gesture delete; `flushSyncTombstoneOutbox` after local delete. |
+| `screens/SettingsScreen.tsx` | **Settings → Account** (signed-in): identity, sync status, **Delete Account** entry to full-screen flow. |
+| `screens/DeleteAccountScreen.tsx` | In-app **Delete account** warning, confirmation, Manage Subscription; calls `deleteChinottoAccountForCurrentUser` / resume. |
+| `screens/CaptureScreen.tsx` | Header **Sync** (iOS + configured Firebase); gesture delete; `flushSyncTombstoneOutbox` after local delete; routes Settings / Delete account. |
 | `App.tsx` | After SQLite init: `startBackgroundSync({ pushEntry })` — **no** auto anonymous sign-in. |
 
 ### Phase 2 (sync v2) — mobile (this repo)
@@ -187,6 +209,7 @@ service cloud.firestore {
 4. **Phase 1 merge:** **insert if `id` absent** (primary key / `INSERT OR IGNORE`).  
 5. **Phase 2+ text:** if `id` already exists locally → **update `text`** from snapshot (same doc, expanded on desktop).  
 6. **Phase 2:** on snapshot, if doc has **`deletedAt` set** → physical local delete for that `entryId`; suppression bridge until rollout complete — **§8**.
+7. **Account deleted elsewhere (e.g. mobile Delete Account):** The Firebase user and `users/{uid}` cloud data are gone. Detach Firestore listeners, clear sync UI, and continue **local-only** without dropping local entries — see **§3 Account deletion**.
 
 ---
 
@@ -366,6 +389,7 @@ Record **implementation** and cross-repo **alignment** changes for **mobile** he
 
 | Date | Change |
 |------|--------|
+| 2026-04-30 | **Mobile:** In-app **account deletion** (App Store **5.1.1(v)**): Settings → Account → Delete Account; wipes `users/{uid}/entries/*` + `users/{uid}`, then Firebase **`deleteUser`** with Sign in with Apple reauth on **`auth/requires-recent-login`**; clears sync queue / tombstone outbox / stashed desktop session only (**local `entries` preserved**). **Wire doc:** new **§3 Account deletion**; desktop must handle invalid `uid` (**§5** item 7). Modules: `sync/deleteChinottoAccount.ts`, `sync/deleteUserFirestoreData.ts`, `sync/accountDeletionCleanup.ts`, `auth/appleSignInCredential.ts`, `auth/reauthenticateApple.ts`, `screens/DeleteAccountScreen.tsx`. |
 | 2026-04-13 | **Wire + mobile:** Phase **2+** — Firestore **`updatedAt`** on text merge (desktop); mobile **`ingestRemoteFirestoreRows`** updates local **`text`** when entry id already exists (**§8.7**). Rules: owner may merge `text`/`updatedAt`; `createdAt` unchanged in writers. **Docs:** drop stale `sync-deletion-v2.md` pointers; desktop single source is **`chinotto-app/docs/sync.md`**. |
 | 2026-04-12 | **Mobile:** App-update policy via Firebase Remote Config (`@react-native-firebase/app` + `remote-config` + `analytics`, Expo 55). App always tries RC; failures → in-repo mock (`enabled: false`). RC key `chinotto_app_update_json` (string JSON → `UpdateConfig`). **Import template:** [`docs/app-update/firebase-remote-config-template.json`](../app-update/firebase-remote-config-template.json). Requires `GoogleService-Info.plist` / `google-services.json` and native prebuild/EAS. |
 | 2026-04-10 | **Mobile:** `startMobileFirestoreIngest` does not run while the Enable sync sheet is open; remote thoughts apply after the sheet closes (capture visible again). **Desktop (`chinotto-app`):** `startDesktopFirestoreIngest` pauses while `SyncModal` is open. **Smoothing:** ~200ms delay after closing the sync sheet before ingest starts; ingest-driven list refreshes are debounced (~120ms) so backfill does not stutter the stream. |
