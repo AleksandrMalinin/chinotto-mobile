@@ -68,6 +68,10 @@ jest.mock('../../storage/firstLaunchCapturePrefs', () => ({
   clearFirstLaunchEmptyCaptureRevealDone: jest.fn(() => Promise.resolve()),
 }));
 
+jest.mock('../DeleteAccountScreen', () => ({
+  DeleteAccountScreen: () => null,
+}));
+
 import { CaptureScreen } from '../CaptureScreen';
 import * as settingsPrefs from '../../storage/settingsPrefs';
 import * as firstLaunchCapturePrefs from '../../storage/firstLaunchCapturePrefs';

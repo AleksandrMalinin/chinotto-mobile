@@ -44,7 +44,14 @@ export type AnalyticsEvent =
   | { event: 'sync_restore_tapped' }
   | { event: 'sync_restore_outcome'; outcome: 'entitlement_active' | 'no_entitlement' | 'error' }
   | { event: 'sync_apple_mobile_sign_in_outcome'; outcome: 'success' | 'user_cancelled' | 'error' }
-  | { event: 'sync_stop_sync_clicked' };
+  | { event: 'sync_stop_sync_clicked' }
+  | { event: 'delete_account_opened' }
+  | { event: 'delete_account_confirmed' }
+  | {
+      event: 'delete_account_failed';
+      failure_kind: 'network' | 'unknown' | 'user_cancelled' | 'not_signed_in' | 'not_configured';
+    }
+  | { event: 'delete_account_success' };
 
 type QueuedEvent = AnalyticsEvent & { ts: string };
 

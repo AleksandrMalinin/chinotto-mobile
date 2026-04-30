@@ -70,6 +70,14 @@ export async function markSynced(queueItemId: string): Promise<void> {
 }
 
 /** Remove pending create-sync rows for an entry (e.g. after local delete before push). */
+/** Clears operational sync upload state after account deletion (local entries are untouched). */
+export async function clearPendingSyncQueue(): Promise<void> {
+  await runSerializedDb(async () => {
+    const db = await getDatabase();
+    await db.runAsync(`DELETE FROM sync_queue WHERE status = 'pending'`);
+  });
+}
+
 export async function removePendingSyncItemsForEntry(db: SQLiteDatabase, entryId: string): Promise<void> {
   const rows = await db.getAllAsync<{ id: string; payload: string }>(
     `SELECT id, payload FROM sync_queue WHERE status = 'pending'`

@@ -7,7 +7,7 @@ import { getOrInitApp } from './firebaseApp';
 
 let authSingleton: Auth | null = null;
 
-function firebaseErrorCode(err: unknown): string {
+export function firebaseAuthErrorCode(err: unknown): string {
   if (err && typeof err === 'object' && 'code' in err && typeof (err as { code: unknown }).code === 'string') {
     return (err as { code: string }).code;
   }
@@ -48,7 +48,7 @@ export function getOrInitAuth(): Auth {
       persistence: nativeAuth.getReactNativePersistence(AsyncStorage),
     });
   } catch (e: unknown) {
-    if (firebaseErrorCode(e) === 'auth/already-initialized') {
+    if (firebaseAuthErrorCode(e) === 'auth/already-initialized') {
       authSingleton = nativeAuth.getAuth(app);
     } else {
       throw e;

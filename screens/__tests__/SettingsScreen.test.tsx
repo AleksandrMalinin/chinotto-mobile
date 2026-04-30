@@ -101,4 +101,21 @@ describe('SettingsScreen', () => {
     renderSettings({ syncStatusLabel: 'Sync on' });
     expect(await screen.findByText('Manage')).toBeTruthy();
   });
+
+  it('shows Account section when signed in to sync', async () => {
+    const onOpenDeleteAccount = jest.fn();
+    renderSettings({
+      syncStatusLabel: 'Sync on',
+      accountSectionVisible: true,
+      accountIdentityLabel: 'user@privaterelay.appleid.com',
+      onOpenDeleteAccount,
+    });
+
+    expect(await screen.findByText('Account')).toBeTruthy();
+    expect(screen.getByText('user@privaterelay.appleid.com')).toBeTruthy();
+    expect(screen.getByTestId('settings-delete-account')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('settings-delete-account'));
+    expect(onOpenDeleteAccount).toHaveBeenCalled();
+  });
 });

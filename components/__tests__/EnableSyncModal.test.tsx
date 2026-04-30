@@ -114,7 +114,7 @@ describe('EnableSyncModal', () => {
     jest.mocked(processSyncQueue).mockClear();
     jest.mocked(flushSyncTombstoneOutbox).mockClear();
     mockMirrorChinottoSyncAccess.mockClear();
-    jest.spyOn(Linking, 'openURL').mockResolvedValue();
+    jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
   });
 
   afterEach(() => {

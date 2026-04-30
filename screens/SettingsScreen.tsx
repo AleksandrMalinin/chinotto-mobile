@@ -19,6 +19,10 @@ type SettingsScreenProps = {
   onOpenAppIcon?: () => void;
   appIconLabel?: string;
   syncStatusLabel: string;
+  /** Signed-in sync user (Settings → Account); iOS + Firebase only. */
+  accountSectionVisible?: boolean;
+  accountIdentityLabel?: string;
+  onOpenDeleteAccount?: () => void;
   onOpenDevMenu?: () => void;
 };
 
@@ -32,6 +36,9 @@ export function SettingsScreen({
   onOpenAppIcon,
   appIconLabel = 'Default',
   syncStatusLabel,
+  accountSectionVisible = false,
+  accountIdentityLabel = 'Apple ID',
+  onOpenDeleteAccount,
   onOpenDevMenu,
 }: SettingsScreenProps) {
   const { displayChrome, setDisplayChrome } = useContext(AdaptiveChromeContext);
@@ -114,6 +121,21 @@ export function SettingsScreen({
                     onPress={onOpenSync}
                   />
                 </SettingsSection>
+
+              {accountSectionVisible && onOpenDeleteAccount ? (
+                <SettingsSection title="Account">
+                  <SettingsRow variant="info" label={accountIdentityLabel} description="Cloud account" />
+                  <SettingsRow variant="info" label="Sync status" valueLabel={syncStatusLabel} />
+                  <SettingsRow
+                    testID="settings-delete-account"
+                    variant="destructive"
+                    label="Delete Account"
+                    description="Permanently removes your Chinotto cloud account and synced data."
+                    onPress={onOpenDeleteAccount}
+                    isLast
+                  />
+                </SettingsSection>
+              ) : null}
 
               <SettingsSection title="Appearance">
                 <SettingsRow

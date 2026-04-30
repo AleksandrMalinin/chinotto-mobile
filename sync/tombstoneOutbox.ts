@@ -30,3 +30,11 @@ export async function removeSyncTombstoneOutbox(entryId: string): Promise<void> 
     await db.runAsync(`DELETE FROM sync_tombstone_outbox WHERE entry_id = ?`, entryId);
   });
 }
+
+/** Clears durable tombstone flush queue (e.g. after cloud account removal). */
+export async function clearSyncTombstoneOutbox(): Promise<void> {
+  await runSerializedDb(async () => {
+    const db = await getDatabase();
+    await db.runAsync(`DELETE FROM sync_tombstone_outbox`);
+  });
+}

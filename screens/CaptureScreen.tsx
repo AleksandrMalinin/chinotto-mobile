@@ -35,6 +35,7 @@ import { RecentList } from '../components/RecentList';
 import { SyncHeaderStatus, type SyncHeaderAuthPhase } from '../components/SyncHeaderStatus';
 import { VoiceMicButton } from '../components/VoiceCaptureControl';
 import { AppIconScreen } from './AppIconScreen';
+import { DeleteAccountScreen } from './DeleteAccountScreen';
 import { ManifestoScreen } from './ManifestoScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { ENABLE_APP_ICON_SWITCHER } from '../src/features/flags';
@@ -121,7 +122,7 @@ const SCROLL_END_THRESHOLD_PX = 160;
 const STREAM_WRITE_PEEK_MIN_SCROLL_Y = 140;
 const SEARCH_DEBOUNCE_MS = 250;
 const SEARCH_MAX_RESULTS = 300;
-type SettingsRoute = 'settings' | 'manifesto' | 'app_icon';
+type SettingsRoute = 'settings' | 'manifesto' | 'app_icon' | 'delete_account';
 
 /** How often to refresh upload-queue state for the sync header while signed in. */
 const SYNC_UPLOAD_POLL_MS = 2500;
@@ -228,6 +229,7 @@ export function CaptureScreen({
   const [searchExpanded, setSearchExpanded] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const [settingsRoute, setSettingsRoute] = useState<SettingsRoute | null>(null);
+  const [firebaseAccountLabel, setFirebaseAccountLabel] = useState<string | null>(null);
   const [appIconVariantId, setAppIconVariantId] = useState<AppIconVariantId>('default');
   const [hapticsEnabled, setHapticsEnabledState] = useState(true);
   const [authRestorePhase, setAuthRestorePhase] = useState<AuthRestorePhase>(() =>
@@ -665,6 +667,9 @@ export function CaptureScreen({
         });
       }
 
+      setFirebaseAccountLabel(
+        user && !user.isAnonymous ? (user.email?.trim() ? user.email.trim() : 'Apple ID') : null
+      );
       setAuthRestorePhase(nextPhase);
       void mirrorChinottoSyncAccessToFirestore();
     });
@@ -1394,6 +1399,20 @@ export function CaptureScreen({
                 : 'Off'
           }
           onOpenDevMenu={__DEV__ && Platform.OS === 'ios' ? openDevMenuFromSettings : undefined}
+          accountSectionVisible={
+            Platform.OS === 'ios' && isFirebaseSyncConfigured() && authRestorePhase === 'signed_in'
+          }
+          accountIdentityLabel={firebaseAccountLabel ?? 'Apple ID'}
+          onOpenDeleteAccount={() => setSettingsRoute('delete_account')}
+        />
+      ) : null}
+      {settingsRoute === 'delete_account' ? (
+        <DeleteAccountScreen
+          onClose={() => setSettingsRoute('settings')}
+          onAccountDeleted={() => {
+            setSettingsRoute(null);
+            Alert.alert('', 'Your account has been deleted.');
+          }}
         />
       ) : null}
       {settingsRoute === 'manifesto' ? (
