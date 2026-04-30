@@ -339,18 +339,21 @@ export function DeleteAccountScreen({ visible, onClose, onAccountDeleted }: Dele
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Delete permanently"
+                accessibilityHint="This cannot be undone."
                 onPress={onConfirmDeletePermanently}
                 disabled={busy}
                 style={({ pressed }) => [
                   styles.modalPrimaryDestructive,
                   {
-                    borderColor: t.colors.accountDeletionPrimaryBorder,
-                    backgroundColor: t.colors.accountDeletionPrimaryFill,
+                    borderColor: t.colors.accountDeletionConfirmBorder,
+                    backgroundColor: t.colors.accountDeletionConfirmFill,
                     opacity: pressed ? 0.65 : 1,
                   },
                 ]}
               >
-                <Text style={[readAction, { color: t.colors.accountDeletionPrimaryLabel }]}>Delete permanently</Text>
+                <Text style={[readAction, { color: t.colors.accountDeletionConfirmLabel }]}>
+                  Delete permanently
+                </Text>
               </Pressable>
               <Pressable
                 accessibilityRole="button"

@@ -117,7 +117,10 @@ describe('DeleteAccountScreen', () => {
       screen.getByText('This will permanently delete your Chinotto account and all synced data.')
     ).toBeTruthy();
 
-    fireEvent.press(screen.getByLabelText('Delete permanently'));
+    const deletePermanently = screen.getByLabelText('Delete permanently');
+    expect(deletePermanently.props.accessibilityHint).toBe('This cannot be undone.');
+
+    fireEvent.press(deletePermanently);
 
     await waitFor(() => {
       expect(DeleteFlow.deleteChinottoAccountForCurrentUser).toHaveBeenCalled();

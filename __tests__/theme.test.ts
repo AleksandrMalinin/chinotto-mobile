@@ -21,6 +21,7 @@ describe('resolveAppTheme (adaptive blend)', () => {
     expect(t.colors.settingsCautionLabel).toBe(colorsDark.settingsCautionLabel);
     expect(t.colors.accountDeletionPrimaryFill).toBe(colorsDark.accountDeletionPrimaryFill);
     expect(t.colors.accountDeletionPrimaryLabel).toBe(colorsDark.accountDeletionPrimaryLabel);
+    expect(t.colors.accountDeletionConfirmFill).toBe(colorsDark.accountDeletionConfirmFill);
   });
 
   it('uses sunlight tokens at blend 1', () => {
@@ -39,6 +40,7 @@ describe('resolveAppTheme (adaptive blend)', () => {
     expect(t.colors.capturePlaceholder).toBe(colorsSunlight.capturePlaceholder);
     expect(t.colors.settingsCautionLabel).toBe(colorsSunlight.settingsCautionLabel);
     expect(t.colors.accountDeletionPrimaryFill).toBe(colorsSunlight.accountDeletionPrimaryFill);
+    expect(t.colors.accountDeletionConfirmBorder).toBe(colorsSunlight.accountDeletionConfirmBorder);
   });
 
   it('crosses sunlight mode at the blend midpoint', () => {

@@ -63,6 +63,10 @@ export const colorsDark = {
   accountDeletionPrimaryFill: 'rgba(52, 28, 32, 0.96)',
   accountDeletionPrimaryBorder: 'rgba(196, 132, 122, 0.42)',
   accountDeletionPrimaryLabel: 'rgba(255, 236, 228, 0.98)',
+  /** Irreversible confirm in delete-account modal only — warmer / higher-chroma than `accountDeletionPrimary*`. */
+  accountDeletionConfirmFill: 'rgba(112, 44, 52, 0.94)',
+  accountDeletionConfirmBorder: 'rgba(255, 168, 150, 0.58)',
+  accountDeletionConfirmLabel: 'rgba(255, 252, 248, 1)',
 } as const;
 
 /**
@@ -106,6 +110,9 @@ export const colorsSunlight = {
   accountDeletionPrimaryFill: 'rgba(64, 34, 38, 0.94)',
   accountDeletionPrimaryBorder: 'rgba(220, 168, 156, 0.48)',
   accountDeletionPrimaryLabel: 'rgba(255, 244, 238, 1)',
+  accountDeletionConfirmFill: 'rgba(100, 40, 48, 0.93)',
+  accountDeletionConfirmBorder: 'rgba(255, 200, 186, 0.62)',
+  accountDeletionConfirmLabel: 'rgba(255, 255, 255, 1)',
 } as const;
 
 /** Light shell — same roles, calm editorial (not marketing chrome). Reserved; shell stays dark-family in normal use. */
@@ -137,6 +144,9 @@ export const colorsLight = {
   accountDeletionPrimaryFill: 'rgba(124, 52, 44, 0.2)',
   accountDeletionPrimaryBorder: 'rgba(124, 52, 44, 0.48)',
   accountDeletionPrimaryLabel: 'rgba(108, 44, 36, 0.98)',
+  accountDeletionConfirmFill: 'rgba(180, 58, 48, 0.24)',
+  accountDeletionConfirmBorder: 'rgba(200, 72, 58, 0.58)',
+  accountDeletionConfirmLabel: 'rgba(118, 36, 28, 1)',
 } as const;
 
 export type ThemeColors = typeof colorsDark | typeof colorsSunlight | typeof colorsLight;

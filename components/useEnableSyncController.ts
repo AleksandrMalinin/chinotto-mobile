@@ -82,6 +82,26 @@ export function useEnableSyncController(params: {
   const paywallShownForOpenRef = useRef(false);
 
   useEffect(() => {
+    if (!visible) {
+      if (copyFeedbackTimerRef.current) {
+        clearTimeout(copyFeedbackTimerRef.current);
+        copyFeedbackTimerRef.current = null;
+      }
+      return;
+    }
+    // Reset on open only. Clearing layout-driving state when `visible` flips false runs while the
+    // Modal fade-out is still visible and makes the sheet height jump; defer reset to the next open.
+    paywallShownForOpenRef.current = false;
+    setPostSyncSuccess(false);
+    setDesktopLinkCopied(false);
+    setSelectedPackageKind('yearly');
+    setPaywallPlans([]);
+    setPaywallPlansLoading(false);
+    setErrorMessage(null);
+    setBusy(false);
+  }, [visible]);
+
+  useEffect(() => {
     if (!__DEV__) {
       return;
     }
@@ -95,21 +115,6 @@ export function useEnableSyncController(params: {
     lastDevPostSyncNonce.current = n;
     setPostSyncSuccess(true);
   }, [visible, devPostSyncPreviewNonce]);
-
-  useEffect(() => {
-    if (!visible) {
-      paywallShownForOpenRef.current = false;
-      setPostSyncSuccess(false);
-      setDesktopLinkCopied(false);
-      setSelectedPackageKind('yearly');
-      setPaywallPlans([]);
-      setPaywallPlansLoading(false);
-      if (copyFeedbackTimerRef.current) {
-        clearTimeout(copyFeedbackTimerRef.current);
-        copyFeedbackTimerRef.current = null;
-      }
-    }
-  }, [visible]);
 
   useEffect(() => {
     if (!visible || !isPaywallEnabled() || !subscriptionHydrated || authPhase !== 'signed_out') {
