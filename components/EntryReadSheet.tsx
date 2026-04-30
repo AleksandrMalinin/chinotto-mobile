@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Linking,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,7 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { Entry } from '../types/entry';
-import { fonts, useAppTheme } from '../theme';
+import { fonts, screenContentGutter, useAppTheme } from '../theme';
 import { displayHostForUrl, extractHttpUrlsFromText } from '../utils/extractHttpUrlsFromText';
 import { formatEntryTime } from '../utils/groupEntriesByDate';
 
@@ -25,9 +26,10 @@ export type EntryReadSheetProps = {
 
 export function EntryReadSheet({ visible, entry, onClose }: EntryReadSheetProps) {
   const t = useAppTheme();
-  const { height: windowHeight } = useWindowDimensions();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { colors, typography, spacing, radius } = t;
+  const contentInset = screenContentGutter(windowWidth);
   const { body, meta } = typography;
   const [copied, setCopied] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
@@ -100,6 +102,7 @@ export function EntryReadSheet({ visible, entry, onClose }: EntryReadSheetProps)
       visible={visible}
       transparent
       animationType="fade"
+      presentationStyle={Platform.OS === 'ios' ? 'overFullScreen' : 'fullScreen'}
       onRequestClose={onClose}
       statusBarTranslucent
     >
@@ -126,7 +129,7 @@ export function EntryReadSheet({ visible, entry, onClose }: EntryReadSheetProps)
             },
           ]}
         >
-          <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.md }}>
+          <View style={{ paddingHorizontal: contentInset, paddingTop: spacing.md }}>
             <View style={styles.toolbarTopRow}>
               <Text
                 style={[
@@ -216,7 +219,7 @@ export function EntryReadSheet({ visible, entry, onClose }: EntryReadSheetProps)
               style={[
                 styles.linkList,
                 {
-                  paddingHorizontal: spacing.lg,
+                  paddingHorizontal: contentInset,
                   paddingTop: spacing.xs,
                   paddingBottom: spacing.sm,
                   borderBottomColor: colors.border,
@@ -276,7 +279,7 @@ export function EntryReadSheet({ visible, entry, onClose }: EntryReadSheetProps)
             testID="entry-read-scroll"
             style={[styles.scroll, { maxHeight: scrollMaxHeight }]}
             contentContainerStyle={{
-              paddingHorizontal: spacing.lg,
+              paddingHorizontal: contentInset,
               paddingTop: spacing.sm,
               paddingBottom: comfortableReading ? spacing.lg + spacing.sm : spacing.lg,
             }}

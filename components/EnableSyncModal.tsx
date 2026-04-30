@@ -8,6 +8,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import Purchases, { type CustomerInfo, type PurchasesOfferings } from 'react-native-purchases';
@@ -18,7 +19,7 @@ import {
   CHINOTTO_PACKAGE_KIND_ORDER,
   REVENUECAT_IOS_API_KEY,
 } from '../src/services/purchases/constants';
-import { fonts, radius, spacing, useAppTheme } from '../theme';
+import { fonts, radius, screenContentGutter, spacing, useAppTheme } from '../theme';
 import { useEnableSyncController } from './useEnableSyncController';
 
 /**
@@ -148,6 +149,8 @@ export function EnableSyncModal({
   bgElevated,
   border,
 }: EnableSyncModalProps) {
+  const { width: windowWidth } = useWindowDimensions();
+  const backdropInset = screenContentGutter(windowWidth);
   const { sunlightMode } = useAppTheme();
   const {
     busy,
@@ -357,7 +360,11 @@ export function EnableSyncModal({
         testID="enable-sync-modal-backdrop"
         accessibilityLabel="Dismiss"
         accessibilityRole="button"
-        style={[styles.backdrop, showPlusPaywall && styles.backdropSoft]}
+        style={[
+          styles.backdrop,
+          { paddingHorizontal: backdropInset },
+          showPlusPaywall && styles.backdropSoft,
+        ]}
         onPress={handleClose}
         disabled={busy}
       >
@@ -756,7 +763,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.54)',
     justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
   },
   backdropSoft: {
     backgroundColor: 'rgba(0,0,0,0.48)',

@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   LayoutAnimation,
   Linking,
+  Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
@@ -1409,15 +1410,23 @@ export function CaptureScreen({
           onOpenDeleteAccount={() => setAccountDeletionOpen(true)}
         />
       ) : null}
-      <DeleteAccountScreen
+      <Modal
         visible={accountDeletionOpen}
-        onClose={() => setAccountDeletionOpen(false)}
-        onAccountDeleted={() => {
-          setAccountDeletionOpen(false);
-          setSettingsRoute(null);
-          Alert.alert('', 'Your account has been deleted.');
-        }}
-      />
+        animationType="fade"
+        presentationStyle={Platform.OS === 'ios' ? 'overFullScreen' : 'fullScreen'}
+        statusBarTranslucent
+        onRequestClose={() => setAccountDeletionOpen(false)}
+      >
+        <DeleteAccountScreen
+          visible={accountDeletionOpen}
+          onClose={() => setAccountDeletionOpen(false)}
+          onAccountDeleted={() => {
+            setAccountDeletionOpen(false);
+            setSettingsRoute(null);
+            Alert.alert('', 'Your account has been deleted.');
+          }}
+        />
+      </Modal>
       {settingsRoute === 'manifesto' ? (
         <ManifestoScreen
           onClose={() => setSettingsRoute('settings')}
