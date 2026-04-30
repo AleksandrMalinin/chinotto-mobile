@@ -1,4 +1,3 @@
-import Constants from 'expo-constants';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -7,23 +6,22 @@ import {
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { track } from '../analytics/analytics';
 import { AppleUserCanceledError } from '../auth/appleSignInCredential';
-import { ChinottoLogo, chinottoLogoLeadingOutset } from '../components/ChinottoLogo';
 import {
   AccountDeletionNeedsRecentLogin,
   DeleteChinottoAccountError,
   deleteChinottoAccountForCurrentUser,
   resumeChinottoAccountDeletionAfterReauth,
 } from '../sync/deleteChinottoAccount';
-import { fonts, screenContentGutter, spacing, useAppTheme } from '../theme';
+import { fonts, radius, spacing, useAppTheme } from '../theme';
 
 const COPY_MAIN =
   'Deleting your Chinotto account will permanently remove your synced data from the cloud.';
@@ -33,29 +31,34 @@ const COPY_FINAL = 'This will permanently delete your Chinotto account and all s
 const COPY_RECENT_LOGIN = 'Please sign in again to confirm account deletion.';
 const IOS_MANAGE_SUBSCRIPTIONS_URL = 'https://apps.apple.com/account/subscriptions';
 
+/**
+ * Account removal step 1 (App Store 5.1.1(v)): required warning copy + Manage Subscription + primary CTA.
+ * Same presentation shell as `EnableSyncModal`: transparent fade `Modal`, dimmed backdrop, centered sheet.
+ * Step 2 is a nested confirmation `Modal` with explicit destructive styling.
+ */
+
 type DeleteAccountScreenProps = {
+  visible: boolean;
   onClose: () => void;
   /** Called after successful deletion (Auth user removed + local sync queues cleared). */
   onAccountDeleted: () => void;
 };
 
-export function DeleteAccountScreen({ onClose, onAccountDeleted }: DeleteAccountScreenProps) {
+export function DeleteAccountScreen({ visible, onClose, onAccountDeleted }: DeleteAccountScreenProps) {
   const t = useAppTheme();
   const insets = useSafeAreaInsets();
-  const headerLogoSize = 42;
-  const gutter = screenContentGutter(0);
-  const topInset = Math.max(insets.top, Constants.statusBarHeight ?? 0, 44);
-  const headerLogoAlignStyle = {
-    marginLeft: -chinottoLogoLeadingOutset(headerLogoSize),
-  };
-
+  const { height: windowHeight } = useWindowDimensions();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!visible) {
+      setConfirmOpen(false);
+      return;
+    }
     track({ event: 'delete_account_opened' });
-  }, []);
+  }, [visible]);
 
   const openManageSubscriptions = useCallback(() => {
     void Linking.openURL(IOS_MANAGE_SUBSCRIPTIONS_URL).catch(() => {});
@@ -140,118 +143,148 @@ export function DeleteAccountScreen({ onClose, onAccountDeleted }: DeleteAccount
     void runDeletion();
   }, [runDeletion]);
 
+  const sheetShadowLift = t.sunlightMode
+    ? Platform.select({
+        ios: {
+          shadowColor: '#000',
+          shadowOpacity: 0.22,
+          shadowRadius: 14,
+          shadowOffset: { width: 0, height: 8 },
+        },
+        android: { elevation: 8 },
+        default: {},
+      }) ?? {}
+    : {};
+
+  /** Same top + bottom inset on the sheet (home indicator drives both sides equally). */
+  const sheetVerticalPad = Math.max(spacing.lg, insets.bottom + spacing.sm);
+
   return (
-    <View testID="delete-account-screen" style={[styles.container, { backgroundColor: t.colors.bg }]}>
-      <SafeAreaView style={styles.safe} edges={['right', 'left']}>
-        <View
-          style={[
-            styles.headerBar,
-            {
-              paddingHorizontal: gutter,
-              paddingTop: topInset + t.spacing.xs,
-              marginBottom: t.spacing.sm,
-            },
-          ]}
+    <>
+      <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+        <Pressable
+          testID="delete-account-modal-backdrop"
+          accessibilityLabel="Dismiss"
+          accessibilityRole="button"
+          style={styles.backdrop}
+          onPress={onClose}
+          disabled={busy}
         >
-          <View style={styles.headerLogoSlot}>
-            <Pressable
-              testID="delete-account-back-logo"
-              accessibilityRole="button"
-              accessibilityLabel="Chinotto"
-              accessibilityHint="Back to settings"
-              onPress={onClose}
-              hitSlop={12}
-              disabled={busy}
-              style={({ pressed }) => [{ opacity: pressed ? 0.92 : 1 }]}
-            >
-              <ChinottoLogo size={headerLogoSize} color={t.colors.logoMark} style={headerLogoAlignStyle} />
-            </Pressable>
-          </View>
-        </View>
-
-        <ScrollView
-          contentContainerStyle={[
-            styles.content,
-            {
-              paddingHorizontal: gutter,
-              paddingBottom: Math.max(insets.bottom + 12, 20),
-            },
-          ]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={[styles.title, { color: t.colors.fg }]}>Delete account?</Text>
-
-          <Text style={[styles.body, { color: t.colors.fgDim }]}>{COPY_MAIN}</Text>
-          <Text style={[styles.body, { color: t.colors.fgDim, marginTop: spacing.sm }]}>{COPY_SUBSCRIPTION}</Text>
-          <Text style={[styles.bodyStrong, { color: t.colors.fg, marginTop: spacing.sm }]}>
-            This action cannot be undone.
-          </Text>
-
-          {errorBanner ? (
-            <View style={[styles.errorBanner, { borderColor: t.colors.border, backgroundColor: t.colors.accentSubtle }]}>
-              <Text style={[styles.errorBannerText, { color: t.colors.fgDim }]}>{errorBanner}</Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Retry account deletion"
-                onPress={() => void runDeletion()}
-                disabled={busy}
-                style={({ pressed }) => [styles.retryBtn, { opacity: pressed ? 0.85 : 1 }]}
-              >
-                <Text style={[styles.retryBtnLabel, { color: t.colors.fg }]}>Retry</Text>
-              </Pressable>
-            </View>
-          ) : null}
-
-          {Platform.OS === 'ios' ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Manage Subscription"
-              onPress={openManageSubscriptions}
-              disabled={busy}
-              style={({ pressed }) => [styles.manageLink, { opacity: pressed ? 0.85 : 1 }]}
-            >
-              <Text style={[styles.manageLinkText, { color: t.colors.metaFg }]}>Manage Subscription</Text>
-            </Pressable>
-          ) : null}
-
           <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Delete account"
-            onPress={() => setConfirmOpen(true)}
-            disabled={busy}
-            style={({ pressed }) => [
-              styles.primaryDestructive,
+            testID="delete-account-screen"
+            style={[
+              styles.sheet,
+              sheetShadowLift,
               {
-                borderColor: 'rgba(255, 146, 146, 0.35)',
-                backgroundColor: pressed ? 'rgba(255, 146, 146, 0.08)' : 'rgba(255, 146, 146, 0.04)',
+                maxHeight: windowHeight * 0.92,
+                paddingTop: sheetVerticalPad,
+                paddingBottom: sheetVerticalPad,
+                backgroundColor: t.sunlightMode ? t.colors.bgElevated : 'rgba(18, 18, 26, 0.9)',
+                borderColor: t.colors.border,
               },
             ]}
+            onPress={(ev) => ev.stopPropagation()}
           >
-            {busy ? (
-              <ActivityIndicator color="rgba(255, 146, 146, 0.95)" />
-            ) : (
-              <Text style={[styles.primaryDestructiveLabel, { color: 'rgba(255, 146, 146, 0.95)' }]}>
-                Delete account
-              </Text>
+            {t.sunlightMode ? null : (
+              <>
+                <View pointerEvents="none" style={styles.sheetAuraViolet} />
+                <View pointerEvents="none" style={styles.sheetAuraBlue} />
+              </>
             )}
-          </Pressable>
+            <View
+              pointerEvents="none"
+              style={[
+                styles.sheetInnerRing,
+                t.sunlightMode ? { borderColor: 'rgba(255,255,255,0.22)' } : null,
+              ]}
+            />
+            <View style={styles.sheetContent}>
+              <Text style={[styles.title, { color: t.colors.fg }]}>Delete account?</Text>
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Cancel"
-            onPress={onClose}
-            disabled={busy}
-            style={({ pressed }) => [styles.secondaryBtn, { opacity: pressed ? 0.85 : 1 }]}
-          >
-            <Text style={[styles.secondaryBtnLabel, { color: t.colors.fg }]}>Cancel</Text>
+              <Text style={[styles.body, { color: t.colors.fgDim }]}>{COPY_MAIN}</Text>
+              <Text style={[styles.body, styles.bodyGapAfterMain, { color: t.colors.fgDim }]}>{COPY_SUBSCRIPTION}</Text>
+              <Text style={[styles.irreversibleLine, { color: t.colors.entryBody }]}>This action cannot be undone.</Text>
+
+              {errorBanner ? (
+                <View style={[styles.errorBanner, { borderColor: t.colors.border, backgroundColor: t.colors.accentSubtle }]}>
+                  <Text style={[styles.errorBannerText, { color: t.colors.fgDim }]}>{errorBanner}</Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Retry account deletion"
+                    onPress={() => void runDeletion()}
+                    disabled={busy}
+                    style={({ pressed }) => [styles.retryBtn, { opacity: pressed ? 0.85 : 1 }]}
+                  >
+                    <Text style={[styles.retryBtnLabel, { color: t.colors.fg }]}>Retry</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+
+              {Platform.OS === 'ios' ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Manage Subscription"
+                  onPress={openManageSubscriptions}
+                  disabled={busy}
+                  style={({ pressed }) => [styles.manageLink, { opacity: pressed ? 0.8 : 1 }]}
+                >
+                  <Text
+                    style={[
+                      styles.manageLinkText,
+                      { color: t.colors.muted, textDecorationColor: t.colors.muted },
+                    ]}
+                  >
+                    Manage Subscription
+                  </Text>
+                </Pressable>
+              ) : null}
+
+              <View style={styles.actionBlock}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Delete account"
+                  onPress={() => setConfirmOpen(true)}
+                  disabled={busy}
+                  style={({ pressed }) => [
+                    styles.primaryDestructive,
+                    {
+                      borderColor: t.colors.accountDeletionPrimaryBorder,
+                      backgroundColor: t.colors.accountDeletionPrimaryFill,
+                      opacity: pressed ? 0.9 : 1,
+                      transform: [{ scale: pressed ? 0.985 : 1 }],
+                    },
+                  ]}
+                >
+                  {busy ? (
+                    <ActivityIndicator color={t.colors.accountDeletionPrimaryLabel} />
+                  ) : (
+                    <Text style={[styles.primaryDestructiveLabel, { color: t.colors.accountDeletionPrimaryLabel }]}>
+                      Delete account
+                    </Text>
+                  )}
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel"
+                  onPress={onClose}
+                  disabled={busy}
+                  style={({ pressed }) => [
+                    styles.secondaryBtn,
+                    { opacity: pressed ? 0.75 : 1, transform: [{ scale: pressed ? 0.99 : 1 }] },
+                  ]}
+                >
+                  <Text style={[styles.secondaryBtnLabel, { color: t.colors.muted }]}>Cancel</Text>
+                </Pressable>
+              </View>
+            </View>
           </Pressable>
-        </ScrollView>
-      </SafeAreaView>
+        </Pressable>
+      </Modal>
 
       <Modal visible={confirmOpen} transparent animationType="fade" onRequestClose={() => setConfirmOpen(false)}>
         <Pressable
-          style={[styles.modalBackdrop, { backgroundColor: 'rgba(0,0,0,0.45)' }]}
+          style={[styles.modalBackdrop, { backgroundColor: 'rgba(0,0,0,0.54)' }]}
           onPress={() => !busy && setConfirmOpen(false)}
         >
           <Pressable style={[styles.modalCard, { backgroundColor: t.colors.bgElevated, borderColor: t.colors.border }]} onPress={(e) => e.stopPropagation()}>
@@ -264,50 +297,95 @@ export function DeleteAccountScreen({ onClose, onAccountDeleted }: DeleteAccount
                 onPress={onConfirmDeletePermanently}
                 disabled={busy}
                 style={({ pressed }) => [
-                  styles.modalDestructive,
-                  { opacity: pressed ? 0.92 : 1, backgroundColor: 'rgba(220, 38, 38, 0.92)' },
+                  styles.modalPrimaryDestructive,
+                  {
+                    borderColor: t.colors.accountDeletionPrimaryBorder,
+                    backgroundColor: t.colors.accountDeletionPrimaryFill,
+                    opacity: pressed ? 0.9 : 1,
+                    transform: [{ scale: pressed ? 0.985 : 1 }],
+                  },
                 ]}
               >
-                <Text style={styles.modalDestructiveLabel}>Delete permanently</Text>
+                <Text style={[styles.modalPrimaryDestructiveLabel, { color: t.colors.accountDeletionPrimaryLabel }]}>
+                  Delete permanently
+                </Text>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Cancel deletion"
                 onPress={() => !busy && setConfirmOpen(false)}
                 disabled={busy}
-                style={({ pressed }) => [styles.modalSecondary, { opacity: pressed ? 0.85 : 1 }]}
+                style={({ pressed }) => [
+                  styles.modalSecondary,
+                  { opacity: pressed ? 0.75 : 1, transform: [{ scale: pressed ? 0.99 : 1 }] },
+                ]}
               >
-                <Text style={[styles.modalSecondaryLabel, { color: t.colors.fg }]}>Cancel</Text>
+                <Text style={[styles.modalSecondaryLabel, { color: t.colors.muted }]}>Cancel</Text>
               </Pressable>
             </View>
           </Pressable>
         </Pressable>
       </Modal>
-    </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 22,
-  },
-  safe: {
+  backdrop: {
     flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.54)',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
   },
-  headerBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 48,
+  sheet: {
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing.lg,
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 38,
+    shadowOffset: { width: 0, height: 19 },
+    elevation: 14,
+    overflow: 'visible',
   },
-  headerLogoSlot: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 48,
+  sheetAuraViolet: {
+    position: 'absolute',
+    top: -7,
+    right: -7,
+    bottom: -7,
+    left: -7,
+    borderRadius: radius.md + 7,
+    backgroundColor: 'transparent',
+    shadowColor: '#646eb4',
+    shadowOpacity: 0.14,
+    shadowRadius: 26,
+    shadowOffset: { width: 0, height: 0 },
   },
-  content: {
-    flexGrow: 1,
+  sheetAuraBlue: {
+    position: 'absolute',
+    top: -16,
+    right: -16,
+    bottom: -16,
+    left: -16,
+    borderRadius: radius.md + 16,
+    backgroundColor: 'transparent',
+    shadowColor: '#4664b4',
+    shadowOpacity: 0.085,
+    shadowRadius: 44,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  sheetInnerRing: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.03)',
+  },
+  sheetContent: {
+    alignSelf: 'stretch',
   },
   title: {
     fontFamily: fonts.medium,
@@ -319,14 +397,18 @@ const styles = StyleSheet.create({
   body: {
     fontFamily: fonts.regular,
     fontSize: 15,
-    lineHeight: 22,
+    lineHeight: 24,
     letterSpacing: 0.1,
   },
-  bodyStrong: {
+  bodyGapAfterMain: {
+    marginTop: spacing.md,
+  },
+  irreversibleLine: {
     fontFamily: fonts.medium,
     fontSize: 15,
-    lineHeight: 22,
-    letterSpacing: 0.1,
+    lineHeight: 23,
+    letterSpacing: 0.12,
+    marginTop: spacing.lg,
   },
   errorBanner: {
     marginTop: spacing.md,
@@ -350,19 +432,23 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   manageLink: {
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
     alignSelf: 'flex-start',
     paddingVertical: 6,
   },
   manageLinkText: {
-    fontFamily: fonts.medium,
-    fontSize: 15,
-    letterSpacing: 0.1,
+    fontFamily: fonts.regular,
+    fontSize: 14,
+    letterSpacing: 0.08,
     textDecorationLine: 'underline',
   },
+  /** One step above copy stack (`spacing.md` between text blocks); separates CTAs from content. */
+  actionBlock: {
+    marginTop: spacing.lg,
+    gap: spacing.sm,
+  },
   primaryDestructive: {
-    marginTop: spacing.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 12,
     paddingVertical: 14,
@@ -376,13 +462,13 @@ const styles = StyleSheet.create({
     letterSpacing: 0.15,
   },
   secondaryBtn: {
-    marginTop: spacing.sm,
-    paddingVertical: 14,
+    paddingVertical: 12,
     alignItems: 'center',
   },
   secondaryBtnLabel: {
     fontFamily: fonts.regular,
-    fontSize: 16,
+    fontSize: 15,
+    letterSpacing: 0.1,
   },
   modalBackdrop: {
     flex: 1,
@@ -402,21 +488,24 @@ const styles = StyleSheet.create({
   modalBody: {
     fontFamily: fonts.regular,
     fontSize: 15,
-    lineHeight: 21,
+    lineHeight: 24,
     marginBottom: 18,
   },
   modalActions: {
-    gap: 10,
+    gap: spacing.sm,
   },
-  modalDestructive: {
+  modalPrimaryDestructive: {
+    borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
+    minHeight: 48,
+    justifyContent: 'center',
   },
-  modalDestructiveLabel: {
+  modalPrimaryDestructiveLabel: {
     fontFamily: fonts.medium,
     fontSize: 16,
-    color: '#fff',
+    letterSpacing: 0.15,
   },
   modalSecondary: {
     paddingVertical: 12,
@@ -424,6 +513,7 @@ const styles = StyleSheet.create({
   },
   modalSecondaryLabel: {
     fontFamily: fonts.regular,
-    fontSize: 16,
+    fontSize: 15,
+    letterSpacing: 0.1,
   },
 });

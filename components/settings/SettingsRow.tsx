@@ -50,8 +50,8 @@ export type SettingsRowProps =
 export function SettingsRow(props: SettingsRowProps) {
   const t = useAppTheme();
   const borderBottomWidth = props.isLast ? 0 : StyleSheet.hairlineWidth;
-  const labelColor =
-    props.variant === 'destructive' ? 'rgba(255, 146, 146, 0.95)' : t.colors.fg;
+  /** Warm dusty-peach advisory (see `settingsCautionLabel`); final irreversible actions stay strong red in modals. */
+  const labelColor = props.variant === 'destructive' ? t.colors.settingsCautionLabel : t.colors.fg;
 
   const content = (
     <View style={styles.inner}>

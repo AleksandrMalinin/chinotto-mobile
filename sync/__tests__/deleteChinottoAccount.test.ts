@@ -1,8 +1,8 @@
-const mockDeleteAll = jest.fn(() => Promise.resolve());
-const mockCleanup = jest.fn(() => Promise.resolve());
-const mockReauth = jest.fn(() => Promise.resolve());
-const mockDeleteUser = jest.fn(() => Promise.resolve());
-const mockSignOut = jest.fn(() => Promise.resolve());
+const mockDeleteAll = jest.fn((..._args: unknown[]) => Promise.resolve());
+const mockCleanup = jest.fn((..._args: unknown[]) => Promise.resolve());
+const mockReauth = jest.fn((..._args: unknown[]) => Promise.resolve());
+const mockDeleteUser = jest.fn((..._args: unknown[]) => Promise.resolve());
+const mockSignOut = jest.fn((..._args: unknown[]) => Promise.resolve());
 
 jest.mock('../firebaseConfig', () => ({
   isFirebaseSyncConfigured: jest.fn(() => true),
@@ -19,15 +19,15 @@ jest.mock('../firebaseAuth', () => ({
 }));
 
 jest.mock('../deleteUserFirestoreData', () => ({
-  deleteAllFirestoreDataForUid: (...args: unknown[]) => mockDeleteAll(...args),
+  deleteAllFirestoreDataForUid: (uid: string) => mockDeleteAll(uid),
 }));
 
 jest.mock('../accountDeletionCleanup', () => ({
-  cleanupLocalSyncStateAfterAccountDeletion: (...args: unknown[]) => mockCleanup(...args),
+  cleanupLocalSyncStateAfterAccountDeletion: () => mockCleanup(),
 }));
 
 jest.mock('../../auth/reauthenticateApple', () => ({
-  reauthenticateCurrentUserWithApple: (...args: unknown[]) => mockReauth(...args),
+  reauthenticateCurrentUserWithApple: () => mockReauth(),
 }));
 
 jest.mock('firebase/auth', () => ({

@@ -16,24 +16,6 @@ import { AdaptiveChromeContext } from '../../theme';
 import * as DeleteFlow from '../../sync/deleteChinottoAccount';
 import { DeleteAccountScreen } from '../DeleteAccountScreen';
 
-jest.mock('expo-constants', () => {
-  const actual = jest.requireActual<typeof import('expo-constants')>('expo-constants');
-  return {
-    ...actual,
-    expoConfig: { version: '1.0.test' },
-    statusBarHeight: 47,
-  };
-});
-
-jest.mock('../../components/ChinottoLogo', () => {
-  const React = require('react');
-  const RN = require('react-native');
-  return {
-    ChinottoLogo: () => React.createElement(RN.Text, { testID: 'delete-account-logo-mock' }, 'logo'),
-    chinottoLogoLeadingOutset: () => 0,
-  };
-});
-
 jest.mock('../../analytics/analytics', () => ({
   track: jest.fn(),
 }));
@@ -71,6 +53,7 @@ function renderDeleteScreen(props?: { onClose?: () => void; onAccountDeleted?: (
         }}
       >
         <DeleteAccountScreen
+          visible
           onClose={props?.onClose ?? jest.fn()}
           onAccountDeleted={props?.onAccountDeleted ?? jest.fn()}
         />

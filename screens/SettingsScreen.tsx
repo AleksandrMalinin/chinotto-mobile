@@ -19,7 +19,7 @@ type SettingsScreenProps = {
   onOpenAppIcon?: () => void;
   appIconLabel?: string;
   syncStatusLabel: string;
-  /** Signed-in sync user (Settings → Account); iOS + Firebase only. */
+  /** Settings → Account (Delete Account). Production: signed-in only; `__DEV__`: always when Firebase is configured (iOS). */
   accountSectionVisible?: boolean;
   accountIdentityLabel?: string;
   onOpenDeleteAccount?: () => void;
@@ -122,21 +122,6 @@ export function SettingsScreen({
                   />
                 </SettingsSection>
 
-              {accountSectionVisible && onOpenDeleteAccount ? (
-                <SettingsSection title="Account">
-                  <SettingsRow variant="info" label={accountIdentityLabel} description="Cloud account" />
-                  <SettingsRow variant="info" label="Sync status" valueLabel={syncStatusLabel} />
-                  <SettingsRow
-                    testID="settings-delete-account"
-                    variant="destructive"
-                    label="Delete Account"
-                    description="Permanently removes your Chinotto cloud account and synced data."
-                    onPress={onOpenDeleteAccount}
-                    isLast
-                  />
-                </SettingsSection>
-              ) : null}
-
               <SettingsSection title="Appearance">
                 <SettingsRow
                   testID="settings-chrome-auto"
@@ -204,6 +189,20 @@ export function SettingsScreen({
                   isLast
                 />
               </SettingsSection>
+
+              {accountSectionVisible && onOpenDeleteAccount ? (
+                <SettingsSection title="Account">
+                  <SettingsRow variant="info" label={accountIdentityLabel} description="Cloud account" />
+                  <SettingsRow
+                    testID="settings-delete-account"
+                    variant="destructive"
+                    label="Delete Account"
+                    description="Permanently removes your Chinotto cloud account and synced data."
+                    onPress={onOpenDeleteAccount}
+                    isLast
+                  />
+                </SettingsSection>
+              ) : null}
 
               <View style={[styles.versionBlock, { borderColor: t.colors.border, backgroundColor: t.colors.accentSubtle }]}>
                 <View style={styles.versionRow}>

@@ -122,7 +122,7 @@ const SCROLL_END_THRESHOLD_PX = 160;
 const STREAM_WRITE_PEEK_MIN_SCROLL_Y = 140;
 const SEARCH_DEBOUNCE_MS = 250;
 const SEARCH_MAX_RESULTS = 300;
-type SettingsRoute = 'settings' | 'manifesto' | 'app_icon' | 'delete_account';
+type SettingsRoute = 'settings' | 'manifesto' | 'app_icon';
 
 /** How often to refresh upload-queue state for the sync header while signed in. */
 const SYNC_UPLOAD_POLL_MS = 2500;
@@ -229,6 +229,7 @@ export function CaptureScreen({
   const [searchExpanded, setSearchExpanded] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const [settingsRoute, setSettingsRoute] = useState<SettingsRoute | null>(null);
+  const [accountDeletionOpen, setAccountDeletionOpen] = useState(false);
   const [firebaseAccountLabel, setFirebaseAccountLabel] = useState<string | null>(null);
   const [appIconVariantId, setAppIconVariantId] = useState<AppIconVariantId>('default');
   const [hapticsEnabled, setHapticsEnabledState] = useState(true);
@@ -1400,21 +1401,23 @@ export function CaptureScreen({
           }
           onOpenDevMenu={__DEV__ && Platform.OS === 'ios' ? openDevMenuFromSettings : undefined}
           accountSectionVisible={
-            Platform.OS === 'ios' && isFirebaseSyncConfigured() && authRestorePhase === 'signed_in'
+            Platform.OS === 'ios' &&
+            isFirebaseSyncConfigured() &&
+            (__DEV__ || authRestorePhase === 'signed_in')
           }
           accountIdentityLabel={firebaseAccountLabel ?? 'Apple ID'}
-          onOpenDeleteAccount={() => setSettingsRoute('delete_account')}
+          onOpenDeleteAccount={() => setAccountDeletionOpen(true)}
         />
       ) : null}
-      {settingsRoute === 'delete_account' ? (
-        <DeleteAccountScreen
-          onClose={() => setSettingsRoute('settings')}
-          onAccountDeleted={() => {
-            setSettingsRoute(null);
-            Alert.alert('', 'Your account has been deleted.');
-          }}
-        />
-      ) : null}
+      <DeleteAccountScreen
+        visible={accountDeletionOpen}
+        onClose={() => setAccountDeletionOpen(false)}
+        onAccountDeleted={() => {
+          setAccountDeletionOpen(false);
+          setSettingsRoute(null);
+          Alert.alert('', 'Your account has been deleted.');
+        }}
+      />
       {settingsRoute === 'manifesto' ? (
         <ManifestoScreen
           onClose={() => setSettingsRoute('settings')}

@@ -52,6 +52,17 @@ export const colorsDark = {
   accent: 'rgba(160,170,255,0.88)',
   /** Swipe-to-delete track — violet family, not alarm red. */
   swipeDeleteBg: 'rgba(108, 116, 178, 0.48)',
+  /** Settings rows that need attention (e.g. Delete Account) — dusty peach (aligned with headline gradient warmth), not yellow warning or alarm red. */
+  settingsCautionLabel: 'rgba(228, 198, 182, 0.99)',
+  settingsCautionBorder: 'rgba(228, 198, 182, 0.42)',
+  settingsCautionFill: 'rgba(228, 198, 182, 0.1)',
+  /**
+   * Delete Account primary CTA — deep warm plum (quietly dangerous; not system alert red).
+   * Distinct from `settingsCautionFill` row tint so the irreversible action reads heavier.
+   */
+  accountDeletionPrimaryFill: 'rgba(52, 28, 32, 0.96)',
+  accountDeletionPrimaryBorder: 'rgba(196, 132, 122, 0.42)',
+  accountDeletionPrimaryLabel: 'rgba(255, 236, 228, 0.98)',
 } as const;
 
 /**
@@ -89,6 +100,12 @@ export const colorsSunlight = {
   entryBody: '#ffffff',
   accent: 'rgba(220,226,255,1)',
   swipeDeleteBg: 'rgba(72, 78, 118, 0.72)',
+  settingsCautionLabel: 'rgba(248, 222, 206, 0.98)',
+  settingsCautionBorder: 'rgba(248, 222, 206, 0.52)',
+  settingsCautionFill: 'rgba(248, 222, 206, 0.14)',
+  accountDeletionPrimaryFill: 'rgba(64, 34, 38, 0.94)',
+  accountDeletionPrimaryBorder: 'rgba(220, 168, 156, 0.48)',
+  accountDeletionPrimaryLabel: 'rgba(255, 244, 238, 1)',
 } as const;
 
 /** Light shell — same roles, calm editorial (not marketing chrome). Reserved; shell stays dark-family in normal use. */
@@ -114,6 +131,12 @@ export const colorsLight = {
   entryBody: 'rgba(28,28,34,0.92)',
   accent: 'rgba(90,100,200,0.88)',
   swipeDeleteBg: 'rgba(100, 108, 175, 0.28)',
+  settingsCautionLabel: 'rgba(158, 88, 68, 0.94)',
+  settingsCautionBorder: 'rgba(158, 88, 68, 0.38)',
+  settingsCautionFill: 'rgba(158, 88, 68, 0.1)',
+  accountDeletionPrimaryFill: 'rgba(124, 52, 44, 0.2)',
+  accountDeletionPrimaryBorder: 'rgba(124, 52, 44, 0.48)',
+  accountDeletionPrimaryLabel: 'rgba(108, 44, 36, 0.98)',
 } as const;
 
 export type ThemeColors = typeof colorsDark | typeof colorsSunlight | typeof colorsLight;
