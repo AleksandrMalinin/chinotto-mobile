@@ -170,7 +170,7 @@ export function DeleteAccountScreen({ visible, onClose, onAccountDeleted }: Dele
           onPress={onClose}
           disabled={busy}
         >
-          <Pressable
+          <View
             testID="delete-account-screen"
             style={[
               styles.sheet,
@@ -183,7 +183,6 @@ export function DeleteAccountScreen({ visible, onClose, onAccountDeleted }: Dele
                 borderColor: t.colors.border,
               },
             ]}
-            onPress={(ev) => ev.stopPropagation()}
           >
             {t.sunlightMode ? null : (
               <>
@@ -278,54 +277,56 @@ export function DeleteAccountScreen({ visible, onClose, onAccountDeleted }: Dele
                 </Pressable>
               </View>
             </View>
-          </Pressable>
+          </View>
         </Pressable>
       </Modal>
 
-      <Modal visible={confirmOpen} transparent animationType="fade" onRequestClose={() => setConfirmOpen(false)}>
-        <Pressable
-          style={[styles.modalBackdrop, { backgroundColor: 'rgba(0,0,0,0.54)' }]}
-          onPress={() => !busy && setConfirmOpen(false)}
-        >
-          <Pressable style={[styles.modalCard, { backgroundColor: t.colors.bgElevated, borderColor: t.colors.border }]} onPress={(e) => e.stopPropagation()}>
-            <Text style={[styles.modalTitle, { color: t.colors.fg }]}>Are you sure?</Text>
-            <Text style={[styles.modalBody, { color: t.colors.fgDim }]}>{COPY_FINAL}</Text>
-            <View style={styles.modalActions}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Delete permanently"
-                onPress={onConfirmDeletePermanently}
-                disabled={busy}
-                style={({ pressed }) => [
-                  styles.modalPrimaryDestructive,
-                  {
-                    borderColor: t.colors.accountDeletionPrimaryBorder,
-                    backgroundColor: t.colors.accountDeletionPrimaryFill,
-                    opacity: pressed ? 0.9 : 1,
-                    transform: [{ scale: pressed ? 0.985 : 1 }],
-                  },
-                ]}
-              >
-                <Text style={[styles.modalPrimaryDestructiveLabel, { color: t.colors.accountDeletionPrimaryLabel }]}>
-                  Delete permanently
-                </Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Cancel deletion"
-                onPress={() => !busy && setConfirmOpen(false)}
-                disabled={busy}
-                style={({ pressed }) => [
-                  styles.modalSecondary,
-                  { opacity: pressed ? 0.75 : 1, transform: [{ scale: pressed ? 0.99 : 1 }] },
-                ]}
-              >
-                <Text style={[styles.modalSecondaryLabel, { color: t.colors.muted }]}>Cancel</Text>
-              </Pressable>
-            </View>
+      {confirmOpen ? (
+        <Modal visible transparent animationType="fade" onRequestClose={() => setConfirmOpen(false)}>
+          <Pressable
+            style={[styles.modalBackdrop, { backgroundColor: 'rgba(0,0,0,0.54)' }]}
+            onPress={() => !busy && setConfirmOpen(false)}
+          >
+            <Pressable style={[styles.modalCard, { backgroundColor: t.colors.bgElevated, borderColor: t.colors.border }]} onPress={(e) => e.stopPropagation()}>
+              <Text style={[styles.modalTitle, { color: t.colors.fg }]}>Are you sure?</Text>
+              <Text style={[styles.modalBody, { color: t.colors.fgDim }]}>{COPY_FINAL}</Text>
+              <View style={styles.modalActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Delete permanently"
+                  onPress={onConfirmDeletePermanently}
+                  disabled={busy}
+                  style={({ pressed }) => [
+                    styles.modalPrimaryDestructive,
+                    {
+                      borderColor: t.colors.accountDeletionPrimaryBorder,
+                      backgroundColor: t.colors.accountDeletionPrimaryFill,
+                      opacity: pressed ? 0.9 : 1,
+                      transform: [{ scale: pressed ? 0.985 : 1 }],
+                    },
+                  ]}
+                >
+                  <Text style={[styles.modalPrimaryDestructiveLabel, { color: t.colors.accountDeletionPrimaryLabel }]}>
+                    Delete permanently
+                  </Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel deletion"
+                  onPress={() => !busy && setConfirmOpen(false)}
+                  disabled={busy}
+                  style={({ pressed }) => [
+                    styles.modalSecondary,
+                    { opacity: pressed ? 0.75 : 1, transform: [{ scale: pressed ? 0.99 : 1 }] },
+                  ]}
+                >
+                  <Text style={[styles.modalSecondaryLabel, { color: t.colors.muted }]}>Cancel</Text>
+                </Pressable>
+              </View>
+            </Pressable>
           </Pressable>
-        </Pressable>
-      </Modal>
+        </Modal>
+      ) : null}
     </>
   );
 }
