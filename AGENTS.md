@@ -212,6 +212,16 @@ If something feels overcomplicated:
 
 ---
 
+## Git safety (STRICT)
+
+Uncommitted work is not in git history. **Discarding it is permanent.**
+
+- **Never** run `git reset --hard`, `git checkout -- <paths>` across the whole tree, `git restore .`, `git clean -fd`, or any command that **throws away uncommitted changes** unless the user **explicitly** asked for that exact destructive outcome and understood that local edits will be lost.
+- **Never** use “align with `origin`”, “fix divergence”, or “undo my amend” as a reason to wipe the working tree. Prefer `git fetch` + **`git reset --soft`** to match a remote tip while keeping the index, or **`git stash push -u`** first, or **ask** the user what to do with uncommitted files.
+- If the goal is only to move `HEAD` without touching files, use options that preserve the working tree and say so in the reply.
+
+---
+
 ## Version Awareness
 
 Before implementing:
@@ -222,6 +232,8 @@ Before implementing:
 
 If a feature requires a specific SDK version:
 → explicitly mention it
+
+**iOS App Store / TestFlight version + build:** this repo commits **`ios/`**. Bumping **`app.json` alone does not update `CFBundleShortVersionString`** in `ios/Chinotto/Info.plist`. Follow **`docs/release/ios-app-store-version-bump.md`** (and Cursor skill **`ios-version-app-store-release`**) whenever you change marketing version or build number for store submission.
 
 ---
 
