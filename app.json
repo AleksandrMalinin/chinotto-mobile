@@ -17,7 +17,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.chinotto.mobile",
       "googleServicesFile": "./GoogleService-Info.plist",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "associatedDomains": ["applinks:getchinotto.app"],
       "usesAppleSignIn": true,
       "entitlements": {
