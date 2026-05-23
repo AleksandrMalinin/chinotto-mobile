@@ -33,6 +33,7 @@ import { ChinottoLogo, chinottoLogoLeadingOutset } from '../components/ChinottoL
 import { EnableSyncModal } from '../components/EnableSyncModal';
 import { EntryThoughtSheet } from '../components/EntryThoughtSheet';
 import { RecentList } from '../components/RecentList';
+import { TemporalMonthScrubber } from '../components/temporal/TemporalMonthScrubber';
 import type { ThoughtSheetOpenAnchor } from '../components/thoughtSheet/detents';
 import { openAfterKeyboardHidden } from '../components/thoughtSheet/openAfterKeyboardHidden';
 import { SyncHeaderStatus, type SyncHeaderAuthPhase } from '../components/SyncHeaderStatus';
@@ -55,6 +56,10 @@ import { mergeDemoStreamWithEntries, isDemoStreamEntryId } from '../dev/demoStre
 import { resetPaywallForPurchaseTesting } from '../dev/resetPaywallForPurchaseTesting';
 import { showDevMenu } from '../dev/showDevMenu';
 import { isDemoStreamMode } from '../src/features/demoStreamMode';
+import {
+  TEMPORAL_NAV_ENABLED,
+  TEMPORAL_NAV_SCRUBBER_IDLE_MS,
+} from '../constants/temporalNavigation';
 import {
   clearFirstLaunchEmptyCaptureRevealDone,
   getFirstLaunchComposerHasFocused,
@@ -103,6 +108,12 @@ import {
   spacing,
   useAppTheme,
 } from '../theme';
+import { formatMonthScrubberLabel, monthKeyFromIso } from '../utils/streamMonthIndex';
+import {
+  isTemporalNavigationActive,
+  isTemporalScrubberEligible,
+  shouldPeekTemporalScrubber,
+} from '../utils/temporalScrubberVisibility';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -247,8 +258,13 @@ export function CaptureScreen({
   const [syncHighlightTick, setSyncHighlightTick] = useState(0);
   /** Scroll position + viewport height for stream viewport-driven row emphasis (RecentList). */
   const [streamScrollY, setStreamScrollY] = useState(0);
+  const [streamScrollVelocityY, setStreamScrollVelocityY] = useState(0);
   const [streamViewportHeight, setStreamViewportHeight] = useState(0);
+  const [totalEntryCount, setTotalEntryCount] = useState(0);
+  const [devTemporalNavEnabled, setDevTemporalNavEnabled] = useState(false);
+  const [streamActiveEntry, setStreamActiveEntry] = useState<Entry | null>(null);
   const streamScrollViewRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  const streamScrollIdleGenRef = useRef(0);
   /** __DEV__: incremented from dev menu to re-show “Sync enabled” / desktop link sheet. */
   const [devPostSyncPreviewNonce, setDevPostSyncPreviewNonce] = useState(0);
   const stuckPollsRef = useRef(0);
@@ -367,10 +383,29 @@ export function CaptureScreen({
     }, 220);
   }, []);
 
+  const refreshTotalEntryCount = useCallback(() => {
+    void getEntryCount()
+      .then(setTotalEntryCount)
+      .catch((err) => {
+        if (__DEV__) {
+          console.warn('getEntryCount failed', err);
+        }
+      });
+  }, []);
+
   const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;
+    const { contentOffset, layoutMeasurement, contentSize, velocity } = e.nativeEvent;
     setStreamScrollY(contentOffset.y);
     setStreamViewportHeight(layoutMeasurement.height);
+    const vy = velocity?.y ?? 0;
+    setStreamScrollVelocityY(vy);
+    const idleGen = streamScrollIdleGenRef.current + 1;
+    streamScrollIdleGenRef.current = idleGen;
+    setTimeout(() => {
+      if (streamScrollIdleGenRef.current === idleGen) {
+        setStreamScrollVelocityY(0);
+      }
+    }, TEMPORAL_NAV_SCRUBBER_IDLE_MS);
 
     if (!deepScrollRecordedRef.current && contentOffset.y >= SYNC_HIGHLIGHT_STREAM_SCROLL_DEPTH_PX) {
       deepScrollRecordedRef.current = true;
@@ -465,8 +500,10 @@ export function CaptureScreen({
       if (__DEV__) {
         console.warn('refreshEntries failed', err);
       }
+    } finally {
+      refreshTotalEntryCount();
     }
-  }, []);
+  }, [refreshTotalEntryCount]);
 
   useEffect(() => {
     void refreshEntries();
@@ -925,6 +962,8 @@ export function CaptureScreen({
         setDevPostSyncPreviewNonce((n) => n + 1);
         openSyncModal('dev_menu');
       },
+      onToggleTemporalNavScrubber: () => setDevTemporalNavEnabled((on) => !on),
+      temporalNavScrubberDevState: devTemporalNavEnabled ? 'on' : 'off',
       onResetAnalyticsPrompt: onResetAnalyticsPrompt,
       onResetSyncCaptureQA: () => {
         Keyboard.dismiss();
@@ -945,7 +984,7 @@ export function CaptureScreen({
       },
       onPreviewAppUpdateModal: onDevPreviewAppUpdate,
     });
-  }, [openSyncModal, onDevPreviewAppUpdate, onResetAnalyticsPrompt]);
+  }, [devTemporalNavEnabled, openSyncModal, onDevPreviewAppUpdate, onResetAnalyticsPrompt]);
 
   useEffect(() => {
     if (syncEntryRequestNonce <= lastSyncEntryNonceRef.current) {
@@ -1147,6 +1186,36 @@ export function CaptureScreen({
 
   const showWritePeekAffordance =
     streamDisplayEntries.length > 0 && streamScrollY >= STREAM_WRITE_PEEK_MIN_SCROLL_Y;
+
+  const searchActive = searchTrimmed.length > 0;
+  const temporalNavActive = isTemporalNavigationActive(
+    TEMPORAL_NAV_ENABLED,
+    __DEV__ && devTemporalNavEnabled,
+  );
+  const temporalScrubberEligible = isTemporalScrubberEligible({
+    active: temporalNavActive,
+    searchActive,
+    totalEntryCount,
+    hasStreamRows: streamDisplayEntries.length > 0,
+    bypassMinEntryCount: __DEV__ && devTemporalNavEnabled,
+  });
+  const showTemporalScrubber =
+    temporalScrubberEligible && shouldPeekTemporalScrubber(streamScrollY, streamScrollVelocityY);
+  const referenceMonthKey = monthKeyFromIso(new Date().toISOString());
+  const visibleMonthKey =
+    streamActiveEntry != null
+      ? monthKeyFromIso(streamActiveEntry.createdAt)
+      : streamDisplayEntries[0] != null
+        ? monthKeyFromIso(streamDisplayEntries[0].createdAt)
+        : referenceMonthKey;
+  const temporalScrubberLabel = formatMonthScrubberLabel(visibleMonthKey, referenceMonthKey);
+  const temporalScrubberBottom = Math.max(insets.bottom, 10) + (showWritePeekAffordance ? 52 : 12);
+
+  const onTemporalScrubberPress = useCallback(() => {
+    if (hapticsEnabled && Platform.OS !== 'web') {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    }
+  }, [hapticsEnabled]);
 
   const showCaptureSyncHeader = Platform.OS === 'ios' && isFirebaseSyncConfigured();
 
@@ -1378,6 +1447,7 @@ export function CaptureScreen({
               }
               onEntryPress={onStreamEntryPress}
               onEntryDelete={handleEntryDelete}
+              onActiveStreamEntryChange={searchActive ? undefined : setStreamActiveEntry}
             />
             <Pressable
               style={[styles.bottomFill, { flexGrow: 1, minHeight: 1 }]}
@@ -1385,6 +1455,15 @@ export function CaptureScreen({
               onPress={Keyboard.dismiss}
             />
             </ScrollView>
+            {showTemporalScrubber ? (
+              <TemporalMonthScrubber
+                label={temporalScrubberLabel}
+                visible={showTemporalScrubber}
+                onPress={onTemporalScrubberPress}
+                rightInset={gutter}
+                bottomInset={temporalScrubberBottom}
+              />
+            ) : null}
             {showWritePeekAffordance ? (
               <Pressable
                 testID="capture-chrome-peek"

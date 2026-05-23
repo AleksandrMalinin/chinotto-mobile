@@ -85,7 +85,7 @@ Same month label in both places. Scrubber is **velocity-aware** and **non-blocki
 | Phase | Deliverable | Ship criteria |
 |-------|-------------|---------------|
 | **A** | Product doc, `monthKey` utils, `getMonthSummaries` / `getNewestEntryInMonth` SQL | Tests green; query fast on device |
-| **B** | Passive floating month label (no scrub) | No capture regression; hidden when search |
+| **B** | Passive floating month label (no scrub) | Done — dev menu toggle; hidden when search |
 | **C** | Temporal map sheet + jump-to-month | Lands on correct month; empty months OK |
 | **D** | Scrub gesture + haptics | No conflict with swipe-delete |
 | **E** | Activity wash + motion polish | Still calm; feature flag / RC kill switch |
@@ -141,3 +141,4 @@ hooks/useTemporalNavigation.ts
 | Date | Note |
 |------|------|
 | 2026-05-24 | Initial product plan; Phase A foundation on `feat/temporal-navigation`. |
+| 2026-05-24 | Phase B passive scrubber + dev menu toggle (`Temporal scrubber on/off`). |

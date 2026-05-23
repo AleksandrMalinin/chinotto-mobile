@@ -89,6 +89,8 @@ export type RecentListProps = {
    * (true on-screen visibility). Falls back to scroll-space geometry when unset (e.g. tests).
    */
   streamScrollViewRef?: RefObject<View | null>;
+  /** Top-visible stream row (viewport focus) — for temporal month scrubber. */
+  onActiveStreamEntryChange?: (entry: Entry | null) => void;
 };
 
 const DELETE_ACTION_WIDTH = 76;
@@ -626,6 +628,7 @@ function RecentListInner({
   streamViewportHeight = 0,
   streamViewportFocusEnabled = false,
   streamScrollViewRef,
+  onActiveStreamEntryChange,
 }: RecentListProps) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const streamGutter = screenContentGutter(windowWidth);
@@ -819,6 +822,19 @@ function RecentListInner({
 
   const activeFlatIndex =
     streamScrollViewRef != null && windowActiveIndex >= 0 ? windowActiveIndex : geometryActiveIndex;
+
+  useEffect(() => {
+    if (onActiveStreamEntryChange == null) {
+      return;
+    }
+    if (activeFlatIndex < 0) {
+      onActiveStreamEntryChange(null);
+      return;
+    }
+    const id = orderedIds[activeFlatIndex];
+    const entry = entries.find((e) => e.id === id) ?? null;
+    onActiveStreamEntryChange(entry);
+  }, [activeFlatIndex, orderedIds, entries, onActiveStreamEntryChange]);
 
   if (!visible) {
     return null;

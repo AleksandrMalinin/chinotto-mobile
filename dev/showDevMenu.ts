@@ -15,6 +15,10 @@ export type DevMenuOptions = {
   onResetSyncCaptureQA?: () => void | Promise<void>;
   /** Show the shipped `UpdateScreen` in soft or forced mode (wired from `App`). */
   onPreviewAppUpdateModal?: (mode: 'soft' | 'forced') => void;
+  /** Toggle passive month scrubber QA (`__DEV__`). */
+  onToggleTemporalNavScrubber?: () => void;
+  /** Label suffix for temporal toggle, e.g. `on` / `off`. */
+  temporalNavScrubberDevState?: 'on' | 'off';
 };
 
 /**
@@ -60,6 +64,13 @@ export function showDevMenu(options: DevMenuOptions): void {
     buttons.push({
       text: 'Preview app update (forced)',
       onPress: () => preview('forced'),
+    });
+  }
+  if (options.onToggleTemporalNavScrubber != null) {
+    const state = options.temporalNavScrubberDevState ?? 'off';
+    buttons.push({
+      text: `Temporal scrubber (${state})`,
+      onPress: options.onToggleTemporalNavScrubber,
     });
   }
 
