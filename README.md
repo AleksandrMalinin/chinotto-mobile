@@ -45,7 +45,7 @@ pnpm android
 ## Core behavior
 
 - **Capture** — open and start typing
-- **Stream** — recent thoughts in reverse chronological order
+- **Stream** — recent thoughts; tap to read or continue in place
 - **Search** — find thoughts by text
 - **Share in** — capture from other apps
 - **iOS Home Widget** — Small / Medium / Large sizes with quick capture entry and recent thoughts preview

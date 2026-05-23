@@ -14,6 +14,7 @@ import {
   getEntriesOlderThan,
   getRecentEntries,
   saveEntry,
+  updateEntryText,
   searchEntriesByText,
   searchEntriesForRecall,
 } from '../entryRepository';
@@ -134,6 +135,38 @@ describe('entryRepository', () => {
       expect(withTransactionAsync).not.toHaveBeenCalled();
       expect(runAsync).not.toHaveBeenCalled();
       expect(mockInsertPendingSyncItem).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateEntryText', () => {
+    it('updates text, re-enqueues sync, preserves createdAt', async () => {
+      getFirstAsync.mockResolvedValueOnce({
+        id: 'e1',
+        createdAt: '2025-01-01T00:00:00.000Z',
+      });
+      runAsync.mockResolvedValueOnce({ changes: 1, lastInsertRowId: 0 });
+
+      const updated = await updateEntryText('e1', '  continued  ');
+
+      expect(updated).toEqual({
+        id: 'e1',
+        text: 'continued',
+        createdAt: '2025-01-01T00:00:00.000Z',
+      });
+      expect(runAsync).toHaveBeenCalledWith(
+        'UPDATE entries SET text = ? WHERE id = ?',
+        'continued',
+        'e1'
+      );
+      expect(mockRemovePending).toHaveBeenCalledWith(dbHandle, 'e1');
+      expect(mockInsertPendingSyncItem).toHaveBeenCalledWith(dbHandle, updated);
+    });
+
+    it('rejects empty text and missing entries', async () => {
+      await expect(updateEntryText('e1', '   ')).rejects.toThrow('Cannot save empty entry');
+
+      getFirstAsync.mockResolvedValueOnce(null);
+      await expect(updateEntryText('missing', 'hello')).rejects.toThrow('Entry not found');
     });
   });
 

@@ -34,7 +34,14 @@
 | **`normalizeFirestoreCreatedAtForIngest`** (ISO, `Timestamp`, `{seconds}`) | ✅ | `desktopFirestoreSync.test.ts` |
 | Vitest + Rust tests for ingest / tombstone / outbox | ✅ | See `chinotto-app/docs/sync.md` § Tests |
 
-**Mobile (`chinotto-mobile`):** Phase 2 is **assumed shipped** per mobile `docs/sync/sync.md` (ingest, outbox, suppression, `linkWithCredential`, etc.). This table does not track mobile code — only verify in **§3** when you cut a mobile release.
+### Codebase status — `chinotto-mobile` (mobile)
+
+| Item | Status | Notes |
+|------|:------:|-------|
+| Phase 2 ingest / tombstone / suppression / `linkWithCredential` | ✅ | `docs/sync/sync.md` §4 |
+| **`updateEntryText`** + re-enqueue sync (same `id` / `createdAt`) | ✅ | `storage/entryRepository.ts` |
+| In-sheet continuation (**`EntryThoughtSheet`**, save-on-close) | ✅ | `hooks/useEntryContinuation.ts` |
+| Push via same queue as create (**`firebasePushEntry`**) | ✅ | `sync/syncEngine.ts` |
 
 ---
 
@@ -59,7 +66,8 @@
 | Item | Status | Scope | Notes |
 |------|:------:|-------|-------|
 | **Create → other device** (latency OK) | ☐ | Both | |
-| **Desktop expands thought → mobile** shows longer **`text`** same `id` (no reorder) | ☐ | Both | Phase 2+ §8.7 |
+| **Desktop expands thought → mobile** shows longer **`text`** same `id` (no reorder) | ✅ | Both | Phase 2+ §8.7 — QA verified 2026-05 |
+| **Mobile continues thought in sheet → desktop** shows updated **`text`** same `id` | ✅ | Both | Phase 2+ §8.7 — QA verified 2026-05 |
 | **Delete → other device** | ☐ | Both | |
 | **Local delete** does not resurrect | ☐ | Both | Suppression + tombstone |
 | **Undo / restore** still pushes active doc (desktop) | ☐ | Desktop | `deleteField` on `deletedAt` |
@@ -83,8 +91,9 @@
 ## 5. Optional (⭕ — never blocking)
 
 | Item | Status | Scope | Notes |
-|------|:------:|-------|-------|
+|------|:------:|-------|
 | **`chinotto-app/docs/sync.md` § Changelog** updated after last desktop sync change | ⭕ | Desktop | |
+| **`chinotto-app/docs/sync-release-checklist.md`** mirror of §3 text-edit rows | ⭕ | Desktop | Align when cutting desktop release |
 | **`AGENTS.md` / README** link to mobile `docs/sync/sync.md` | ⭕ | Desktop | |
 | Unify **`[ChinottoSync]`** vs **`[chinotto sync]`** | ⭕ | Both | |
 | E2E automated sync tests | ⭕ | Both | |
@@ -94,9 +103,10 @@
 
 ## 6. Out of scope (do not block)
 
-- **Concurrent** edits to the same entry on two writers with explicit conflict UX — Phase **2+** is desktop-led text merge + mobile **`text`** apply only; see `docs/sync/sync.md` §8.7 and desktop `docs/sync.md` § Limits.  
+- **Concurrent** edits to the same entry on two writers with explicit conflict UX — Phase **2+** is **bidirectional text merge** (desktop + mobile in-sheet continuation) with **last write wins**; see `docs/sync/sync.md` §8.7 and desktop `docs/sync.md` § Limits.  
 - Tombstone window **>1000** — rare edge case.  
 - Desktop **extra** tombstone `getDocs` vs mobile — intentional.
+- **Live refresh inside open `EntryThoughtSheet`** when remote `text` changes — stream updates; sheet body stays on open snapshot until close/reopen.
 
 ---
 
@@ -104,8 +114,10 @@
 
 | Section | How to read it |
 |---------|----------------|
-| **§1** | **✅** = already in **chinotto-app** code (update only if implementation changes). |
+| **§1** | **✅** = already in code (update only if implementation changes). |
 | **§2–§4** | **☐** = **not yet verified for this release**; mark **✅** when done. |
 | **§5** | **⭕** = polish only. |
 
 **Desktop surfaces:** any new **`create_entry`** path must also **`get_entry` → `pushEntryUpsertToFirestore`** when sync is on, or add a row under §1 when implemented.
+
+**Mobile surfaces:** any new **local text save** path must go through **`updateEntryText`** (or equivalent transaction + re-enqueue) when sync is on.

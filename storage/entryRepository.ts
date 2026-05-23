@@ -37,6 +37,41 @@ export async function saveEntry(text: string): Promise<Entry> {
 }
 
 /**
+ * Update local entry text (continuation on mobile). Re-enqueues sync with the same stable `id` / `createdAt`.
+ */
+export async function updateEntryText(entryId: string, text: string): Promise<Entry> {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    throw new Error('Cannot save empty entry');
+  }
+
+  return runSerializedDb(async () => {
+    const db = await getDatabase();
+    let updated: Entry | null = null;
+    await db.withTransactionAsync(async () => {
+      const row = await db.getFirstAsync<{ id: string; createdAt: string }>(
+        `SELECT id, created_at AS createdAt FROM entries WHERE id = ?`,
+        entryId
+      );
+      if (row == null) {
+        throw new Error('Entry not found');
+      }
+      const updateRes = await db.runAsync(`UPDATE entries SET text = ? WHERE id = ?`, trimmed, entryId);
+      if (updateRes.changes === 0) {
+        throw new Error('Entry not found');
+      }
+      updated = { id: row.id, text: trimmed, createdAt: row.createdAt };
+      await removePendingSyncItemsForEntry(db, entryId);
+      await insertPendingSyncItem(db, updated);
+    });
+    if (updated == null) {
+      throw new Error('Entry not found');
+    }
+    return updated;
+  });
+}
+
+/**
  * Local-first delete. When Firebase sync is configured: suppression + tombstone outbox (Phase 2).
  */
 export async function deleteEntry(entryId: string): Promise<void> {

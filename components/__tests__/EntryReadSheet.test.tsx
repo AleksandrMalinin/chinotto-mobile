@@ -1,12 +1,16 @@
 import * as Clipboard from 'expo-clipboard';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
-import { Linking } from 'react-native';
+import { Linking, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { EntryReadSheet } from '../EntryReadSheet';
+import { EntryThoughtSheet } from '../EntryThoughtSheet';
 
 jest.mock('expo-clipboard', () => ({
   setStringAsync: jest.fn(() => Promise.resolve()),
+}));
+
+jest.mock('../../storage/entryRepository', () => ({
+  updateEntryText: jest.fn(() => Promise.resolve()),
 }));
 
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
@@ -25,7 +29,7 @@ const sampleEntry = {
   createdAt: '2025-06-15T14:30:00.000Z',
 };
 
-describe('EntryReadSheet', () => {
+describe('EntryThoughtSheet', () => {
   beforeEach(() => {
     jest.mocked(Clipboard.setStringAsync).mockClear();
     jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined as never);
@@ -38,7 +42,7 @@ describe('EntryReadSheet', () => {
   it('renders full entry text when visible', () => {
     const { getByText, getByTestId } = render(
       <SafeAreaProvider initialMetrics={safeAreaMetrics}>
-        <EntryReadSheet visible entry={sampleEntry} onClose={jest.fn()} />
+        <EntryThoughtSheet visible entry={sampleEntry} onClose={jest.fn()} />
       </SafeAreaProvider>
     );
 
@@ -49,7 +53,7 @@ describe('EntryReadSheet', () => {
   it('copies entry text when Copy is pressed', async () => {
     const { getByTestId } = render(
       <SafeAreaProvider initialMetrics={safeAreaMetrics}>
-        <EntryReadSheet visible entry={sampleEntry} onClose={jest.fn()} />
+        <EntryThoughtSheet visible entry={sampleEntry} onClose={jest.fn()} />
       </SafeAreaProvider>
     );
 
@@ -60,22 +64,41 @@ describe('EntryReadSheet', () => {
     });
   });
 
-  it('calls onClose when dismiss backdrop is pressed', () => {
+  it('calls onClose when dismiss backdrop is pressed in compact mode', async () => {
     const onClose = jest.fn();
     const { getByLabelText } = render(
       <SafeAreaProvider initialMetrics={safeAreaMetrics}>
-        <EntryReadSheet visible entry={sampleEntry} onClose={onClose} />
+        <EntryThoughtSheet visible entry={sampleEntry} onClose={onClose} />
       </SafeAreaProvider>
     );
 
     fireEvent.press(getByLabelText('Dismiss'));
-    expect(onClose).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('calls onClose when dismiss backdrop is pressed while expanded', async () => {
+    const onClose = jest.fn();
+    const { getByTestId, getByLabelText } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <EntryThoughtSheet visible entry={sampleEntry} onClose={onClose} />
+      </SafeAreaProvider>
+    );
+
+    const body = getByTestId('entry-read-body');
+    fireEvent.press(body);
+    fireEvent.press(body);
+    fireEvent.press(getByLabelText('Dismiss'));
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('does not show Open when text has no URL', () => {
     const { queryByTestId } = render(
       <SafeAreaProvider initialMetrics={safeAreaMetrics}>
-        <EntryReadSheet visible entry={sampleEntry} onClose={jest.fn()} />
+        <EntryThoughtSheet visible entry={sampleEntry} onClose={jest.fn()} />
       </SafeAreaProvider>
     );
 
@@ -90,7 +113,7 @@ describe('EntryReadSheet', () => {
     };
     const { getByTestId } = render(
       <SafeAreaProvider initialMetrics={safeAreaMetrics}>
-        <EntryReadSheet visible entry={entry} onClose={jest.fn()} />
+        <EntryThoughtSheet visible entry={entry} onClose={jest.fn()} />
       </SafeAreaProvider>
     );
 
@@ -110,7 +133,7 @@ describe('EntryReadSheet', () => {
     };
     const { getByTestId } = render(
       <SafeAreaProvider initialMetrics={safeAreaMetrics}>
-        <EntryReadSheet visible entry={entry} onClose={jest.fn()} />
+        <EntryThoughtSheet visible entry={entry} onClose={jest.fn()} />
       </SafeAreaProvider>
     );
 
@@ -121,7 +144,7 @@ describe('EntryReadSheet', () => {
   it('keeps compact read layout for shorter entries', () => {
     const { getByTestId } = render(
       <SafeAreaProvider initialMetrics={safeAreaMetrics}>
-        <EntryReadSheet visible entry={sampleEntry} onClose={jest.fn()} />
+        <EntryThoughtSheet visible entry={sampleEntry} onClose={jest.fn()} />
       </SafeAreaProvider>
     );
 
@@ -136,7 +159,7 @@ describe('EntryReadSheet', () => {
     };
     const { getByTestId, getByText } = render(
       <SafeAreaProvider initialMetrics={safeAreaMetrics}>
-        <EntryReadSheet visible entry={entry} onClose={jest.fn()} />
+        <EntryThoughtSheet visible entry={entry} onClose={jest.fn()} />
       </SafeAreaProvider>
     );
 
@@ -149,5 +172,47 @@ describe('EntryReadSheet', () => {
     await waitFor(() => {
       expect(Linking.openURL).toHaveBeenCalledWith('https://a.com');
     });
+  });
+
+  it('pins sheet with flex column shell (no absolute or transform on sheet)', () => {
+    const { getByTestId, toJSON } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <EntryThoughtSheet visible entry={sampleEntry} onClose={jest.fn()} />
+      </SafeAreaProvider>
+    );
+
+    const sheet = getByTestId('entry-thought-sheet');
+    const flat = StyleSheet.flatten(sheet.props.style);
+    expect(flat.position).toBeUndefined();
+    expect(flat.bottom).toBeUndefined();
+    expect(flat.transform).toBeUndefined();
+
+    const tree = JSON.stringify(toJSON());
+    expect(tree).not.toContain('KeyboardAvoidingView');
+  });
+
+  it('shows a grabber affordance without a Continue label', () => {
+    const { getByTestId, queryByTestId } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <EntryThoughtSheet visible entry={sampleEntry} onClose={jest.fn()} />
+      </SafeAreaProvider>
+    );
+
+    expect(getByTestId('entry-thought-grabber')).toBeTruthy();
+    expect(queryByTestId('entry-thought-continue')).toBeNull();
+  });
+
+  it('expands into edit mode on double tap of the body', () => {
+    const { getByTestId, queryByTestId } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <EntryThoughtSheet visible entry={sampleEntry} onClose={jest.fn()} />
+      </SafeAreaProvider>
+    );
+
+    const body = getByTestId('entry-read-body');
+    fireEvent.press(body);
+    fireEvent.press(body);
+    expect(getByTestId('entry-thought-input')).toBeTruthy();
+    expect(queryByTestId('entry-read-body')).toBeNull();
   });
 });

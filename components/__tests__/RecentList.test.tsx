@@ -1,4 +1,4 @@
-import { fireEvent, render } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 jest.mock('../StreamFlowPanel', () => ({
   __esModule: true,
@@ -35,7 +35,7 @@ describe('RecentList', () => {
     expect(queryByTestId('recent-list')).toBeNull();
   });
 
-  it('invokes onEntryPress when a row is pressed', () => {
+  it('invokes onEntryPress when a row is pressed', async () => {
     const e = entryToday('tap me');
     const onEntryPress = jest.fn();
     const { getByTestId } = render(
@@ -43,7 +43,9 @@ describe('RecentList', () => {
     );
 
     fireEvent.press(getByTestId(`recent-entry-${e.id}`));
-    expect(onEntryPress).toHaveBeenCalledWith(e);
+    await waitFor(() => {
+      expect(onEntryPress).toHaveBeenCalledWith(e, undefined);
+    });
   });
 
   it('shows emptyHint when visible and entries are empty', () => {

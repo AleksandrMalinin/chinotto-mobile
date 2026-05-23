@@ -4,10 +4,20 @@ jest.mock('react-native-gesture-handler', () => {
   const React = require('react');
   const { View, ScrollView } = require('react-native');
   const Swipeable = ({ children }) => children;
+  const PanGestureHandler = ({ children }) => children;
   return {
     GestureHandlerRootView: View,
+    PanGestureHandler,
     Swipeable,
     ScrollView,
+    State: {
+      UNDETERMINED: 0,
+      FAILED: 1,
+      BEGAN: 2,
+      CANCELLED: 3,
+      ACTIVE: 4,
+      END: 5,
+    },
   };
 });
 
