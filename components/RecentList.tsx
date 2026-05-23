@@ -91,6 +91,8 @@ export type RecentListProps = {
   streamScrollViewRef?: RefObject<View | null>;
   /** Top-visible stream row (viewport focus) — for temporal month scrubber. */
   onActiveStreamEntryChange?: (entry: Entry | null) => void;
+  /** Reserve trailing space so temporal month rack does not cover row timestamps. */
+  streamTrailingInset?: number;
   /** When set, report scroll content Y for this entry (temporal month jump). */
   scrollToEntryId?: string | null;
   onScrollToEntryOffset?: (contentOffsetY: number) => void;
@@ -175,6 +177,7 @@ type StreamRowProps = {
   streamFocusReduceMotion?: boolean;
   /** Matches `CaptureScreen` scroll `paddingHorizontal` so rows can full-bleed under press/trace. */
   streamGutter: number;
+  streamTrailingInset?: number;
   onEntryPress?: (entry: Entry, anchor?: ThoughtSheetOpenAnchor) => void;
   onEntryDelete?: (entry: Entry) => void;
 };
@@ -186,6 +189,7 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
   streamFocusDelta,
   streamFocusReduceMotion = false,
   streamGutter,
+  streamTrailingInset = 0,
   onEntryPress,
   onEntryDelete,
 }: StreamRowProps) {
@@ -316,7 +320,10 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
           <View
             style={[
               styles.entryRow,
-              { paddingHorizontal: streamGutter + screenContentInnerPad },
+              {
+                paddingLeft: streamGutter + screenContentInnerPad,
+                paddingRight: streamGutter + screenContentInnerPad + streamTrailingInset,
+              },
             ]}
           >
             <Animated.Text
@@ -633,6 +640,7 @@ function RecentListInner({
   streamViewportFocusEnabled = false,
   streamScrollViewRef,
   onActiveStreamEntryChange,
+  streamTrailingInset = 0,
   scrollToEntryId = null,
   onScrollToEntryOffset,
   onScrollToEntryComplete,
@@ -985,7 +993,8 @@ function RecentListInner({
                 style={[
                   styles.sectionLabel,
                   {
-                    paddingHorizontal: streamGutter,
+                    paddingLeft: streamGutter,
+                    paddingRight: streamGutter + streamTrailingInset,
                     color: colors.sectionFg,
                     fontFamily: meta.fontFamily,
                     fontSize: meta.fontSize,
@@ -1021,6 +1030,7 @@ function RecentListInner({
               streamFocusDelta={streamFocusDelta}
               streamFocusReduceMotion={reduceMotion}
               streamGutter={streamGutter}
+              streamTrailingInset={streamTrailingInset}
               onEntryPress={onEntryPress}
               onEntryDelete={onEntryDelete}
             />

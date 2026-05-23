@@ -6,22 +6,25 @@ import {
   LayoutChangeEvent,
   NativeScrollEvent,
   NativeSyntheticEvent,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-
 import {
+  TEMPORAL_MONTH_RACK_CHROME_WIDTH,
   TEMPORAL_MONTH_RACK_FADE_MS,
   TEMPORAL_MONTH_RACK_ROW_HEIGHT,
 } from '../../constants/temporalNavigation';
 import { fonts, useAppTheme } from '../../theme';
 import type { MonthKey, MonthSummary } from '../../types/temporal';
-import { formatMonthScrubberLabel } from '../../utils/streamMonthIndex';
+import {
+  formatMonthRackLabel,
+  formatMonthRackYearLabel,
+  formatMonthScrubberLabel,
+  yearFromMonthKey,
+} from '../../utils/streamMonthIndex';
 import {
   findMonthIndex,
   monthRackIndexFromScrollOffset,
@@ -30,13 +33,13 @@ import {
 } from '../../utils/monthRack';
 
 const FADE_EASING = Easing.out(Easing.cubic);
+const YEAR_HEADER_HEIGHT = 16;
 
 export type TemporalMonthRackProps = {
   months: readonly MonthSummary[];
   /** Month derived from stream scroll (when user is not scrubbing the rack). */
   streamMonthKey: MonthKey;
   visible: boolean;
-  referenceMonthKey: MonthKey;
   rightInset: number;
   topInset: number;
   bottomInset: number;
@@ -53,7 +56,6 @@ export function TemporalMonthRack({
   months,
   streamMonthKey,
   visible,
-  referenceMonthKey,
   rightInset,
   topInset,
   bottomInset,
@@ -69,15 +71,19 @@ export function TemporalMonthRack({
   const scrubbingRef = useRef(false);
   const programmaticScrollRef = useRef(false);
   const lastHapticIndexRef = useRef(-1);
-  const [rackHeight, setRackHeight] = useState(0);
+  const [scrollAreaHeight, setScrollAreaHeight] = useState(0);
   const [scrollOffsetY, setScrollOffsetY] = useState(0);
   const [reduceMotion, setReduceMotion] = useState(false);
+  const yearOpacity = useRef(new Animated.Value(1)).current;
+  const displayedYearRef = useRef<number | null>(null);
 
   const monthKeys = useMemo(() => months.map((m) => m.monthKey), [months]);
-  const centerPadding = Math.max(0, (rackHeight - TEMPORAL_MONTH_RACK_ROW_HEIGHT) / 2);
+  const centerPadding = Math.max(0, (scrollAreaHeight - TEMPORAL_MONTH_RACK_ROW_HEIGHT) / 2);
 
   const activeIndex = monthRackIndexFromScrollOffset(scrollOffsetY, monthKeys.length);
   const activeMonthKey = monthKeys[activeIndex] ?? streamMonthKey;
+  const activeYear = yearFromMonthKey(activeMonthKey);
+  const yearLabel = formatMonthRackYearLabel(activeMonthKey);
 
   const syncScrollToMonth = useCallback(
     (monthKey: MonthKey, animated: boolean) => {
@@ -122,9 +128,27 @@ export function TemporalMonthRack({
     syncScrollToMonth(streamMonthKey, !reduceMotion);
   }, [streamMonthKey, monthKeys, syncScrollToMonth, reduceMotion]);
 
-  const onRackLayout = useCallback((e: LayoutChangeEvent) => {
-    setRackHeight(e.nativeEvent.layout.height);
+  const onScrollAreaLayout = useCallback((e: LayoutChangeEvent) => {
+    setScrollAreaHeight(e.nativeEvent.layout.height);
   }, []);
+
+  useEffect(() => {
+    if (displayedYearRef.current === activeYear) {
+      return;
+    }
+    displayedYearRef.current = activeYear;
+    if (reduceMotion) {
+      yearOpacity.setValue(1);
+      return;
+    }
+    yearOpacity.setValue(0.35);
+    Animated.timing(yearOpacity, {
+      toValue: 1,
+      duration: 180,
+      easing: FADE_EASING,
+      useNativeDriver: true,
+    }).start();
+  }, [activeYear, reduceMotion, yearOpacity]);
 
   const fireBoundaryHaptic = useCallback(
     (index: number) => {
@@ -183,13 +207,6 @@ export function TemporalMonthRack({
     }
   }, [commitActiveMonth, setScrubbing]);
 
-  const surface = t.sunlightMode
-    ? 'rgba(255, 255, 255, 0.55)'
-    : t.isDark
-      ? 'rgba(22, 24, 34, 0.52)'
-      : 'rgba(255, 255, 255, 0.62)';
-  const fadeColor = t.isDark ? 'rgba(12, 13, 18, 0)' : 'rgba(248, 249, 252, 0)';
-
   if (monthKeys.length === 0) {
     return null;
   }
@@ -204,7 +221,27 @@ export function TemporalMonthRack({
         style={[styles.rackWrap, { opacity: hostOpacity }]}
         pointerEvents={visible ? 'auto' : 'none'}
       >
-        <View style={[styles.rail, { backgroundColor: surface }]} onLayout={onRackLayout}>
+        <View style={styles.rail}>
+          <Animated.View style={[styles.yearHeader, { opacity: yearOpacity }]}>
+            <Text
+              testID="temporal-month-rack-year"
+              accessibilityRole="text"
+              style={[
+                styles.yearText,
+                {
+                  fontFamily: fonts.regular,
+                  fontSize: 9,
+                  color: t.colors.muted,
+                  letterSpacing: 0.35,
+                  opacity: 0.88,
+                },
+              ]}
+              numberOfLines={1}
+            >
+              {yearLabel}
+            </Text>
+          </Animated.View>
+          <View style={styles.scrollArea} onLayout={onScrollAreaLayout}>
           <ScrollView
             ref={scrollRef}
             testID="temporal-month-rack-scroll"
@@ -224,14 +261,15 @@ export function TemporalMonthRack({
             {months.map((month, index) => {
               const delta = index - activeIndex;
               const visual = monthRackRowVisual(delta, reduceMotion);
-              const label = formatMonthScrubberLabel(month.monthKey, referenceMonthKey);
+              const label = formatMonthRackLabel(month.monthKey);
+              const accessibilityLabel = formatMonthScrubberLabel(month.monthKey, month.monthKey);
               const isCenter = delta === 0;
               return (
                 <Pressable
                   key={month.monthKey}
                   testID={isCenter ? 'temporal-month-rack-active' : `temporal-month-rack-row-${month.monthKey}`}
                   accessibilityRole={isCenter ? 'button' : 'text'}
-                  accessibilityLabel={label}
+                  accessibilityLabel={accessibilityLabel}
                   accessibilityHint={isCenter ? 'Opens timeline of months' : undefined}
                   disabled={!isCenter}
                   onPress={isCenter ? onActiveMonthPress : undefined}
@@ -249,7 +287,7 @@ export function TemporalMonthRack({
                       styles.rowText,
                       {
                         fontFamily: fonts.regular,
-                        fontSize: isCenter ? 13 : 12,
+                        fontSize: isCenter ? 10 : 9,
                         color: t.colors.metaFg,
                         fontWeight: isCenter ? '500' : '400',
                       },
@@ -262,16 +300,7 @@ export function TemporalMonthRack({
               );
             })}
           </ScrollView>
-          <LinearGradient
-            pointerEvents="none"
-            colors={[surface, fadeColor]}
-            style={styles.fadeTop}
-          />
-          <LinearGradient
-            pointerEvents="none"
-            colors={[fadeColor, surface]}
-            style={styles.fadeBottom}
-          />
+          </View>
         </View>
       </Animated.View>
     </View>
@@ -282,42 +311,38 @@ const styles = StyleSheet.create({
   host: {
     position: 'absolute',
     zIndex: 3,
-    width: 76,
+    width: TEMPORAL_MONTH_RACK_CHROME_WIDTH,
     justifyContent: 'center',
   },
   rackWrap: {
     flex: 1,
-    maxHeight: 260,
+    maxHeight: 220,
     justifyContent: 'center',
   },
   rail: {
     flex: 1,
-    borderRadius: 14,
-    overflow: 'hidden',
-    borderWidth: Platform.OS === 'ios' ? StyleSheet.hairlineWidth : 1,
-    borderColor: 'rgba(128, 138, 188, 0.12)',
+    backgroundColor: 'transparent',
+  },
+  yearHeader: {
+    height: YEAR_HEADER_HEIGHT,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    paddingRight: 2,
+  },
+  yearText: {
+    textAlign: 'right',
+  },
+  scrollArea: {
+    flex: 1,
   },
   row: {
     alignItems: 'flex-end',
     justifyContent: 'center',
-    paddingRight: 10,
+    paddingRight: 2,
+    paddingLeft: 4,
   },
   rowText: {
-    letterSpacing: 0.15,
+    letterSpacing: 0.12,
     textAlign: 'right',
-  },
-  fadeTop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 22,
-  },
-  fadeBottom: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 22,
   },
 });

@@ -33,6 +33,7 @@ import { ChinottoLogo, chinottoLogoLeadingOutset } from '../components/ChinottoL
 import { EnableSyncModal } from '../components/EnableSyncModal';
 import { EntryThoughtSheet } from '../components/EntryThoughtSheet';
 import { RecentList } from '../components/RecentList';
+import { TemporalMapSheet } from '../components/temporal/TemporalMapSheet';
 import { TemporalMonthRack } from '../components/temporal/TemporalMonthRack';
 import type { ThoughtSheetOpenAnchor } from '../components/thoughtSheet/detents';
 import { openAfterKeyboardHidden } from '../components/thoughtSheet/openAfterKeyboardHidden';
@@ -59,6 +60,7 @@ import { isDemoStreamMode } from '../src/features/demoStreamMode';
 import {
   TEMPORAL_NAV_ENABLED,
   TEMPORAL_NAV_SCRUBBER_IDLE_MS,
+  TEMPORAL_MONTH_RACK_STREAM_INSET,
 } from '../constants/temporalNavigation';
 import {
   clearFirstLaunchEmptyCaptureRevealDone,
@@ -269,6 +271,7 @@ export function CaptureScreen({
   const [streamActiveEntry, setStreamActiveEntry] = useState<Entry | null>(null);
   const [monthSummaries, setMonthSummaries] = useState<MonthSummary[]>([]);
   const [temporalRackScrubbing, setTemporalRackScrubbing] = useState(false);
+  const [temporalMapVisible, setTemporalMapVisible] = useState(false);
   const [scrollToEntryId, setScrollToEntryId] = useState<string | null>(null);
   const streamScrollViewRef = useRef<ComponentRef<typeof ScrollView>>(null);
   const streamScrollIdleGenRef = useRef(0);
@@ -534,6 +537,12 @@ export function CaptureScreen({
   useEffect(() => {
     void syncRecentThoughtsToWidget(entries);
   }, [entries]);
+
+  useEffect(() => {
+    if (searchTrimmed.length > 0) {
+      setTemporalMapVisible(false);
+    }
+  }, [searchTrimmed]);
 
   /** Empty stream — nothing to recall; clear search so UI never offers find-in-stream alone. */
   useEffect(() => {
@@ -1240,24 +1249,12 @@ export function CaptureScreen({
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   }, [hapticsEnabled]);
 
-  const onTemporalActiveMonthPress = useCallback(() => {
-    playTemporalBoundaryHaptic();
-  }, [playTemporalBoundaryHaptic]);
-
-  const onScrollToEntryOffset = useCallback((contentOffsetY: number) => {
-    streamScrollViewRef.current?.scrollTo({
-      y: Math.max(0, contentOffsetY - 8),
-      animated: true,
-    });
-  }, []);
-
-  const onScrollToEntryComplete = useCallback(() => {
-    setScrollToEntryId(null);
-  }, []);
-
-  const onTemporalMonthCommitted = useCallback(
-    (monthKey: MonthKey) => {
-      if (demoStreamMode || monthKey === visibleMonthKey) {
+  const jumpToMonth = useCallback(
+    (monthKey: MonthKey, options?: { evenIfCurrent?: boolean }) => {
+      if (demoStreamMode) {
+        return;
+      }
+      if (!options?.evenIfCurrent && monthKey === visibleMonthKey) {
         return;
       }
       void (async () => {
@@ -1279,6 +1276,39 @@ export function CaptureScreen({
       })();
     },
     [demoStreamMode, onScheduleStreamHighlight, visibleMonthKey],
+  );
+
+  const onTemporalActiveMonthPress = useCallback(() => {
+    playTemporalBoundaryHaptic();
+    setTemporalMapVisible(true);
+    void getMonthSummaries()
+      .then(setMonthSummaries)
+      .catch(() => {});
+  }, [playTemporalBoundaryHaptic]);
+
+  const onTemporalMapSelectMonth = useCallback(
+    (monthKey: MonthKey) => {
+      jumpToMonth(monthKey, { evenIfCurrent: true });
+    },
+    [jumpToMonth],
+  );
+
+  const onScrollToEntryOffset = useCallback((contentOffsetY: number) => {
+    streamScrollViewRef.current?.scrollTo({
+      y: Math.max(0, contentOffsetY - 8),
+      animated: true,
+    });
+  }, []);
+
+  const onScrollToEntryComplete = useCallback(() => {
+    setScrollToEntryId(null);
+  }, []);
+
+  const onTemporalMonthCommitted = useCallback(
+    (monthKey: MonthKey) => {
+      jumpToMonth(monthKey);
+    },
+    [jumpToMonth],
   );
 
   const showCaptureSyncHeader = Platform.OS === 'ios' && isFirebaseSyncConfigured();
@@ -1496,6 +1526,7 @@ export function CaptureScreen({
               streamViewportFocusEnabled={
                 searchTrimmed.length > 0 ? searchResults.length > 0 : streamDisplayEntries.length > 0
               }
+              streamTrailingInset={showTemporalScrubber ? TEMPORAL_MONTH_RACK_STREAM_INSET : 0}
               highlightEntryId={searchTrimmed.length > 0 ? null : streamHighlightEntryId}
               emptyHint={
                 searchTrimmed.length > 0
@@ -1529,8 +1560,7 @@ export function CaptureScreen({
                 months={monthSummaries}
                 streamMonthKey={visibleMonthKey}
                 visible={showTemporalScrubber}
-                referenceMonthKey={referenceMonthKey}
-                rightInset={6}
+                rightInset={2}
                 topInset={temporalRackTop}
                 bottomInset={temporalRackBottom}
                 onScrubbingChange={setTemporalRackScrubbing}
@@ -1687,6 +1717,14 @@ export function CaptureScreen({
           setReadEntryAnchor(null);
         }}
         onEntryUpdated={onReadEntryUpdated}
+        hapticsEnabled={hapticsEnabled}
+      />
+      <TemporalMapSheet
+        visible={temporalMapVisible}
+        months={monthSummaries}
+        highlightedMonthKey={visibleMonthKey}
+        onClose={() => setTemporalMapVisible(false)}
+        onSelectMonth={onTemporalMapSelectMonth}
         hapticsEnabled={hapticsEnabled}
       />
     </View>

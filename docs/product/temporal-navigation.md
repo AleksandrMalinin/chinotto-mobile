@@ -86,7 +86,7 @@ Same month label in both places. Scrubber is **velocity-aware** and **non-blocki
 |-------|-------------|---------------|
 | **A** | Product doc, `monthKey` utils, `getMonthSummaries` / `getNewestEntryInMonth` SQL | Tests green; query fast on device |
 | **B** | Trailing **month rack** (vertical snap carousel at screen edge) | Done — dev menu toggle; hidden when search |
-| **C** | Temporal map sheet + jump-to-month | Lands on correct month; empty months OK |
+| **C** | Temporal map sheet + jump-to-month | Done — rack tap opens map; month row jumps stream |
 | **D** | Scrub gesture + haptics | No conflict with swipe-delete |
 | **E** | Activity wash + motion polish | Still calm; feature flag / RC kill switch |
 
@@ -143,3 +143,4 @@ hooks/useTemporalNavigation.ts
 | 2026-05-24 | Initial product plan; Phase A foundation on `feat/temporal-navigation`. |
 | 2026-05-24 | Phase B passive scrubber + dev menu toggle (`Temporal scrubber on/off`). |
 | 2026-05-24 | Month rack carousel at trailing edge (`TemporalMonthRack`) replaces single-month pill. |
+| 2026-05-24 | Phase C `TemporalMapSheet` — years + months list, activity bar, jump on select. |

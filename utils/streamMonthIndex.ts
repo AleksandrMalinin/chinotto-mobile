@@ -53,9 +53,20 @@ export function formatMonthScrubberLabel(
   return date.toLocaleDateString(locale, { month: 'long' });
 }
 
-/** Quiet year header for temporal map sheet. */
+/** Compact rack row — short month only (year lives in the rack header). */
+export function formatMonthRackLabel(monthKey: MonthKey, locale?: string): string {
+  const { year, month } = parseMonthKey(monthKey);
+  return new Date(year, month - 1, 1).toLocaleDateString(locale, { month: 'short' });
+}
+
+/** Quiet year header for temporal map sheet and rack chrome. */
 export function formatTemporalYearLabel(year: number, locale?: string): string {
   return new Date(year, 0, 1).toLocaleDateString(locale, { year: 'numeric' });
+}
+
+/** Year pinned above the month rack; tracks the centered month while scrubbing. */
+export function formatMonthRackYearLabel(monthKey: MonthKey, locale?: string): string {
+  return formatTemporalYearLabel(yearFromMonthKey(monthKey), locale);
 }
 
 /**

@@ -1,6 +1,8 @@
 import type { Entry } from '../../types/entry';
 import {
   buildMonthAnchorsFromEntries,
+  formatMonthRackLabel,
+  formatMonthRackYearLabel,
   formatMonthScrubberLabel,
   formatMonthThoughtCount,
   monthActivityRatio,
@@ -29,6 +31,16 @@ describe('streamMonthIndex', () => {
   it('formatMonthScrubberLabel includes year when crossing years', () => {
     const label = formatMonthScrubberLabel('2025-12', '2026-05', 'en-US');
     expect(label).toMatch(/2025/);
+  });
+
+  it('formatMonthRackLabel uses short month only', () => {
+    const label = formatMonthRackLabel('2026-03', 'en-US');
+    expect(label).toMatch(/^Mar/);
+    expect(label).not.toMatch(/2026/);
+  });
+
+  it('formatMonthRackYearLabel follows active month key', () => {
+    expect(formatMonthRackYearLabel('2025-12', 'en-US')).toMatch(/2025/);
   });
 
   it('formatMonthThoughtCount uses calm copy', () => {

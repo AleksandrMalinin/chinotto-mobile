@@ -14,7 +14,13 @@ export const TEMPORAL_NAV_SCROLL_VELOCITY_PEEK = 80;
 export const TEMPORAL_NAV_SCRUBBER_IDLE_MS = 1200;
 
 /** Vertical snap stride for the month rack (trailing edge). */
-export const TEMPORAL_MONTH_RACK_ROW_HEIGHT = 34;
+export const TEMPORAL_MONTH_RACK_ROW_HEIGHT = 28;
+
+/** Touch + label column at screen edge (visual is narrower than hit area). */
+export const TEMPORAL_MONTH_RACK_CHROME_WIDTH = 34;
+
+/** Extra right inset on stream rows while the rack is visible — keeps timestamps clear. */
+export const TEMPORAL_MONTH_RACK_STREAM_INSET = 30;
 
 /** Fade in/out for the whole rack chrome (ms). */
 export const TEMPORAL_MONTH_RACK_FADE_MS = 220;

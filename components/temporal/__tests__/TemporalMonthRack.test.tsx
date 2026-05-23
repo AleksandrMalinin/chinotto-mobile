@@ -20,12 +20,11 @@ const months = [
 describe('TemporalMonthRack', () => {
   it('renders month rows and active month press', () => {
     const onActiveMonthPress = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId, getByText } = render(
       <TemporalMonthRack
         months={months}
         streamMonthKey="2026-05"
         visible
-        referenceMonthKey="2026-05"
         rightInset={6}
         topInset={80}
         bottomInset={40}
@@ -34,6 +33,8 @@ describe('TemporalMonthRack', () => {
       />,
     );
 
+    expect(getByTestId('temporal-month-rack-year')).toBeTruthy();
+    expect(getByText('2026')).toBeTruthy();
     fireEvent.press(getByTestId('temporal-month-rack-active'));
     expect(onActiveMonthPress).toHaveBeenCalledTimes(1);
   });
