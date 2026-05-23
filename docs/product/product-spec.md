@@ -225,7 +225,7 @@ No additional structure.
 ## Future considerations (carefully)
 
 - Voice capture (natural extension)
-- Better recall UX
+- Better recall UX — see [`temporal-navigation.md`](temporal-navigation.md) (month scrubber + temporal map sheet; in progress)
 
 All must pass:
 

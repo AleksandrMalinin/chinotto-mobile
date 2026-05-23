@@ -12,6 +12,8 @@ import {
   getEntryById,
   getEntryCount,
   getEntriesOlderThan,
+  getMonthSummaries,
+  getNewestEntryInMonth,
   getRecentEntries,
   saveEntry,
   updateEntryText,
@@ -214,6 +216,61 @@ describe('entryRepository', () => {
       expect(getFirstAsync).toHaveBeenCalledWith(
         expect.stringMatching(/WHERE id = \?/),
         'e1'
+      );
+      expect(row?.id).toBe('e1');
+    });
+  });
+
+  describe('getMonthSummaries', () => {
+    it('aggregates by local calendar month and resolves newest entry id', async () => {
+      getAllAsync.mockResolvedValueOnce([
+        {
+          monthKey: '2026-05',
+          count: 2,
+          newestCreatedAt: '2026-05-20T12:00:00.000Z',
+        },
+      ]);
+      getFirstAsync.mockResolvedValueOnce({
+        id: 'newest-may',
+        text: 't',
+        createdAt: '2026-05-20T12:00:00.000Z',
+      });
+
+      const summaries = await getMonthSummaries();
+
+      expect(getAllAsync).toHaveBeenCalledWith(
+        expect.stringMatching(/strftime\('%Y-%m', datetime\(created_at\), 'localtime'\)/),
+      );
+      expect(summaries).toEqual([
+        {
+          monthKey: '2026-05',
+          count: 2,
+          newestCreatedAt: '2026-05-20T12:00:00.000Z',
+          newestEntryId: 'newest-may',
+        },
+      ]);
+    });
+
+    it('returns empty array when no rows', async () => {
+      getAllAsync.mockResolvedValueOnce([]);
+      await expect(getMonthSummaries()).resolves.toEqual([]);
+      expect(getFirstAsync).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getNewestEntryInMonth', () => {
+    it('queries newest in month with stable order', async () => {
+      getFirstAsync.mockResolvedValueOnce({
+        id: 'e1',
+        text: 't',
+        createdAt: '2026-04-01T00:00:00.000Z',
+      });
+
+      const row = await getNewestEntryInMonth('2026-04');
+
+      expect(getFirstAsync).toHaveBeenCalledWith(
+        expect.stringMatching(/strftime\('%Y-%m', datetime\(created_at\), 'localtime'\) = \?/),
+        '2026-04',
       );
       expect(row?.id).toBe('e1');
     });

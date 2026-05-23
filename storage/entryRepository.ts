@@ -1,6 +1,7 @@
 import { randomUUID } from 'expo-crypto';
 
 import type { Entry } from '../types/entry';
+import type { MonthKey, MonthSummary } from '../types/temporal';
 import { isFirebaseSyncConfigured } from '../sync/firebaseConfig';
 import { addFirestoreIngestSuppressionWithDb } from '../sync/ingestSuppression';
 import { insertPendingSyncItem, removePendingSyncItemsForEntry } from '../sync/syncQueue';
@@ -194,6 +195,71 @@ export async function getEntryCount(): Promise<number> {
     const db = await getDatabase();
     const row = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM entries');
     return row?.n ?? 0;
+  });
+}
+
+type MonthSummaryRow = {
+  monthKey: MonthKey;
+  count: number;
+  newestCreatedAt: string;
+};
+
+/**
+ * Per local calendar month: thought count + newest row (for temporal map / jump).
+ * Ordered newest month first.
+ */
+export async function getMonthSummaries(): Promise<MonthSummary[]> {
+  return runSerializedDb(async () => {
+    const db = await getDatabase();
+    const rows = await db.getAllAsync<MonthSummaryRow>(
+      `SELECT
+         strftime('%Y-%m', datetime(created_at), 'localtime') AS monthKey,
+         COUNT(*) AS count,
+         MAX(created_at) AS newestCreatedAt
+       FROM entries
+       GROUP BY monthKey
+       ORDER BY monthKey DESC`
+    );
+    if (rows.length === 0) {
+      return [];
+    }
+    const out: MonthSummary[] = [];
+    for (const row of rows) {
+      const newest = await db.getFirstAsync<Entry>(
+        `SELECT id, text, created_at AS createdAt
+         FROM entries
+         WHERE strftime('%Y-%m', datetime(created_at), 'localtime') = ?
+         ORDER BY created_at DESC, id DESC
+         LIMIT 1`,
+        row.monthKey
+      );
+      if (newest == null) {
+        continue;
+      }
+      out.push({
+        monthKey: row.monthKey,
+        count: row.count,
+        newestCreatedAt: row.newestCreatedAt,
+        newestEntryId: newest.id,
+      });
+    }
+    return out;
+  });
+}
+
+/** Newest thought in a local calendar month — scroll/jump anchor. */
+export async function getNewestEntryInMonth(monthKey: MonthKey): Promise<Entry | null> {
+  return runSerializedDb(async () => {
+    const db = await getDatabase();
+    const row = await db.getFirstAsync<Entry>(
+      `SELECT id, text, created_at AS createdAt
+       FROM entries
+       WHERE strftime('%Y-%m', datetime(created_at), 'localtime') = ?
+       ORDER BY created_at DESC, id DESC
+       LIMIT 1`,
+      monthKey
+    );
+    return row ?? null;
   });
 }
 
