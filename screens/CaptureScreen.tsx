@@ -31,8 +31,10 @@ import { AmbientBackground } from '../components/AmbientBackground';
 import { CaptureInput } from '../components/CaptureInput';
 import { ChinottoLogo, chinottoLogoLeadingOutset } from '../components/ChinottoLogo';
 import { EnableSyncModal } from '../components/EnableSyncModal';
-import { EntryReadSheet } from '../components/EntryReadSheet';
+import { EntryThoughtSheet } from '../components/EntryThoughtSheet';
 import { RecentList } from '../components/RecentList';
+import type { ThoughtSheetOpenAnchor } from '../components/thoughtSheet/detents';
+import { openAfterKeyboardHidden } from '../components/thoughtSheet/openAfterKeyboardHidden';
 import { SyncHeaderStatus, type SyncHeaderAuthPhase } from '../components/SyncHeaderStatus';
 import { VoiceMicButton } from '../components/VoiceCaptureControl';
 import { AppIconScreen } from './AppIconScreen';
@@ -223,6 +225,7 @@ export function CaptureScreen({
     [syncModalControlled, onSyncModalVisibleChange]
   );
   const [readEntry, setReadEntry] = useState<Entry | null>(null);
+  const [readEntryAnchor, setReadEntryAnchor] = useState<ThoughtSheetOpenAnchor | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Entry[]>([]);
   const [searchTruncated, setSearchTruncated] = useState(false);
@@ -264,6 +267,7 @@ export function CaptureScreen({
   const searchSignalLoggedRef = useRef(false);
   const inputRef = useRef<TextInput>(null);
   const searchInputRef = useRef<TextInput>(null);
+  const readEntryOpenCleanupRef = useRef<(() => void) | null>(null);
   const searchBlurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const entriesRef = useRef<Entry[]>([]);
   const hasMoreRef = useRef(true);
@@ -507,6 +511,9 @@ export function CaptureScreen({
       splashFocusPendingRef.current = true;
       return;
     }
+    if (readEntry != null) {
+      return;
+    }
     if (firstLaunchFocusTimerRef.current) {
       clearTimeout(firstLaunchFocusTimerRef.current);
       firstLaunchFocusTimerRef.current = null;
@@ -520,7 +527,36 @@ export function CaptureScreen({
       inputRef.current?.focus();
     });
     return () => cancelAnimationFrame(id);
-  }, [captureFocusNonce, allowCaptureFocus]);
+  }, [captureFocusNonce, allowCaptureFocus, readEntry]);
+
+  useEffect(() => {
+    return () => {
+      readEntryOpenCleanupRef.current?.();
+    };
+  }, []);
+
+  // Blur composer when a different entry sheet opens — never Keyboard.dismiss here;
+  // dismiss is global and would steal focus from the sheet editor after autosave rerenders.
+  useEffect(() => {
+    if (readEntry == null) {
+      return;
+    }
+    inputRef.current?.blur();
+    searchInputRef.current?.blur();
+  }, [readEntry?.id]);
+
+  const openReadEntrySheet = useCallback((entry: Entry, anchor?: ThoughtSheetOpenAnchor | null) => {
+    readEntryOpenCleanupRef.current?.();
+    readEntryOpenCleanupRef.current = null;
+    Keyboard.dismiss();
+    inputRef.current?.blur();
+    searchInputRef.current?.blur();
+    readEntryOpenCleanupRef.current = openAfterKeyboardHidden(() => {
+      readEntryOpenCleanupRef.current = null;
+      setReadEntryAnchor(anchor ?? null);
+      setReadEntry(entry);
+    });
+  }, []);
 
   useEffect(() => {
     if (!thoughtEntryRequestId || thoughtEntryRequestId === lastThoughtRequestIdRef.current) {
@@ -532,12 +568,9 @@ export function CaptureScreen({
       if (!entry) {
         return;
       }
-      setReadEntry(entry);
-      requestAnimationFrame(() => {
-        inputRef.current?.blur();
-      });
+      openReadEntrySheet(entry, null);
     })();
-  }, [thoughtEntryRequestId]);
+  }, [openReadEntrySheet, thoughtEntryRequestId]);
 
   useEffect(() => {
     if (!allowCaptureFocus) {
@@ -943,11 +976,16 @@ export function CaptureScreen({
     }
   }, [settingsRoute]);
 
-  const onStreamEntryPress = useCallback((entry: Entry) => {
+  const onStreamEntryPress = useCallback((entry: Entry, anchor?: ThoughtSheetOpenAnchor) => {
     void recordOpenedExistingThoughtForSyncHighlight().then(() => {
       setSyncHighlightTick((n) => n + 1);
     });
-    setReadEntry(entry);
+    openReadEntrySheet(entry, anchor ?? null);
+  }, [openReadEntrySheet]);
+
+  const onReadEntryUpdated = useCallback((updated: Entry) => {
+    setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
+    setSearchResults((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
   }, []);
 
   const onVoiceTranscriptPartial = useCallback((partial: string) => {
@@ -1116,7 +1154,11 @@ export function CaptureScreen({
     <View style={styles.shell}>
       <AmbientBackground />
       <SafeAreaView style={styles.safe} edges={['top', 'right', 'left']}>
-        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          enabled={readEntry == null}
+        >
           <View
             style={[
               styles.headerBar,
@@ -1194,7 +1236,9 @@ export function CaptureScreen({
                         maxHeight={composerMaxHeight}
                         placeholder="Jot a thought…"
                         placeholderTextColor={capturePlaceholderColor}
-                        autoFocus={allowCaptureFocus && !deferKeyboardForFirstLaunchReveal}
+                        autoFocus={allowCaptureFocus && !deferKeyboardForFirstLaunchReveal && readEntry == null}
+                        editable={readEntry == null}
+                        showSoftInputOnFocus={readEntry == null}
                       />
                     </View>
                     {showVoiceCapture ? (
@@ -1479,10 +1523,16 @@ export function CaptureScreen({
         bgElevated={t.colors.bgElevated}
         border={t.colors.border}
       />
-      <EntryReadSheet
+      <EntryThoughtSheet
         visible={readEntry != null}
         entry={readEntry}
-        onClose={() => setReadEntry(null)}
+        openAnchor={readEntryAnchor}
+        onClose={() => {
+          setReadEntry(null);
+          setReadEntryAnchor(null);
+        }}
+        onEntryUpdated={onReadEntryUpdated}
+        hapticsEnabled={hapticsEnabled}
       />
     </View>
   );

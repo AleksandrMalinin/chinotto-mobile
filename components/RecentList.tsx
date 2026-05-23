@@ -42,6 +42,8 @@ import {
   type StreamFocusWindowBox,
 } from '../utils/streamFocusTier';
 import { StreamFlowPanel } from './StreamFlowPanel';
+import type { ThoughtSheetOpenAnchor } from './thoughtSheet/detents';
+import { measureThoughtSheetOpenAnchor } from './thoughtSheet/measureOpenAnchor';
 
 /**
  * Time-grouped stream — section labels (`.stream-section-title`), entry rows with
@@ -58,8 +60,8 @@ export type RecentListProps = {
   emptyHint?: string;
   /** Muted line below the list (e.g. search capped at N results). */
   listFooterHint?: string;
-  /** Opens full-text read sheet (companion recall). */
-  onEntryPress?: (entry: Entry) => void;
+  /** Opens full-text read sheet (companion recall). Optional anchor for row→sheet motion. */
+  onEntryPress?: (entry: Entry, anchor?: ThoughtSheetOpenAnchor) => void;
   onEntryDelete?: (entry: Entry) => void;
   /** Row id for a brief leading-edge trace (e.g. just saved from capture or share). */
   highlightEntryId?: string | null;
@@ -167,7 +169,7 @@ type StreamRowProps = {
   streamFocusReduceMotion?: boolean;
   /** Matches `CaptureScreen` scroll `paddingHorizontal` so rows can full-bleed under press/trace. */
   streamGutter: number;
-  onEntryPress?: (entry: Entry) => void;
+  onEntryPress?: (entry: Entry, anchor?: ThoughtSheetOpenAnchor) => void;
   onEntryDelete?: (entry: Entry) => void;
 };
 
@@ -236,6 +238,8 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
     return () => anim.stop();
   }, [targetBodyOpacity, targetTimeOpacity, streamFocusReduceMotion]);
 
+  const rowRef = useRef<View>(null);
+
   const onPressIn = useCallback(() => {
     setPressed(true);
   }, []);
@@ -243,8 +247,18 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
     setPressed(false);
   }, []);
 
+  const handlePress = useCallback(() => {
+    if (onEntryPress == null) {
+      return;
+    }
+    measureThoughtSheetOpenAnchor(rowRef.current, (anchor) => {
+      onEntryPress(item, anchor);
+    });
+  }, [item, onEntryPress]);
+
   const rowContent = (
     <View
+      ref={rowRef}
       style={[
         styles.rowOuter,
         styles.rowOuterRelative,
@@ -269,7 +283,7 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
         accessibilityLabel={`${item.text}, ${formatEntryTime(item.createdAt)}`}
         accessibilityHint={
           [
-            onEntryPress != null ? 'Double tap to read full text' : null,
+            onEntryPress != null ? 'Double tap to open thought' : null,
             onEntryDelete != null ? 'Swipe left to delete' : null,
           ]
             .filter(Boolean)
@@ -286,7 +300,7 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
             : undefined
         }
         testID={`recent-entry-${item.id}`}
-        onPress={onEntryPress != null ? () => onEntryPress(item) : undefined}
+        onPress={onEntryPress != null ? handlePress : undefined}
         onPressIn={onPressIn}
         onPressOut={onPressOut}
         style={styles.pressableAboveTrace}

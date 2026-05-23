@@ -16,6 +16,8 @@ export type CaptureInputProps = {
   onBlur?: () => void;
   /** Default true; set false while a full-screen overlay (e.g. brand splash) is visible. */
   autoFocus?: boolean;
+  editable?: boolean;
+  showSoftInputOnFocus?: boolean;
 };
 
 export const CaptureInput = forwardRef<TextInput, CaptureInputProps>(
@@ -31,6 +33,8 @@ export const CaptureInput = forwardRef<TextInput, CaptureInputProps>(
       onFocus,
       onBlur,
       autoFocus = true,
+      editable = true,
+      showSoftInputOnFocus = true,
     },
     ref
   ) {
@@ -69,6 +73,8 @@ export const CaptureInput = forwardRef<TextInput, CaptureInputProps>(
         onBlur={onBlur}
         multiline
         autoFocus={autoFocus}
+        editable={editable}
+        showSoftInputOnFocus={showSoftInputOnFocus}
         autoCorrect
         autoCapitalize="sentences"
         returnKeyType="done"
