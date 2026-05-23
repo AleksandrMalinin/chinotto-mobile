@@ -33,7 +33,7 @@ import { ChinottoLogo, chinottoLogoLeadingOutset } from '../components/ChinottoL
 import { EnableSyncModal } from '../components/EnableSyncModal';
 import { EntryThoughtSheet } from '../components/EntryThoughtSheet';
 import { RecentList } from '../components/RecentList';
-import { TemporalMonthScrubber } from '../components/temporal/TemporalMonthScrubber';
+import { TemporalMonthRack } from '../components/temporal/TemporalMonthRack';
 import type { ThoughtSheetOpenAnchor } from '../components/thoughtSheet/detents';
 import { openAfterKeyboardHidden } from '../components/thoughtSheet/openAfterKeyboardHidden';
 import { SyncHeaderStatus, type SyncHeaderAuthPhase } from '../components/SyncHeaderStatus';
@@ -72,6 +72,8 @@ import {
   getEntriesOlderThan,
   getEntryById,
   getEntryCount,
+  getMonthSummaries,
+  getNewestEntryInMonth,
   getRecentEntries,
   saveEntry,
   searchEntriesForRecall,
@@ -108,7 +110,9 @@ import {
   spacing,
   useAppTheme,
 } from '../theme';
-import { formatMonthScrubberLabel, monthKeyFromIso } from '../utils/streamMonthIndex';
+import type { MonthKey, MonthSummary } from '../types/temporal';
+import { monthKeyFromIso } from '../utils/streamMonthIndex';
+import { loadStreamUntilEntryIncluded } from '../utils/temporalJump';
 import {
   isTemporalNavigationActive,
   isTemporalScrubberEligible,
@@ -263,8 +267,13 @@ export function CaptureScreen({
   const [totalEntryCount, setTotalEntryCount] = useState(0);
   const [devTemporalNavEnabled, setDevTemporalNavEnabled] = useState(false);
   const [streamActiveEntry, setStreamActiveEntry] = useState<Entry | null>(null);
+  const [monthSummaries, setMonthSummaries] = useState<MonthSummary[]>([]);
+  const [temporalRackScrubbing, setTemporalRackScrubbing] = useState(false);
+  const [scrollToEntryId, setScrollToEntryId] = useState<string | null>(null);
   const streamScrollViewRef = useRef<ComponentRef<typeof ScrollView>>(null);
   const streamScrollIdleGenRef = useRef(0);
+  const temporalRackScrubbingRef = useRef(false);
+  temporalRackScrubbingRef.current = temporalRackScrubbing;
   /** __DEV__: incremented from dev menu to re-show “Sync enabled” / desktop link sheet. */
   const [devPostSyncPreviewNonce, setDevPostSyncPreviewNonce] = useState(0);
   const stuckPollsRef = useRef(0);
@@ -508,6 +517,19 @@ export function CaptureScreen({
   useEffect(() => {
     void refreshEntries();
   }, [refreshEntries, remoteIngestVersion, externalEntriesEpoch]);
+
+  useEffect(() => {
+    if (!isTemporalNavigationActive(TEMPORAL_NAV_ENABLED, __DEV__ && devTemporalNavEnabled)) {
+      return;
+    }
+    void getMonthSummaries()
+      .then(setMonthSummaries)
+      .catch((err) => {
+        if (__DEV__) {
+          console.warn('getMonthSummaries failed', err);
+        }
+      });
+  }, [devTemporalNavEnabled, entries.length]);
 
   useEffect(() => {
     void syncRecentThoughtsToWidget(entries);
@@ -1208,14 +1230,56 @@ export function CaptureScreen({
       : streamDisplayEntries[0] != null
         ? monthKeyFromIso(streamDisplayEntries[0].createdAt)
         : referenceMonthKey;
-  const temporalScrubberLabel = formatMonthScrubberLabel(visibleMonthKey, referenceMonthKey);
-  const temporalScrubberBottom = Math.max(insets.bottom, 10) + (showWritePeekAffordance ? 52 : 12);
+  const temporalRackTop = insets.top + 72;
+  const temporalRackBottom = Math.max(insets.bottom, 10) + (showWritePeekAffordance ? 56 : 16);
 
-  const onTemporalScrubberPress = useCallback(() => {
-    if (hapticsEnabled && Platform.OS !== 'web') {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  const playTemporalBoundaryHaptic = useCallback(() => {
+    if (!hapticsEnabled || Platform.OS === 'web') {
+      return;
     }
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   }, [hapticsEnabled]);
+
+  const onTemporalActiveMonthPress = useCallback(() => {
+    playTemporalBoundaryHaptic();
+  }, [playTemporalBoundaryHaptic]);
+
+  const onScrollToEntryOffset = useCallback((contentOffsetY: number) => {
+    streamScrollViewRef.current?.scrollTo({
+      y: Math.max(0, contentOffsetY - 8),
+      animated: true,
+    });
+  }, []);
+
+  const onScrollToEntryComplete = useCallback(() => {
+    setScrollToEntryId(null);
+  }, []);
+
+  const onTemporalMonthCommitted = useCallback(
+    (monthKey: MonthKey) => {
+      if (demoStreamMode || monthKey === visibleMonthKey) {
+        return;
+      }
+      void (async () => {
+        try {
+          const anchor = await getNewestEntryInMonth(monthKey);
+          if (anchor == null) {
+            return;
+          }
+          const merged = await loadStreamUntilEntryIncluded(anchor, entriesRef.current);
+          setEntries(merged);
+          setHasMore(true);
+          setScrollToEntryId(anchor.id);
+          onScheduleStreamHighlight?.(anchor.id);
+        } catch (err) {
+          if (__DEV__) {
+            console.warn('temporal month jump failed', err);
+          }
+        }
+      })();
+    },
+    [demoStreamMode, onScheduleStreamHighlight, visibleMonthKey],
+  );
 
   const showCaptureSyncHeader = Platform.OS === 'ios' && isFirebaseSyncConfigured();
 
@@ -1447,7 +1511,12 @@ export function CaptureScreen({
               }
               onEntryPress={onStreamEntryPress}
               onEntryDelete={handleEntryDelete}
-              onActiveStreamEntryChange={searchActive ? undefined : setStreamActiveEntry}
+              onActiveStreamEntryChange={
+                searchActive || temporalRackScrubbing ? undefined : setStreamActiveEntry
+              }
+              scrollToEntryId={scrollToEntryId}
+              onScrollToEntryOffset={onScrollToEntryOffset}
+              onScrollToEntryComplete={onScrollToEntryComplete}
             />
             <Pressable
               style={[styles.bottomFill, { flexGrow: 1, minHeight: 1 }]}
@@ -1455,13 +1524,20 @@ export function CaptureScreen({
               onPress={Keyboard.dismiss}
             />
             </ScrollView>
-            {showTemporalScrubber ? (
-              <TemporalMonthScrubber
-                label={temporalScrubberLabel}
+            {temporalScrubberEligible ? (
+              <TemporalMonthRack
+                months={monthSummaries}
+                streamMonthKey={visibleMonthKey}
                 visible={showTemporalScrubber}
-                onPress={onTemporalScrubberPress}
-                rightInset={gutter}
-                bottomInset={temporalScrubberBottom}
+                referenceMonthKey={referenceMonthKey}
+                rightInset={6}
+                topInset={temporalRackTop}
+                bottomInset={temporalRackBottom}
+                onScrubbingChange={setTemporalRackScrubbing}
+                onMonthCommitted={onTemporalMonthCommitted}
+                onActiveMonthPress={onTemporalActiveMonthPress}
+                hapticsEnabled={hapticsEnabled}
+                onMonthBoundaryHaptic={playTemporalBoundaryHaptic}
               />
             ) : null}
             {showWritePeekAffordance ? (

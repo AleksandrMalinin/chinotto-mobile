@@ -65,11 +65,11 @@ Same month label in both places. Scrubber is **velocity-aware** and **non-blocki
 
 ## Interaction summary
 
-### Scrubber (passive → active)
+### Month rack (passive → scrub)
 
-- **Passive:** fade in when scrolling with meaningful velocity or below composer; fade out ~1.2s after idle.
-- **Tap:** open temporal map with current month highlighted.
-- **Long-press / drag on pill (later phase):** scrub months with light haptics at boundaries; stream seeks to month anchors.
+- **Passive:** trailing vertical rack (3+ visible months, center = active) fades in when scrolling; follows stream month when not scrubbing.
+- **Scrub:** drag rack → snap by month, light haptic per month boundary; on release → jump stream to newest thought in that month.
+- **Tap** active (center) month → temporal map sheet (phase C).
 
 ### Temporal map sheet
 
@@ -85,7 +85,7 @@ Same month label in both places. Scrubber is **velocity-aware** and **non-blocki
 | Phase | Deliverable | Ship criteria |
 |-------|-------------|---------------|
 | **A** | Product doc, `monthKey` utils, `getMonthSummaries` / `getNewestEntryInMonth` SQL | Tests green; query fast on device |
-| **B** | Passive floating month label (no scrub) | Done — dev menu toggle; hidden when search |
+| **B** | Trailing **month rack** (vertical snap carousel at screen edge) | Done — dev menu toggle; hidden when search |
 | **C** | Temporal map sheet + jump-to-month | Lands on correct month; empty months OK |
 | **D** | Scrub gesture + haptics | No conflict with swipe-delete |
 | **E** | Activity wash + motion polish | Still calm; feature flag / RC kill switch |
@@ -142,3 +142,4 @@ hooks/useTemporalNavigation.ts
 |------|------|
 | 2026-05-24 | Initial product plan; Phase A foundation on `feat/temporal-navigation`. |
 | 2026-05-24 | Phase B passive scrubber + dev menu toggle (`Temporal scrubber on/off`). |
+| 2026-05-24 | Month rack carousel at trailing edge (`TemporalMonthRack`) replaces single-month pill. |

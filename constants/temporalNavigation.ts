@@ -12,3 +12,9 @@ export const TEMPORAL_NAV_SCROLL_VELOCITY_PEEK = 80;
 
 /** Hide scrubber after idle (ms). */
 export const TEMPORAL_NAV_SCRUBBER_IDLE_MS = 1200;
+
+/** Vertical snap stride for the month rack (trailing edge). */
+export const TEMPORAL_MONTH_RACK_ROW_HEIGHT = 34;
+
+/** Fade in/out for the whole rack chrome (ms). */
+export const TEMPORAL_MONTH_RACK_FADE_MS = 220;

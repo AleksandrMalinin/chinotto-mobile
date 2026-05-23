@@ -91,6 +91,10 @@ export type RecentListProps = {
   streamScrollViewRef?: RefObject<View | null>;
   /** Top-visible stream row (viewport focus) — for temporal month scrubber. */
   onActiveStreamEntryChange?: (entry: Entry | null) => void;
+  /** When set, report scroll content Y for this entry (temporal month jump). */
+  scrollToEntryId?: string | null;
+  onScrollToEntryOffset?: (contentOffsetY: number) => void;
+  onScrollToEntryComplete?: () => void;
 };
 
 const DELETE_ACTION_WIDTH = 76;
@@ -629,6 +633,9 @@ function RecentListInner({
   streamViewportFocusEnabled = false,
   streamScrollViewRef,
   onActiveStreamEntryChange,
+  scrollToEntryId = null,
+  onScrollToEntryOffset,
+  onScrollToEntryComplete,
 }: RecentListProps) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const streamGutter = screenContentGutter(windowWidth);
@@ -835,6 +842,41 @@ function RecentListInner({
     const entry = entries.find((e) => e.id === id) ?? null;
     onActiveStreamEntryChange(entry);
   }, [activeFlatIndex, orderedIds, entries, onActiveStreamEntryChange]);
+
+  useEffect(() => {
+    if (scrollToEntryId == null || onScrollToEntryOffset == null) {
+      return;
+    }
+    let cancelled = false;
+    let attempts = 0;
+    const tryMeasure = () => {
+      if (cancelled) {
+        return;
+      }
+      const frame = framesRef.current.get(scrollToEntryId);
+      if (frame != null) {
+        onScrollToEntryOffset(listOffsetY + listPaddingTop + frame.top);
+        onScrollToEntryComplete?.();
+        return;
+      }
+      attempts += 1;
+      if (attempts < 12) {
+        requestAnimationFrame(tryMeasure);
+      }
+    };
+    tryMeasure();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    scrollToEntryId,
+    entries,
+    layoutVersion,
+    listOffsetY,
+    listPaddingTop,
+    onScrollToEntryOffset,
+    onScrollToEntryComplete,
+  ]);
 
   if (!visible) {
     return null;
