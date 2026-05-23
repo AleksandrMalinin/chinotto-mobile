@@ -64,7 +64,7 @@ describe('EntryThoughtSheet', () => {
     });
   });
 
-  it('calls onClose when dismiss backdrop is pressed', async () => {
+  it('calls onClose when dismiss backdrop is pressed in compact mode', async () => {
     const onClose = jest.fn();
     const { getByLabelText } = render(
       <SafeAreaProvider initialMetrics={safeAreaMetrics}>
@@ -72,6 +72,23 @@ describe('EntryThoughtSheet', () => {
       </SafeAreaProvider>
     );
 
+    fireEvent.press(getByLabelText('Dismiss'));
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('calls onClose when dismiss backdrop is pressed while expanded', async () => {
+    const onClose = jest.fn();
+    const { getByTestId, getByLabelText } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <EntryThoughtSheet visible entry={sampleEntry} onClose={onClose} />
+      </SafeAreaProvider>
+    );
+
+    const body = getByTestId('entry-read-body');
+    fireEvent.press(body);
+    fireEvent.press(body);
     fireEvent.press(getByLabelText('Dismiss'));
     await waitFor(() => {
       expect(onClose).toHaveBeenCalledTimes(1);

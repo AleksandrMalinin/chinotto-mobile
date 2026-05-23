@@ -2,6 +2,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
   Keyboard,
   Linking,
   Modal,
@@ -28,6 +29,10 @@ import {
   type ThoughtSheetOpenAnchor,
 } from './thoughtSheet/detents';
 import { useSheetPanActions } from './thoughtSheet/useSheetPanActions';
+import { useSheetEnterAnimation } from './thoughtSheet/useSheetEnterAnimation';
+import {
+  thoughtSheetBackdropA11yLabel,
+} from './thoughtSheet/backdropAction';
 
 /**
  * SHEET SHELL LAYOUT (do not break — see .cursor/rules/entry-thought-sheet-layout.mdc):
@@ -81,6 +86,12 @@ export function EntryThoughtSheet({
   const scrollMaxHeight = thoughtSheetCompactScrollMaxHeight(windowHeight, comfortableReading);
   const expandedEditorMaxHeight = Math.min(expandedHeight * 0.72, 560);
   const showEditor = isExpanded && isEditing;
+
+  const { scrimOpacity, contentOpacity, contentTranslateY } = useSheetEnterAnimation(
+    visible,
+    entry?.id
+  );
+  const scrimColor = isExpanded ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.48)';
 
   const httpUrls = useMemo(
     () => extractHttpUrlsFromText(isExpanded ? draft : (entry?.text ?? '')),
@@ -220,6 +231,12 @@ export function EntryThoughtSheet({
     }
   }, [draft, entry]);
 
+  const handleBackdropPress = useCallback(() => {
+    handleClose();
+  }, [handleClose]);
+
+  const backdropA11yLabel = thoughtSheetBackdropA11yLabel();
+
   const handleBodyPress = useCallback(() => {
     if (phaseRef.current !== 'compact') {
       return;
@@ -336,22 +353,28 @@ export function EntryThoughtSheet({
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType="none"
       presentationStyle={Platform.OS === 'ios' ? 'overFullScreen' : 'fullScreen'}
-      onRequestClose={handleClose}
+      onRequestClose={handleBackdropPress}
       statusBarTranslucent
     >
       <GestureHandlerRootView style={styles.rootGestureHost}>
-        <View
-          testID="entry-read-sheet"
-          style={[styles.root, { backgroundColor: isExpanded ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.48)' }]}
-          accessibilityViewIsModal
-        >
+        <View testID="entry-read-sheet" style={styles.root} accessibilityViewIsModal>
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.scrimLayer,
+              {
+                backgroundColor: scrimColor,
+                opacity: scrimOpacity,
+              },
+            ]}
+          />
           <Pressable
             style={styles.dismissRegion}
-            onPress={isExpanded ? collapseSheet : handleClose}
+            onPress={handleBackdropPress}
             accessibilityRole="button"
-            accessibilityLabel={isExpanded ? 'Collapse thought sheet' : 'Dismiss'}
+            accessibilityLabel={backdropA11yLabel}
           />
 
           <View
@@ -368,6 +391,12 @@ export function EntryThoughtSheet({
               },
             ]}
           >
+            <Animated.View
+              style={{
+                opacity: contentOpacity,
+                transform: [{ translateY: contentTranslateY }],
+              }}
+            >
               <PanGestureHandler
                 onHandlerStateChange={onHandlerStateChange}
                 activeOffsetY={[-12, 12]}
@@ -516,6 +545,7 @@ export function EntryThoughtSheet({
                   </Pressable>
                 </ScrollView>
               )}
+            </Animated.View>
           </View>
         </View>
       </GestureHandlerRootView>
@@ -529,6 +559,9 @@ const styles = StyleSheet.create({
   },
   root: {
     flex: 1,
+  },
+  scrimLayer: {
+    ...StyleSheet.absoluteFillObject,
   },
   dismissRegion: {
     flex: 1,

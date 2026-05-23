@@ -38,11 +38,13 @@ Sheet is pinned to the **bottom by flex column** (dismiss grows, sheet is last s
 - `KeyboardAvoidingView` only inside CaptureScreen — **never** inside this Modal
 - Keyboard inset: adjust **inner** editor `paddingBottom` via `keyboardWillShow` listeners — not the shell
 - Pan gestures: detection only on grabber strip; no drag translation on shell
+- **Enter animation:** `Modal animationType="none"`; animate scrim opacity + **inner** content opacity/translateY only — never the sheet shell (`testID="entry-thought-sheet"`)
 
 ## Keyboard / edit mode
 
 - TextInput lives **inside** sheet, **outside** ScrollView when expanded
 - Never call `Keyboard.dismiss()` on sheet open or during typing
+- **Backdrop:** tap outside always closes the sheet (save-on-close if draft changed)
 - **Save on dismiss/collapse only** — no debounced autosave while typing (avoids parent re-renders and sync churn)
 - `onEntryUpdated`: update stream lists only — do **not** replace `readEntry` while sheet is open
 
