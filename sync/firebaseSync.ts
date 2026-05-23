@@ -1,4 +1,5 @@
 import {
+  deleteField,
   doc,
   getFirestore,
   initializeFirestore,
@@ -41,7 +42,8 @@ export function getOrInitFirestore(): Firestore {
 }
 
 /**
- * Idempotent Firestore write: `users/{uid}/entries/{entry.id}` with `{ text, createdAt }`.
+ * Idempotent Firestore upsert: `users/{uid}/entries/{entry.id}` with merge.
+ * Sends `text`, `createdAt`, `updatedAt` (parity with desktop Phase 2+); clears `deletedAt` when reviving.
  * Requires a signed-in Firebase user (Sign in with Apple for stable sync). Queue stays pending until then.
  * Retries are safe if remote dedupes by document id (see docs/sync/sync.md).
  */
@@ -59,10 +61,17 @@ export async function firebasePushEntry(entry: Entry): Promise<void> {
   }
   const uid = user.uid;
   const db = getOrInitFirestore();
-  await setDoc(doc(db, 'users', uid, 'entries', entry.id), {
-    text: entry.text,
-    createdAt: entry.createdAt,
-  });
+  const ref = doc(db, 'users', uid, 'entries', entry.id);
+  await setDoc(
+    ref,
+    {
+      text: entry.text,
+      createdAt: entry.createdAt,
+      updatedAt: serverTimestamp(),
+      deletedAt: deleteField(),
+    },
+    { merge: true }
+  );
 }
 
 /**

@@ -8,7 +8,7 @@
 |--------|--------|---------|
 | **Phase 1** | Shipped (v1) | Append-only create sync; mobile push; desktop ingest by `id` dedupe. No delete over the wire. |
 | **Phase 2** | Desktop **shipped**; mobile **shipped** (this repo) | Tombstone `deletedAt`, suppression bridge, tombstone outbox flush, dual `onSnapshot` (ingest + tombstones), swipe/long-press delete. Normative spec **§8**. **Desktop ops / IPC:** `chinotto-app/docs/sync.md`. |
-| **Phase 2+ (text)** | Desktop **shipped** (`chinotto-app`); mobile **shipped** (this repo) | Same Firestore doc: desktop **`setDoc` merge** updates **`text`** + **`updatedAt`** after local save; mobile ingest **inserts new ids** and **`UPDATE` local `text`** when the id already exists (read-only capture on mobile; no conflict engine). **§8.7**. |
+| **Phase 2+ (text)** | Desktop **shipped** (`chinotto-app`); mobile **shipped** (this repo) | Same Firestore doc: **`text`** merges from **either** client. Desktop: **`setDoc` + `merge`** + **`updatedAt`**. Mobile: **`updateEntryText`** (in-sheet continuation, save-on-close) → same sync queue → **`firebasePushEntry`**; ingest **`UPDATE`s local `text`** when id exists. No conflict engine — last write wins in Firestore. **§8.7**. |
 
 **Cross-repo docs:** **[Chinotto `docs/sync.md`](https://github.com/AleksandrMalinin/chinotto/blob/main/docs/sync.md)** — desktop architecture, IPC, tombstone/outbox behavior, tests, troubleshooting, and changelog. **This file** (`chinotto-mobile/docs/sync/sync.md`) is the normative **wire** contract (payloads, Firestore layout, **§8**); keep the two aligned when either changes.
 
@@ -25,7 +25,7 @@ Mobile and desktop MUST use the same shape for sync payloads.
 | `createdAt` | `string` | ISO 8601 UTC (e.g. `2025-03-22T12:00:00.000Z`). |
 | `updatedAt` | Firestore **`Timestamp`** (optional on doc until first desktop save after Phase 2+) | Server time of last **`text`** merge from a writer; used for future LWW; mobile ingest does not persist it in SQLite v1. |
 
-**Invariants:** **`id`** immutable. **`createdAt`** immutable in app logic (writers must not change it on edit). **`text`** may change on the same doc when **Phase 2+** desktop (or future clients) merge updates — §8.7. Globally unique **`id`** for dedupe and ordering tie-break. **Phase 2** adds remote tombstones and delete ops — §8.
+**Invariants:** **`id`** immutable. **`createdAt`** immutable in app logic (writers must not change it on edit). **`text`** may change on the same doc when **Phase 2+** desktop **or mobile** merge updates — §8.7. Globally unique **`id`** for dedupe and ordering tie-break. **Phase 2** adds remote tombstones and delete ops — §8.
 
 ### Source of truth
 
@@ -86,7 +86,7 @@ users/{firebaseUid}/entries/{entryId}
 - **`entryId`** = `Entry.id`.  
 - **Phase 1 document fields:** `text` (string), `createdAt` (Firestore **`Timestamp`** or ISO string from clients; normalize before SQLite).  
 - **Phase 2:** optional tombstone field **`deletedAt`** — see §8 (type `Timestamp`, not ISO string in Firestore).  
-- **Phase 2+ (text):** optional **`updatedAt`** — Firestore **`Timestamp`**, set with **`serverTimestamp()`** on each desktop merge that updates **`text`** (and clears `deletedAt` when reviving). Mobile listeners treat doc changes like creates for ingest rows; repository applies **insert or text update** per §8.7.  
+- **Phase 2+ (text):** optional **`updatedAt`** — Firestore **`Timestamp`**, set with **`serverTimestamp()`** on each text merge from desktop **or mobile** (mobile clears **`deletedAt`** on push when reviving). Mobile ingest does not persist **`updatedAt`** in SQLite v1. Listeners on all clients treat doc changes like creates for ingest rows; repository applies **insert or text update** per §8.7.  
 - **Creates (Phase 1):** `setDoc` — retries are safe (same doc id and payload). **Deletes (Phase 2):** `setDoc` with **`{ merge: true }`** and `deletedAt: serverTimestamp()` (preferred over `updateDoc` alone so missing remote docs still tombstone). Idempotent if already tombstoned.
 
 **Cross-device sync access (desktop gating):**
@@ -123,7 +123,7 @@ service cloud.firestore {
 - `orderBy('createdAt')` on `entries` (ingest listener) — often auto-created; add a composite if the console requests it (e.g. mixed `createdAt` types).
 - **Tombstone listener:** `where('deletedAt', '!=', null)` + `orderBy('deletedAt', 'desc')` + `limit` requires a **composite index** on `deletedAt` (inequality + descending sort). If the listener fails at runtime, check the dev console for **`[ChinottoSync] tombstone snapshot error`** and use the link in the Firebase error to create the index, then restart the app.
 
-**Phase 2 — Rules:** extend so the authenticated user may **update** their entry documents to set **`deletedAt`** (tombstone), in addition to create/read. **Phase 2+:** the same user may **`setDoc` + `merge`** on an existing entry doc to change **`text`** and set **`updatedAt`** (desktop thought continuation); **`createdAt`** must not be changed in client writes. Mobile remains read-only for body edits in v1; no multi-writer conflict rules beyond last merge wins in Firestore.
+**Phase 2 — Rules:** extend so the authenticated user may **update** their entry documents to set **`deletedAt`** (tombstone), in addition to create/read. **Phase 2+:** the same user may **`setDoc` + `merge`** (or full **`setDoc`** on mobile today) on an existing entry doc to change **`text`**; desktop also sets **`updatedAt`**. **`createdAt`** must not be changed in client writes. No multi-writer conflict rules beyond last merge wins in Firestore.
 
 ### Account deletion (mobile in-app; App Store 5.1.1(v))
 
@@ -155,7 +155,9 @@ Chinotto **mobile** exposes **Settings → Account → Delete Account** when the
 | `sync/ingestSuppression.ts` | `firestore_ingest_suppressed_ids` bridge (local delete until tombstone ack). |
 | `sync/firestoreTombstone.ts` | `isFirestoreDocumentTombstoned` for snapshot rows. |
 | `sync/firestoreIngest.ts` | `startMobileFirestoreIngest` — `onSnapshot` ingest + remote tombstones; **`runFirestoreIngestBackfill`** paginates `getDocs` after sign-in to load older rows beyond the live snapshot `limit`. |
-| `storage/entryRepository.ts` | `deleteEntry`, `applyRemoteTombstoneDeletes`, `ingestRemoteFirestoreRows` (insert new ids **or** `UPDATE` local `text` when id exists — §8.7). |
+| `storage/entryRepository.ts` | `saveEntry`, **`updateEntryText`** (in-sheet continuation — re-enqueues sync, preserves `createdAt`), `deleteEntry`, `applyRemoteTombstoneDeletes`, `ingestRemoteFirestoreRows` (insert new ids **or** `UPDATE` local `text` when id exists — §8.7). |
+| `hooks/useEntryContinuation.ts` | Draft + dirty tracking for **`EntryThoughtSheet`**; **`flushSave` / `resetForClose`** only (no per-keystroke autosave). |
+| `components/EntryThoughtSheet.tsx` | Read existing thought; double-tap / swipe-up to continue **in sheet**; save-on-close → **`updateEntryText`**. |
 | `auth/appleFirebaseAuth.ts` | `applyAppleCredentialToFirebase` — anonymous → **`linkWithCredential`**, else **`signInWithCredential`**. |
 | `auth/appleSignInCredential.ts` | Shared Sign in with Apple → Firebase **`OAuthProvider('apple.com')`** credential (nonce). Used by enable-sync and account-deletion reauth. |
 | `auth/enableAppleSync.ts` | Sign in with Apple + Firebase (`createFirebaseAppleCredential` + `applyAppleCredentialToFirebase`). |
@@ -363,15 +365,17 @@ users/{firebaseUid}/entries/{entryId}
 
 ### 8.7 Cross-device **text** updates (thought continuation, Phase 2+)
 
-**Goal:** One entry `id` = one thought. A short capture on mobile can be **expanded on desktop** in the same document; mobile must **show the expanded `text`** after Firestore delivers the change, without turning mobile into a full editor.
+**Goal:** One entry `id` = one thought. A short capture on mobile can be **continued on mobile** (in-sheet edit) or **expanded on desktop** in the same document; each client **shows the latest `text`** after Firestore delivers the change. Mobile is **not** a full document editor — continuation is scoped to the existing thought sheet (save-on-close, no stream-wide edit UI).
 
 | Rule | Detail |
 |------|--------|
 | **Firestore** | Same path `users/{uid}/entries/{entryId}`. Active docs have **`text`**, **`createdAt`**, optional **`updatedAt`** (`Timestamp`). Tombstone semantics unchanged (**§8.1**). |
 | **Desktop (`chinotto-app`)** | After local SQLite text save: **`setDoc` + `merge`** with trimmed **`text`**, preserved **`createdAt`**, **`updatedAt: serverTimestamp()`**, **`deletedAt` cleared**. See **Chinotto `docs/sync.md`**. |
-| **Mobile ingest** | `ingestRemoteFirestoreRows`: **`INSERT OR IGNORE`** for new ids; if insert skipped and row not suppressed → **`UPDATE entries SET text = ? WHERE id = ?`**. **`created_at`** is never changed by this path. |
+| **Mobile push** | **`updateEntryText`**: SQLite **`UPDATE`** + remove pending queue rows for that `id` + **`insertPendingSyncItem`** (same `id` / `createdAt`) in one transaction. Background **`processSyncQueue`** → **`firebasePushEntry`** (`setDoc` + **`merge`**: `text`, `createdAt`, **`updatedAt`**, clears **`deletedAt`**). Triggered on sheet **dismiss / collapse** only (**`useEntryContinuation`**), not on every keystroke. |
+| **Mobile ingest** | `ingestRemoteFirestoreRows`: **`INSERT OR IGNORE`** for new ids; if insert skipped and row not suppressed → **`UPDATE entries SET text = ? WHERE id = ?`**. **`created_at`** is never changed by this path. Ingest bumps **`remoteIngestVersion`** → capture stream refresh. |
+| **Mobile UX / sync** | While sheet is open: **`onEntryUpdated`** updates stream lists only — **do not** replace **`readEntry`** (avoids keyboard/focus loss). Open sheet may show **stale `text`** until close/reopen if a remote edit arrives while reading. |
 | **Ordering** | Stream order stays by **`created_at`** / `createdAt` (first capture instant), not `updatedAt`. |
-| **Conflict** | v1: mobile does **not** edit body text post-capture; if that changes later, compare **`updatedAt`** before overwrite. |
+| **Conflict** | **Last write wins** in Firestore. No **`updatedAt`** compare on mobile push or ingest today. Simultaneous edits on two devices can overwrite each other; explicit conflict UX is out of scope. Future: compare **`updatedAt`** before overwrite. |
 
 **Security rules:** owner may merge **`text`** / **`updatedAt`** on their entry docs; do not allow changing another user’s `uid` namespace.
 
@@ -389,6 +393,8 @@ Record **implementation** and cross-repo **alignment** changes for **mobile** he
 
 | Date | Change |
 |------|--------|
+| 2026-05-23 | **Mobile push parity:** **`firebasePushEntry`** uses **`setDoc` + `merge`** with **`updatedAt: serverTimestamp()`** and **`deletedAt: deleteField()`** (matches desktop Phase 2+ text upsert). |
+| 2026-05-23 | **Mobile:** **In-sheet thought continuation** (`EntryThoughtSheet`, **`updateEntryText`**, **`useEntryContinuation`**) — mobile can edit existing entry **`text`** (save-on-close) and push via the same sync queue as create. **§8.7** updated: bidirectional text sync; documents stale read-only-mobile wording. **QA:** mobile edit → desktop ingest; desktop edit → mobile stream ingest — verified. |
 | 2026-04-30 | **Mobile:** In-app **account deletion** (App Store **5.1.1(v)**): Settings → Account → Delete Account; wipes `users/{uid}/entries/*` + `users/{uid}`, then Firebase **`deleteUser`** with Sign in with Apple reauth on **`auth/requires-recent-login`**; clears sync queue / tombstone outbox / stashed desktop session only (**local `entries` preserved**). **Wire doc:** new **§3 Account deletion**; desktop must handle invalid `uid` (**§5** item 7). Modules: `sync/deleteChinottoAccount.ts`, `sync/deleteUserFirestoreData.ts`, `sync/accountDeletionCleanup.ts`, `auth/appleSignInCredential.ts`, `auth/reauthenticateApple.ts`, `screens/DeleteAccountScreen.tsx`. **UI:** Account section shows cloud identity + Delete Account only — **Sync** row already carries **Sync on** / **Off** so status is not repeated. **`__DEV__`:** Account section stays visible when signed out (iOS + Firebase configured) for QA; production still gates on signed-in sync. |
 | 2026-04-13 | **Wire + mobile:** Phase **2+** — Firestore **`updatedAt`** on text merge (desktop); mobile **`ingestRemoteFirestoreRows`** updates local **`text`** when entry id already exists (**§8.7**). Rules: owner may merge `text`/`updatedAt`; `createdAt` unchanged in writers. **Docs:** drop stale `sync-deletion-v2.md` pointers; desktop single source is **`chinotto-app/docs/sync.md`**. |
 | 2026-04-12 | **Mobile:** App-update policy via Firebase Remote Config (`@react-native-firebase/app` + `remote-config` + `analytics`, Expo 55). App always tries RC; failures → in-repo mock (`enabled: false`). RC key `chinotto_app_update_json` (string JSON → `UpdateConfig`). **Import template:** [`docs/app-update/firebase-remote-config-template.json`](../app-update/firebase-remote-config-template.json). Requires `GoogleService-Info.plist` / `google-services.json` and native prebuild/EAS. |
