@@ -194,6 +194,7 @@ If you are about to implement:
 - Complex global state
 - Multiple screens for simple flows (beyond brand splash → capture)
 - Heavy UI components
+- **EntryThoughtSheet layout changes** without reading `.cursor/rules/entry-thought-sheet-layout.mdc` (flex dismiss + sheet last child; never `KeyboardAvoidingView` / `absolute` / `translateY` on shell)
 
 → STOP and propose a simpler alternative
 
