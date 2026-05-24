@@ -27,6 +27,13 @@ export function initDatabase(): Promise<SQLiteDatabase> {
       CREATE TABLE IF NOT EXISTS firestore_ingest_suppressed_ids (
         id TEXT PRIMARY KEY NOT NULL,
         suppressed_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS entry_engagement (
+        entry_id TEXT PRIMARY KEY NOT NULL,
+        open_count INTEGER NOT NULL DEFAULT 0,
+        edit_count INTEGER NOT NULL DEFAULT 0,
+        last_opened_at TEXT,
+        last_edited_at TEXT
       );`
     );
     return db;
