@@ -3,7 +3,7 @@
 Product and implementation plan for **memory-oriented** time navigation in the capture stream — without folders, calendars, or PKM chrome.
 
 **Status:** In progress (`feat/temporal-navigation`).  
-**Related:** [`product-spec.md`](product-spec.md), [`../../AGENTS.md`](../../AGENTS.md).
+**Related:** [`product-spec.md`](product-spec.md), [`spatial-navigation.md`](spatial-navigation.md), [`../../AGENTS.md`](../../AGENTS.md).
 
 ---
 
