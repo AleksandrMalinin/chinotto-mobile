@@ -1,5 +1,6 @@
 import { fireEvent, render } from '@testing-library/react-native';
 import type { ReactElement } from 'react';
+import { Animated } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { TemporalMapSheet } from '../TemporalMapSheet';
@@ -33,6 +34,22 @@ const months = [
 ];
 
 describe('TemporalMapSheet', () => {
+  beforeEach(() => {
+    jest.spyOn(Animated, 'spring').mockImplementation(() => ({ start: jest.fn() }) as never);
+    jest.spyOn(Animated, 'timing').mockImplementation(
+      () =>
+        ({
+          start: (callback?: (result: { finished: boolean }) => void) => {
+            callback?.({ finished: true });
+          },
+        }) as never,
+    );
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   it('selects a month and closes', () => {
     const onSelectMonth = jest.fn();
     const onClose = jest.fn();

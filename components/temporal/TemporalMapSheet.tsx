@@ -5,7 +5,6 @@ import {
   Modal,
   NativeSyntheticEvent,
   NativeScrollEvent,
-  PanResponder,
   Platform,
   Pressable,
   StyleSheet,
@@ -18,7 +17,6 @@ import {
   NativeViewGestureHandler,
   PanGestureHandler,
   ScrollView,
-  State,
 } from 'react-native-gesture-handler';
 import type {
   NativeViewGestureHandler as NativeViewGestureHandlerType,
@@ -35,7 +33,7 @@ import {
 } from '../../utils/streamMonthIndex';
 import { groupMonthSummariesByYear, maxMonthThoughtCount } from '../../utils/temporalMapGroups';
 import { thoughtSheetBackdropA11yLabel } from '../thoughtSheet/backdropAction';
-import { shouldDismissThoughtSheet } from '../thoughtSheet/detents';
+import { useSheetDragDismiss } from '../thoughtSheet/useSheetDragDismiss';
 import { useSheetEnterAnimation } from '../thoughtSheet/useSheetEnterAnimation';
 import { temporalChromeColors } from './temporalChrome';
 
@@ -69,11 +67,9 @@ export function TemporalMapSheet({
   const contentInset = screenContentGutter(windowWidth);
   const { meta, body } = typography;
   const scrollYRef = useRef(0);
-  const [scrollAtTop, setScrollAtTop] = useState(true);
   const closingRef = useRef(false);
   const panRef = useRef<PanGestureHandlerType>(null);
   const scrollGestureRef = useRef<NativeViewGestureHandlerType>(null);
-  const dragY = useRef(new Animated.Value(0)).current;
 
   const sheetMaxHeight = Math.round(windowHeight * SHEET_HEIGHT_RATIO);
   const listMaxHeight = Math.max(120, sheetMaxHeight - CHROME_ESTIMATE);
@@ -88,6 +84,29 @@ export function TemporalMapSheet({
   );
   const scrimColor = 'rgba(0,0,0,0.5)';
 
+  const finishClose = useCallback(() => {
+    if (closingRef.current) {
+      return;
+    }
+    closingRef.current = true;
+    onClose();
+    requestAnimationFrame(() => {
+      closingRef.current = false;
+    });
+  }, [onClose]);
+
+  const {
+    dragY,
+    onGestureEvent,
+    onHandlerStateChange,
+    animateDismiss,
+    resetDrag,
+    scrimDragMultiplier,
+  } = useSheetDragDismiss({
+    travel: sheetMaxHeight,
+    onDismiss: finishClose,
+  });
+
   const playHaptic = useCallback(() => {
     if (!hapticsEnabled || Platform.OS === 'web') {
       return;
@@ -95,109 +114,24 @@ export function TemporalMapSheet({
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   }, [hapticsEnabled]);
 
-  const handleClose = useCallback(() => {
-    if (closingRef.current) {
-      return;
-    }
-    closingRef.current = true;
-    dragY.setValue(0);
-    onClose();
-    requestAnimationFrame(() => {
-      closingRef.current = false;
-    });
-  }, [dragY, onClose]);
-
-  const resetDrag = useCallback(() => {
-    Animated.spring(dragY, {
-      toValue: 0,
-      useNativeDriver: true,
-      damping: 24,
-      stiffness: 280,
-    }).start();
-  }, [dragY]);
-
-  const tryDismissFromDrag = useCallback(
-    (translationY: number, velocityY: number) => {
-      if ((scrollYRef.current ?? 0) > 4 && translationY > 0) {
-        resetDrag();
-        return;
-      }
-      if (shouldDismissThoughtSheet(translationY, velocityY)) {
-        handleClose();
-        return;
-      }
-      resetDrag();
-    },
-    [handleClose, resetDrag],
-  );
+  const requestDismiss = useCallback(() => {
+    animateDismiss(0, 0);
+  }, [animateDismiss]);
 
   const onMapScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const y = event.nativeEvent.contentOffset.y;
     scrollYRef.current = y;
-    setScrollAtTop(y <= 4);
   }, []);
 
   const onMapScrollEndDrag = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset, velocity } = event.nativeEvent;
-      const y = contentOffset.y;
-      scrollYRef.current = y;
-      setScrollAtTop(y <= 4);
-      if (y <= 4 && (velocity?.y ?? 0) > 0.55) {
-        handleClose();
+      scrollYRef.current = contentOffset.y;
+      if (contentOffset.y <= 4 && (velocity?.y ?? 0) > 0.55) {
+        animateDismiss(0, 520);
       }
     },
-    [handleClose],
-  );
-
-  const onSheetPanGesture = useMemo(
-    () =>
-      Animated.event([{ nativeEvent: { translationY: dragY } }], {
-        useNativeDriver: true,
-        listener: (event: NativeSyntheticEvent<{ translationY: number }>) => {
-          const y = event.nativeEvent.translationY;
-          if ((scrollYRef.current ?? 0) > 4 && y > 0) {
-            dragY.setValue(0);
-          } else {
-            dragY.setValue(Math.max(0, y));
-          }
-        },
-      }),
-    [dragY],
-  );
-
-  const onSheetPanStateChange = useCallback(
-    (event: { nativeEvent: { oldState: number; state: number; translationY: number; velocityY: number } }) => {
-      const { oldState, state, translationY, velocityY } = event.nativeEvent;
-      if (oldState === State.ACTIVE && (state === State.END || state === State.CANCELLED)) {
-        tryDismissFromDrag(translationY, velocityY);
-      }
-      if (state === State.CANCELLED || state === State.FAILED) {
-        resetDrag();
-      }
-    },
-    [resetDrag, tryDismissFromDrag],
-  );
-
-  const chromePanResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_, gesture) =>
-          gesture.dy > 6 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
-        onPanResponderMove: (_, gesture) => {
-          if ((scrollYRef.current ?? 0) > 4) {
-            return;
-          }
-          dragY.setValue(Math.max(0, gesture.dy));
-        },
-        onPanResponderRelease: (_, gesture) => {
-          tryDismissFromDrag(gesture.dy, gesture.vy);
-        },
-        onPanResponderTerminate: () => {
-          resetDrag();
-        },
-      }),
-    [dragY, resetDrag, tryDismissFromDrag],
+    [animateDismiss],
   );
 
   useEffect(() => {
@@ -205,22 +139,26 @@ export function TemporalMapSheet({
       return;
     }
     scrollYRef.current = 0;
-    setScrollAtTop(true);
-    dragY.setValue(0);
-  }, [visible, highlightedMonthKey, dragY]);
+    resetDrag();
+  }, [visible, highlightedMonthKey, resetDrag]);
 
   const handleSelectMonth = useCallback(
     (monthKey: MonthKey) => {
       playHaptic();
       onSelectMonth(monthKey);
-      handleClose();
+      animateDismiss(0, 0);
     },
-    [handleClose, onSelectMonth, playHaptic],
+    [animateDismiss, onSelectMonth, playHaptic],
   );
 
   const sheetTranslateY = useMemo(
     () => Animated.add(contentTranslateY, dragY),
     [contentTranslateY, dragY],
+  );
+
+  const combinedScrimOpacity = useMemo(
+    () => Animated.multiply(scrimOpacity, scrimDragMultiplier),
+    [scrimOpacity, scrimDragMultiplier],
   );
 
   if (!visible) {
@@ -233,30 +171,29 @@ export function TemporalMapSheet({
       transparent
       animationType="none"
       presentationStyle={Platform.OS === 'ios' ? 'overFullScreen' : 'fullScreen'}
-      onRequestClose={handleClose}
+      onRequestClose={requestDismiss}
       statusBarTranslucent
     >
       <GestureHandlerRootView style={styles.rootGestureHost}>
         <View testID="temporal-map-sheet-root" style={styles.root} accessibilityViewIsModal>
           <Animated.View
             pointerEvents="none"
-            style={[styles.scrimLayer, { backgroundColor: scrimColor, opacity: scrimOpacity }]}
+            style={[styles.scrimLayer, { backgroundColor: scrimColor, opacity: combinedScrimOpacity }]}
           />
           <Pressable
             style={styles.dismissRegion}
-            onPress={handleClose}
+            onPress={requestDismiss}
             accessibilityRole="button"
             accessibilityLabel={thoughtSheetBackdropA11yLabel()}
           />
 
           <PanGestureHandler
             ref={panRef}
-            enabled={scrollAtTop}
             simultaneousHandlers={scrollGestureRef}
             activeOffsetY={[-12, 12]}
             failOffsetX={[-28, 28]}
-            onGestureEvent={onSheetPanGesture}
-            onHandlerStateChange={onSheetPanStateChange}
+            onGestureEvent={onGestureEvent}
+            onHandlerStateChange={onHandlerStateChange}
           >
             <Animated.View
               testID="temporal-map-sheet"
@@ -273,7 +210,7 @@ export function TemporalMapSheet({
                 },
               ]}
             >
-              <View style={styles.sheetChrome} {...chromePanResponder.panHandlers}>
+              <View style={styles.sheetChrome}>
                 <View style={styles.dragStrip}>
                   <View
                     testID="temporal-map-grabber"
@@ -468,12 +405,13 @@ const styles = StyleSheet.create({
   },
   root: {
     flex: 1,
+    justifyContent: 'flex-end',
   },
   scrimLayer: {
     ...StyleSheet.absoluteFillObject,
   },
   dismissRegion: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
   },
   sheet: {
     borderTopWidth: StyleSheet.hairlineWidth,
