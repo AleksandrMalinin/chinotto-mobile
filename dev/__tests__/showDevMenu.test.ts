@@ -12,6 +12,8 @@ describe('showDevMenu', () => {
       onResetAnalyticsPrompt: jest.fn(),
       onResetSyncCaptureQA: jest.fn(),
       onPreviewAppUpdateModal: jest.fn(),
+      onPreviewEchoEdgePeek: jest.fn(),
+      onResetEchoEdgePeek: jest.fn(),
     });
 
     const buttons = alertSpy.mock.calls[0][2] as { text: string }[];
@@ -21,6 +23,8 @@ describe('showDevMenu', () => {
     expect(buttons.some((b) => b.text === 'Reset sync & capture QA')).toBe(true);
     expect(buttons.some((b) => b.text === 'Preview app update (soft)')).toBe(true);
     expect(buttons.some((b) => b.text === 'Preview app update (forced)')).toBe(true);
+    expect(buttons.some((b) => b.text === 'Preview Echo edge peek')).toBe(true);
+    expect(buttons.some((b) => b.text === 'Reset Echo edge peek flag')).toBe(true);
 
     alertSpy.mockRestore();
   });

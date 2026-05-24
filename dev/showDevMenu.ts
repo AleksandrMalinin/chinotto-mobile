@@ -19,6 +19,10 @@ export type DevMenuOptions = {
   onToggleTemporalNavScrubber?: () => void;
   /** Label suffix for temporal toggle, e.g. `on` / `off`. */
   temporalNavScrubberDevState?: 'on' | 'off';
+  /** Replay the one-time Echo edge peek animation immediately. */
+  onPreviewEchoEdgePeek?: () => void | Promise<void>;
+  /** Clear AsyncStorage flag so auto peek can fire again on next eligibility. */
+  onResetEchoEdgePeek?: () => void | Promise<void>;
 };
 
 /**
@@ -71,6 +75,18 @@ export function showDevMenu(options: DevMenuOptions): void {
     buttons.push({
       text: `Temporal scrubber (${state})`,
       onPress: options.onToggleTemporalNavScrubber,
+    });
+  }
+  if (options.onPreviewEchoEdgePeek != null) {
+    buttons.push({
+      text: 'Preview Echo edge peek',
+      onPress: () => void options.onPreviewEchoEdgePeek?.(),
+    });
+  }
+  if (options.onResetEchoEdgePeek != null) {
+    buttons.push({
+      text: 'Reset Echo edge peek flag',
+      onPress: () => void options.onResetEchoEdgePeek?.(),
     });
   }
   buttons.push({ text: 'Cancel', style: 'cancel' });
