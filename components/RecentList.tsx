@@ -12,6 +12,7 @@ import {
   AccessibilityInfo,
   Animated,
   Easing,
+  InteractionManager,
   type LayoutChangeEvent,
   Platform,
   Pressable,
@@ -41,6 +42,7 @@ import {
   streamFocusTimeOpacityBelowActive,
   type StreamFocusWindowBox,
 } from '../utils/streamFocusTier';
+import { streamScrollContentYForRow } from '../utils/streamScrollToEntry';
 import { StreamFlowPanel } from './StreamFlowPanel';
 import type { ThoughtSheetOpenAnchor } from './thoughtSheet/detents';
 import { measureThoughtSheetOpenAnchor } from './thoughtSheet/measureOpenAnchor';
@@ -91,10 +93,10 @@ export type RecentListProps = {
   streamScrollViewRef?: RefObject<View | null>;
   /** Top-visible stream row (viewport focus) — for temporal month scrubber. */
   onActiveStreamEntryChange?: (entry: Entry | null) => void;
-  /** Reserve trailing space so temporal month rack does not cover row timestamps. */
-  streamTrailingInset?: number;
   /** When set, report scroll content Y for this entry (temporal month jump). */
   scrollToEntryId?: string | null;
+  /** Live scroll offset — prefer over `streamScrollY` prop inside async measure (temporal jump). */
+  streamScrollYRef?: RefObject<number>;
   onScrollToEntryOffset?: (contentOffsetY: number) => void;
   onScrollToEntryComplete?: () => void;
 };
@@ -177,7 +179,6 @@ type StreamRowProps = {
   streamFocusReduceMotion?: boolean;
   /** Matches `CaptureScreen` scroll `paddingHorizontal` so rows can full-bleed under press/trace. */
   streamGutter: number;
-  streamTrailingInset?: number;
   onEntryPress?: (entry: Entry, anchor?: ThoughtSheetOpenAnchor) => void;
   onEntryDelete?: (entry: Entry) => void;
 };
@@ -189,7 +190,6 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
   streamFocusDelta,
   streamFocusReduceMotion = false,
   streamGutter,
-  streamTrailingInset = 0,
   onEntryPress,
   onEntryDelete,
 }: StreamRowProps) {
@@ -320,10 +320,7 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
           <View
             style={[
               styles.entryRow,
-              {
-                paddingLeft: streamGutter + screenContentInnerPad,
-                paddingRight: streamGutter + screenContentInnerPad + streamTrailingInset,
-              },
+              { paddingHorizontal: streamGutter + screenContentInnerPad },
             ]}
           >
             <Animated.Text
@@ -640,8 +637,8 @@ function RecentListInner({
   streamViewportFocusEnabled = false,
   streamScrollViewRef,
   onActiveStreamEntryChange,
-  streamTrailingInset = 0,
   scrollToEntryId = null,
+  streamScrollYRef,
   onScrollToEntryOffset,
   onScrollToEntryComplete,
 }: RecentListProps) {
@@ -855,33 +852,70 @@ function RecentListInner({
     if (scrollToEntryId == null || onScrollToEntryOffset == null) {
       return;
     }
+    if (!orderedIds.includes(scrollToEntryId)) {
+      return;
+    }
     let cancelled = false;
     let attempts = 0;
-    const tryMeasure = () => {
+    const maxAttempts = 48;
+    const scrollFromLayoutFrames = () => {
+      const frame = framesRef.current.get(scrollToEntryId);
+      if (frame == null) {
+        return false;
+      }
+      onScrollToEntryOffset(listOffsetY + listPaddingTop + frame.top);
+      return true;
+    };
+    const tryMeasure = async () => {
       if (cancelled) {
         return;
       }
-      const frame = framesRef.current.get(scrollToEntryId);
-      if (frame != null) {
-        onScrollToEntryOffset(listOffsetY + listPaddingTop + frame.top);
+      const row = rowRefs.current.get(scrollToEntryId);
+      const sv = streamScrollViewRef?.current ?? null;
+      if (row != null && sv != null) {
+        const scrollBox = await measureInWindowPromise(sv);
+        const rowBox = await measureInWindowPromise(row);
+        if (!cancelled && scrollBox != null && rowBox != null) {
+          const liveScrollY = streamScrollYRef?.current ?? streamScrollY;
+          onScrollToEntryOffset(
+            streamScrollContentYForRow(liveScrollY, scrollBox, rowBox),
+          );
+          onScrollToEntryComplete?.();
+          return;
+        }
+      }
+      if (scrollFromLayoutFrames()) {
         onScrollToEntryComplete?.();
         return;
       }
       attempts += 1;
-      if (attempts < 12) {
-        requestAnimationFrame(tryMeasure);
+      if (attempts < maxAttempts) {
+        requestAnimationFrame(() => {
+          void tryMeasure();
+        });
+      } else if (scrollFromLayoutFrames()) {
+        onScrollToEntryComplete?.();
+      } else {
+        onScrollToEntryComplete?.();
       }
     };
-    tryMeasure();
+    const task = InteractionManager.runAfterInteractions(() => {
+      void tryMeasure();
+    });
     return () => {
       cancelled = true;
+      task.cancel();
     };
   }, [
     scrollToEntryId,
+    orderedIds,
     entries,
     layoutVersion,
     listOffsetY,
     listPaddingTop,
+    streamScrollY,
+    streamScrollYRef,
+    streamScrollViewRef,
     onScrollToEntryOffset,
     onScrollToEntryComplete,
   ]);
@@ -993,8 +1027,7 @@ function RecentListInner({
                 style={[
                   styles.sectionLabel,
                   {
-                    paddingLeft: streamGutter,
-                    paddingRight: streamGutter + streamTrailingInset,
+                    paddingHorizontal: streamGutter,
                     color: colors.sectionFg,
                     fontFamily: meta.fontFamily,
                     fontSize: meta.fontSize,
@@ -1030,7 +1063,6 @@ function RecentListInner({
               streamFocusDelta={streamFocusDelta}
               streamFocusReduceMotion={reduceMotion}
               streamGutter={streamGutter}
-              streamTrailingInset={streamTrailingInset}
               onEntryPress={onEntryPress}
               onEntryDelete={onEntryDelete}
             />

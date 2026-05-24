@@ -1,10 +1,27 @@
 import type { Entry } from '../types/entry';
-import { getEntriesOlderThan, getRecentEntries } from '../storage/entryRepository';
+import type { MonthKey, MonthSummary } from '../types/temporal';
+import { getEntriesOlderThan, getNewestEntryInMonth, getRecentEntries } from '../storage/entryRepository';
 
 const JUMP_PAGE_SIZE = 40;
 const JUMP_MAX_PAGES = 30;
 
-function mergeEntriesNewestFirst(existing: Entry[], incoming: Entry[]): Entry[] {
+/** Resolve the stream scroll anchor for a calendar month (cached row first, then SQLite). */
+export async function resolveMonthJumpAnchor(
+  monthKey: MonthKey,
+  current: readonly Entry[],
+  summaries: readonly MonthSummary[],
+): Promise<Entry | null> {
+  const summary = summaries.find((m) => m.monthKey === monthKey);
+  if (summary != null) {
+    const cached = current.find((e) => e.id === summary.newestEntryId);
+    if (cached != null) {
+      return cached;
+    }
+  }
+  return getNewestEntryInMonth(monthKey);
+}
+
+function mergeEntriesNewestFirst(existing: readonly Entry[], incoming: readonly Entry[]): Entry[] {
   const byId = new Map<string, Entry>();
   for (const row of [...incoming, ...existing]) {
     byId.set(row.id, row);
