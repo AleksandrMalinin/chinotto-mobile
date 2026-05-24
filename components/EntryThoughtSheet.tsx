@@ -58,6 +58,8 @@ export type EntryThoughtSheetProps = {
   onClose: () => void;
   onEntryUpdated?: (entry: Entry) => void;
   hapticsEnabled?: boolean;
+  /** Light impact when the sheet presents (e.g. Echo recall open). */
+  hapticOnPresent?: boolean;
 };
 
 type SheetPhase = 'compact' | 'expanded';
@@ -68,6 +70,7 @@ export function EntryThoughtSheet({
   onClose,
   onEntryUpdated,
   hapticsEnabled = true,
+  hapticOnPresent = false,
 }: EntryThoughtSheetProps) {
   const t = useAppTheme();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
@@ -125,6 +128,13 @@ export function EntryThoughtSheet({
     }
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   }, [hapticsEnabled]);
+
+  useEffect(() => {
+    if (!visible || entry == null || !hapticOnPresent) {
+      return;
+    }
+    playSheetHaptic();
+  }, [visible, entry?.id, hapticOnPresent, playSheetHaptic]);
 
   const handleClose = useCallback(() => {
     if (closingRef.current) {

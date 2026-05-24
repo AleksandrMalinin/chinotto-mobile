@@ -1,4 +1,5 @@
 import * as Clipboard from 'expo-clipboard';
+import * as Haptics from 'expo-haptics';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { Animated, Linking, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -57,6 +58,22 @@ describe('EntryThoughtSheet', () => {
 
     expect(getByTestId('entry-read-sheet')).toBeTruthy();
     expect(getByText(sampleEntry.text)).toBeTruthy();
+  });
+
+  it('plays haptic when hapticOnPresent is set on open', () => {
+    jest.mocked(Haptics.impactAsync).mockClear();
+    render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <EntryThoughtSheet
+          visible
+          entry={sampleEntry}
+          onClose={jest.fn()}
+          hapticOnPresent
+        />
+      </SafeAreaProvider>,
+    );
+
+    expect(Haptics.impactAsync).toHaveBeenCalledWith(Haptics.ImpactFeedbackStyle.Light);
   });
 
   it('copies entry text when Copy is pressed', async () => {
