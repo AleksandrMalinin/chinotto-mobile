@@ -58,9 +58,11 @@ import { resetPaywallForPurchaseTesting } from '../dev/resetPaywallForPurchaseTe
 import { showDevMenu } from '../dev/showDevMenu';
 import { isDemoStreamMode } from '../src/features/demoStreamMode';
 import {
+  TEMPORAL_MONTH_RACK_CHROME_WIDTH,
   TEMPORAL_NAV_ENABLED,
+  TEMPORAL_NAV_MIN_SCROLL_Y,
   TEMPORAL_NAV_SCRUBBER_IDLE_MS,
-  TEMPORAL_MONTH_RACK_STREAM_INSET,
+  TEMPORAL_TRAILING_CHROME_RIGHT_INSET,
 } from '../constants/temporalNavigation';
 import {
   clearFirstLaunchEmptyCaptureRevealDone,
@@ -75,7 +77,6 @@ import {
   getEntryById,
   getEntryCount,
   getMonthSummaries,
-  getNewestEntryInMonth,
   getRecentEntries,
   saveEntry,
   searchEntriesForRecall,
@@ -114,7 +115,7 @@ import {
 } from '../theme';
 import type { MonthKey, MonthSummary } from '../types/temporal';
 import { monthKeyFromIso } from '../utils/streamMonthIndex';
-import { loadStreamUntilEntryIncluded } from '../utils/temporalJump';
+import { loadStreamUntilEntryIncluded, resolveMonthJumpAnchor } from '../utils/temporalJump';
 import {
   isTemporalNavigationActive,
   isTemporalScrubberEligible,
@@ -271,9 +272,14 @@ export function CaptureScreen({
   const [streamActiveEntry, setStreamActiveEntry] = useState<Entry | null>(null);
   const [monthSummaries, setMonthSummaries] = useState<MonthSummary[]>([]);
   const [temporalRackScrubbing, setTemporalRackScrubbing] = useState(false);
+  /** True at capture / after Write — rack stays off until user scrolls into the stream again. */
+  const [temporalRackAtCapture, setTemporalRackAtCapture] = useState(true);
   const [temporalMapVisible, setTemporalMapVisible] = useState(false);
   const [scrollToEntryId, setScrollToEntryId] = useState<string | null>(null);
+  /** Pins rack + map highlight until stream scroll/active entry catches up after a jump. */
+  const [temporalCommittedMonthKey, setTemporalCommittedMonthKey] = useState<MonthKey | null>(null);
   const streamScrollViewRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  const streamScrollYRef = useRef(0);
   const streamScrollIdleGenRef = useRef(0);
   const temporalRackScrubbingRef = useRef(false);
   temporalRackScrubbingRef.current = temporalRackScrubbing;
@@ -298,6 +304,7 @@ export function CaptureScreen({
   const readEntryOpenCleanupRef = useRef<(() => void) | null>(null);
   const searchBlurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const entriesRef = useRef<Entry[]>([]);
+  const monthSummariesRef = useRef<MonthSummary[]>([]);
   const hasMoreRef = useRef(true);
   const loadingMoreRef = useRef(false);
   const searchQueryRef = useRef('');
@@ -324,6 +331,7 @@ export function CaptureScreen({
   authPhaseRef.current = authRestorePhase;
 
   entriesRef.current = entries;
+  monthSummariesRef.current = monthSummaries;
   hasMoreRef.current = hasMore;
   searchQueryRef.current = searchQuery;
   const searchTrimmed = searchQuery.trim();
@@ -407,8 +415,15 @@ export function CaptureScreen({
 
   const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, layoutMeasurement, contentSize, velocity } = e.nativeEvent;
-    setStreamScrollY(contentOffset.y);
+    const y = contentOffset.y;
+    streamScrollYRef.current = y;
+    setStreamScrollY(y);
     setStreamViewportHeight(layoutMeasurement.height);
+    if (y < TEMPORAL_NAV_MIN_SCROLL_Y) {
+      setTemporalRackAtCapture(true);
+    } else {
+      setTemporalRackAtCapture(false);
+    }
     const vy = velocity?.y ?? 0;
     setStreamScrollVelocityY(vy);
     const idleGen = streamScrollIdleGenRef.current + 1;
@@ -1147,6 +1162,10 @@ export function CaptureScreen({
     if (hapticsEnabled && Platform.OS !== 'web') {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     }
+    setTemporalRackAtCapture(true);
+    setStreamScrollY(0);
+    setStreamScrollVelocityY(0);
+    setTemporalMapVisible(false);
     streamScrollViewRef.current?.scrollTo({ y: 0, animated: true });
     requestAnimationFrame(() => {
       inputRef.current?.focus();
@@ -1231,7 +1250,9 @@ export function CaptureScreen({
     bypassMinEntryCount: __DEV__ && devTemporalNavEnabled,
   });
   const showTemporalScrubber =
-    temporalScrubberEligible && shouldPeekTemporalScrubber(streamScrollY, streamScrollVelocityY);
+    temporalScrubberEligible &&
+    !temporalRackAtCapture &&
+    shouldPeekTemporalScrubber(streamScrollY, streamScrollVelocityY);
   const referenceMonthKey = monthKeyFromIso(new Date().toISOString());
   const visibleMonthKey =
     streamActiveEntry != null
@@ -1239,6 +1260,7 @@ export function CaptureScreen({
       : streamDisplayEntries[0] != null
         ? monthKeyFromIso(streamDisplayEntries[0].createdAt)
         : referenceMonthKey;
+  const temporalChromeMonthKey = temporalCommittedMonthKey ?? visibleMonthKey;
   const temporalRackTop = insets.top + 72;
   const temporalRackBottom = Math.max(insets.bottom, 10) + (showWritePeekAffordance ? 56 : 16);
 
@@ -1251,32 +1273,66 @@ export function CaptureScreen({
 
   const jumpToMonth = useCallback(
     (monthKey: MonthKey, options?: { evenIfCurrent?: boolean }) => {
-      if (demoStreamMode) {
+      if (!options?.evenIfCurrent && monthKey === temporalChromeMonthKey) {
         return;
       }
-      if (!options?.evenIfCurrent && monthKey === visibleMonthKey) {
-        return;
-      }
+      setTemporalCommittedMonthKey(monthKey);
+      setTemporalRackAtCapture(false);
+      setTemporalMapVisible(false);
       void (async () => {
         try {
-          const anchor = await getNewestEntryInMonth(monthKey);
+          let anchor: Entry | null = null;
+          let merged: Entry[] = entriesRef.current;
+
+          if (demoStreamMode) {
+            const demoRows = mergeDemoStreamWithEntries(entriesRef.current, true);
+            anchor = demoRows.find((e) => monthKeyFromIso(e.createdAt) === monthKey) ?? null;
+          } else {
+            anchor = await resolveMonthJumpAnchor(
+              monthKey,
+              entriesRef.current,
+              monthSummariesRef.current,
+            );
+            if (anchor == null) {
+              setTemporalCommittedMonthKey(null);
+              return;
+            }
+            merged = await loadStreamUntilEntryIncluded(anchor, entriesRef.current);
+          }
+
           if (anchor == null) {
+            setTemporalCommittedMonthKey(null);
             return;
           }
-          const merged = await loadStreamUntilEntryIncluded(anchor, entriesRef.current);
-          setEntries(merged);
-          setHasMore(true);
+
+          setStreamActiveEntry(anchor);
+          if (!demoStreamMode) {
+            setEntries(merged);
+            setHasMore(true);
+          }
           setScrollToEntryId(anchor.id);
           onScheduleStreamHighlight?.(anchor.id);
         } catch (err) {
+          setTemporalCommittedMonthKey(null);
           if (__DEV__) {
             console.warn('temporal month jump failed', err);
           }
         }
       })();
     },
-    [demoStreamMode, onScheduleStreamHighlight, visibleMonthKey],
+    [demoStreamMode, onScheduleStreamHighlight, temporalChromeMonthKey],
   );
+
+  useEffect(() => {
+    if (temporalCommittedMonthKey == null) {
+      return;
+    }
+    const activeMonth =
+      streamActiveEntry != null ? monthKeyFromIso(streamActiveEntry.createdAt) : null;
+    if (activeMonth === temporalCommittedMonthKey && scrollToEntryId == null) {
+      setTemporalCommittedMonthKey(null);
+    }
+  }, [streamActiveEntry, scrollToEntryId, temporalCommittedMonthKey]);
 
   const onTemporalActiveMonthPress = useCallback(() => {
     playTemporalBoundaryHaptic();
@@ -1526,7 +1582,6 @@ export function CaptureScreen({
               streamViewportFocusEnabled={
                 searchTrimmed.length > 0 ? searchResults.length > 0 : streamDisplayEntries.length > 0
               }
-              streamTrailingInset={showTemporalScrubber ? TEMPORAL_MONTH_RACK_STREAM_INSET : 0}
               highlightEntryId={searchTrimmed.length > 0 ? null : streamHighlightEntryId}
               emptyHint={
                 searchTrimmed.length > 0
@@ -1546,6 +1601,7 @@ export function CaptureScreen({
                 searchActive || temporalRackScrubbing ? undefined : setStreamActiveEntry
               }
               scrollToEntryId={scrollToEntryId}
+              streamScrollYRef={streamScrollYRef}
               onScrollToEntryOffset={onScrollToEntryOffset}
               onScrollToEntryComplete={onScrollToEntryComplete}
             />
@@ -1558,9 +1614,9 @@ export function CaptureScreen({
             {temporalScrubberEligible ? (
               <TemporalMonthRack
                 months={monthSummaries}
-                streamMonthKey={visibleMonthKey}
+                streamMonthKey={temporalChromeMonthKey}
                 visible={showTemporalScrubber}
-                rightInset={2}
+                rightInset={TEMPORAL_TRAILING_CHROME_RIGHT_INSET}
                 topInset={temporalRackTop}
                 bottomInset={temporalRackBottom}
                 onScrubbingChange={setTemporalRackScrubbing}
@@ -1581,8 +1637,9 @@ export function CaptureScreen({
                 style={({ pressed }) => [
                   styles.streamWritePeek,
                   {
-                    right: gutter,
+                    right: TEMPORAL_TRAILING_CHROME_RIGHT_INSET,
                     bottom: Math.max(insets.bottom, 10) + 6,
+                    width: TEMPORAL_MONTH_RACK_CHROME_WIDTH,
                     borderColor: searchBorderIdle,
                     backgroundColor: pressed ? searchPressedSurface : searchSurface,
                     opacity: pressed ? 0.92 : 0.78,
@@ -1722,7 +1779,7 @@ export function CaptureScreen({
       <TemporalMapSheet
         visible={temporalMapVisible}
         months={monthSummaries}
-        highlightedMonthKey={visibleMonthKey}
+        highlightedMonthKey={temporalChromeMonthKey}
         onClose={() => setTemporalMapVisible(false)}
         onSelectMonth={onTemporalMapSelectMonth}
         hapticsEnabled={hapticsEnabled}
@@ -1748,7 +1805,6 @@ const styles = StyleSheet.create({
   streamWritePeek: {
     position: 'absolute',
     zIndex: 4,
-    paddingHorizontal: 14,
     paddingVertical: 9,
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
