@@ -14,7 +14,6 @@ export function useSheetEnterAnimation(visible: boolean, entryId: string | undef
 
   useEffect(() => {
     if (!visible || entryId == null) {
-      enterProgress.setValue(0);
       return;
     }
     enterProgress.setValue(0);
