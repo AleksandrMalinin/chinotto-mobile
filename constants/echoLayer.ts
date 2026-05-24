@@ -15,3 +15,9 @@ export const ECHO_GRAVITY_RECENT_DAYS = 14;
 
 /** Drift scoring — thoughts older than this may resurface. */
 export const ECHO_DRIFT_MIN_AGE_DAYS = 30;
+
+/** Pixels of Echo page revealed during the one-time edge peek. */
+export const ECHO_EDGE_PEEK_OFFSET_PX = 14;
+
+/** Composer/search opacity at full Echo reveal (matches search-mode dim). */
+export const ECHO_COMPOSER_DIM_AT_FULL = 0.58;

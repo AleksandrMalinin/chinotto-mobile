@@ -21,6 +21,8 @@ const AnimatedScrollView = Animated.createAnimatedComponent(ScrollView);
 
 export type StreamEchoPagerHandle = {
   scrollToStream: (animated?: boolean) => void;
+  /** Briefly reveal Echo from stream home — used for one-time edge peek. */
+  peekEchoEdge: (peekPx: number, animated?: boolean) => void;
 };
 
 export type StreamEchoPagerProps = {
@@ -77,16 +79,32 @@ export const StreamEchoPager = forwardRef<StreamEchoPagerHandle, StreamEchoPager
 
     const scrollToStream = useCallback(
       (animated = true) => {
-      pagerRef.current?.scrollTo({
-        x: streamEchoPagerHomeOffset(PixelRatio.roundToNearestPixel(pageWidth)),
-        y: 0,
-        animated,
-      });
+        pagerRef.current?.scrollTo({
+          x: streamEchoPagerHomeOffset(PixelRatio.roundToNearestPixel(pageWidth)),
+          y: 0,
+          animated,
+        });
       },
       [pageWidth],
     );
 
-    useImperativeHandle(ref, () => ({ scrollToStream }), [scrollToStream]);
+    const peekEchoEdge = useCallback(
+      (peekPx: number, animated = true) => {
+        if (peekPx <= 0 || pageWidth <= 0) {
+          return;
+        }
+        const pageSpan = PixelRatio.roundToNearestPixel(pageWidth);
+        const homeX = streamEchoPagerHomeOffset(pageSpan);
+        pagerRef.current?.scrollTo({
+          x: Math.max(0, homeX - peekPx),
+          y: 0,
+          animated,
+        });
+      },
+      [pageWidth],
+    );
+
+    useImperativeHandle(ref, () => ({ scrollToStream, peekEchoEdge }), [peekEchoEdge, scrollToStream]);
 
     useLayoutEffect(() => {
       if (!echoMounted || pageWidth <= 0) {
