@@ -74,6 +74,17 @@ jest.mock('expo-linear-gradient', () => {
   };
 });
 
+jest.mock('expo-blur', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    BlurView: ({ children, style, ...rest }) =>
+      React.createElement(View, { style, ...rest }, children),
+    BlurTargetView: ({ children, style, ...rest }) =>
+      React.createElement(View, { style, ...rest }, children),
+  };
+});
+
 jest.mock('react-native-purchases', () => {
   const emptyCustomerInfo = {
     entitlements: { active: {}, all: {} },
