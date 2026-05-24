@@ -13,6 +13,9 @@ export type EchoChromeColors = {
   shellBottom: string;
   fragmentFill: string;
   fragmentBorder: string;
+  /** Silent warm vs cool fragment edge — persistence register, not a label. */
+  fragmentBorderGravity: string;
+  fragmentBorderDrift: string;
   /** Gravity (revisited) vs drift — silent tone, no kind labels. */
   fragmentBodyGravity: string;
   fragmentBodyDrift: string;
@@ -44,6 +47,16 @@ export function echoChromeFromTheme(t: AppTheme): EchoChromeColors {
     shellBottom: sunlightMode ? 'rgba(88, 98, 140, 0.06)' : 'rgba(75, 98, 155, 0.06)',
     fragmentFill: sunlightMode ? 'rgba(255, 255, 255, 0.06)' : 'rgba(255, 255, 255, 0.035)',
     fragmentBorder: colors.searchBorder,
+    fragmentBorderGravity: sunlightMode
+      ? 'rgba(198, 206, 255, 0.16)'
+      : isDark
+        ? 'rgba(160, 170, 220, 0.14)'
+        : 'rgba(140, 150, 210, 0.12)',
+    fragmentBorderDrift: sunlightMode
+      ? 'rgba(170, 188, 255, 0.08)'
+      : isDark
+        ? 'rgba(255, 255, 255, 0.05)'
+        : 'rgba(255, 255, 255, 0.07)',
     fragmentBodyGravity: colors.entryBody,
     fragmentBodyDrift: colors.fgDim,
     /** Present / revisited — lavender mark tone. */
@@ -65,6 +78,14 @@ export function echoChromeFromTheme(t: AppTheme): EchoChromeColors {
 
 export function echoAccentForKind(chrome: EchoChromeColors, kind: EchoCandidateKind): string {
   return kind === 'gravity' ? chrome.gravityAccent : chrome.driftAccent;
+}
+
+/** Warm vs cool fragment edge — no dot, no badge. */
+export function echoFragmentBorderForKind(
+  chrome: EchoChromeColors,
+  kind: EchoCandidateKind,
+): string {
+  return kind === 'gravity' ? chrome.fragmentBorderGravity : chrome.fragmentBorderDrift;
 }
 
 /** @deprecated Use {@link echoChromeFromTheme}. Kept for tests that pass isDark only. */

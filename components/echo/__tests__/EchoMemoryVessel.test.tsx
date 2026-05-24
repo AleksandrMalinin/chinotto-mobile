@@ -41,6 +41,13 @@ describe('EchoMemoryVessel', () => {
     expect(getByTestId('echo-fragment-surface-2')).toBeTruthy();
     expect(getByText('Persistent thought')).toBeTruthy();
     expect(getByText(formatEchoRelativeAge(candidates[0]!.createdAt))).toBeTruthy();
+    expect(getByTestId('echo-fragment-surface-1').props.style).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          borderColor: echoChromeColors(true).fragmentBorderGravity,
+        }),
+      ]),
+    );
     expect(queryByText('Revisited')).toBeNull();
     expect(queryByText('Earlier')).toBeNull();
   });
