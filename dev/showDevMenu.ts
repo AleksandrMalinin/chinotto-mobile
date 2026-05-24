@@ -73,7 +73,6 @@ export function showDevMenu(options: DevMenuOptions): void {
       onPress: options.onToggleTemporalNavScrubber,
     });
   }
-
   buttons.push({ text: 'Cancel', style: 'cancel' });
   Alert.alert('Dev menu', undefined, buttons);
 }

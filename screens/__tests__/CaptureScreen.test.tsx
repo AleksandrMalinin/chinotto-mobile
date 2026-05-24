@@ -436,6 +436,20 @@ describe('CaptureScreen', () => {
     expect(queryByTestId('stream-search-toggle')).toBeNull();
   });
 
+  it('hides the system scroll indicator on the stream list', async () => {
+    jest
+      .mocked(entryRepository.getRecentEntries)
+      .mockImplementation(() => Promise.resolve([STREAM_SEARCH_SEED_ENTRY]));
+    const { findByTestId, getByTestId } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <CaptureScreen />
+      </SafeAreaProvider>
+    );
+
+    await findByTestId('capture-input');
+    expect(getByTestId('capture-stream-scroll').props.showsVerticalScrollIndicator).toBe(false);
+  });
+
   it('shows Write peek after the stream scrolls past the capture area', async () => {
     jest
       .mocked(entryRepository.getRecentEntries)

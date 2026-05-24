@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef, type RefObject } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentRef, type RefObject } from 'react';
 
 import { track, type SyncModalSurface } from '../analytics/analytics';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -24,12 +24,20 @@ import {
   UIManager,
   useWindowDimensions,
   View,
+  PixelRatio,
   type LayoutAnimationConfig,
 } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AmbientBackground } from '../components/AmbientBackground';
+import { EchoPageShell } from '../components/echo/EchoPageShell';
+import { EchoSpatialBackground } from '../components/echo/EchoSpatialBackground';
+import { echoChromeFromTheme } from '../components/echo/echoChrome';
+import {
+  StreamEchoPager,
+  streamEchoPagerHomeOffset,
+  type StreamEchoPagerHandle,
+} from '../components/echo/StreamEchoPager';
 import { CaptureInput } from '../components/CaptureInput';
 import { ChinottoLogo, chinottoLogoLeadingOutset } from '../components/ChinottoLogo';
 import { EnableSyncModal } from '../components/EnableSyncModal';
@@ -61,6 +69,9 @@ import { resetPaywallForPurchaseTesting } from '../dev/resetPaywallForPurchaseTe
 import { showDevMenu } from '../dev/showDevMenu';
 import { isDemoStreamMode } from '../src/features/demoStreamMode';
 import {
+  ECHO_LAYER_ENABLED,
+} from '../constants/echoLayer';
+import {
   TEMPORAL_MONTH_RACK_CHROME_WIDTH,
   TEMPORAL_NAV_ENABLED,
   TEMPORAL_NAV_MIN_SCROLL_Y,
@@ -74,6 +85,11 @@ import {
   setFirstLaunchComposerHasFocused,
   setFirstLaunchEmptyCaptureRevealDone,
 } from '../storage/firstLaunchCapturePrefs';
+import {
+  getEchoCandidates,
+  recordEntryOpened,
+  resolveEchoCandidates,
+} from '../storage/entryEngagementRepository';
 import {
   deleteEntry,
   getEntriesOlderThan,
@@ -117,9 +133,14 @@ import {
   useAppTheme,
 } from '../theme';
 import type { MonthKey, MonthSummary } from '../types/temporal';
+import type { EchoCandidate } from '../utils/selectEchoCandidates';
 import { monthKeyFromIso } from '../utils/streamMonthIndex';
 import { streamSearchResultLabel } from '../utils/streamSearchResultLabel';
 import { loadStreamUntilEntryIncluded, resolveMonthJumpAnchor } from '../utils/temporalJump';
+import {
+  isEchoLayerEligible,
+  isEchoPagerInteractive,
+} from '../utils/echoLayerVisibility';
 import {
   isTemporalNavigationActive,
   isTemporalScrubberEligible,
@@ -273,6 +294,10 @@ export function CaptureScreen({
   const [streamViewportHeight, setStreamViewportHeight] = useState(0);
   const [totalEntryCount, setTotalEntryCount] = useState(0);
   const [devTemporalNavEnabled, setDevTemporalNavEnabled] = useState(false);
+  const [echoCandidates, setEchoCandidates] = useState<EchoCandidate[]>([]);
+  const [echoPageIndex, setEchoPageIndex] = useState<0 | 1>(0);
+  const streamEchoPagerRef = useRef<StreamEchoPagerHandle>(null);
+  const echoPagerScrollX = useRef(new Animated.Value(0)).current;
   const [streamActiveEntry, setStreamActiveEntry] = useState<Entry | null>(null);
   const [monthSummaries, setMonthSummaries] = useState<MonthSummary[]>([]);
   const [temporalRackScrubbing, setTemporalRackScrubbing] = useState(false);
@@ -329,6 +354,7 @@ export function CaptureScreen({
   const firstLaunchPrefsLoadGenerationRef = useRef(0);
   const analyticsGateReportedRef = useRef(false);
   const { width: windowWidth } = useWindowDimensions();
+  const echoPageWidth = PixelRatio.roundToNearestPixel(windowWidth);
   const t = useAppTheme();
   const insets = useSafeAreaInsets();
   const gutter = screenContentGutter(windowWidth);
@@ -396,6 +422,8 @@ export function CaptureScreen({
     setSearchQuery('');
     setSearchExpanded(false);
     setSearchFocused(false);
+    streamEchoPagerRef.current?.scrollToStream(false);
+    setEchoPageIndex(0);
     if (searchBlurTimerRef.current) {
       clearTimeout(searchBlurTimerRef.current);
       searchBlurTimerRef.current = null;
@@ -571,6 +599,37 @@ export function CaptureScreen({
   }, [devTemporalNavEnabled, entries.length]);
 
   useEffect(() => {
+    if (!ECHO_LAYER_ENABLED) {
+      setEchoCandidates([]);
+      return;
+    }
+    void resolveEchoCandidates({
+      fallbackEntries: streamDisplayEntries,
+      preferStreamFallback: streamDisplayEntries.length > 0,
+    })
+      .then(setEchoCandidates)
+      .catch((err) => {
+        if (__DEV__) {
+          console.warn('resolveEchoCandidates failed', err);
+        }
+      });
+  }, [demoStreamMode, entries.length, totalEntryCount, streamDisplayEntries]);
+
+  useEffect(() => {
+    if (searchTrimmed.length > 0) {
+      streamEchoPagerRef.current?.scrollToStream(false);
+      setEchoPageIndex(0);
+    }
+  }, [searchTrimmed]);
+
+  useEffect(() => {
+    if (readEntry != null) {
+      streamEchoPagerRef.current?.scrollToStream(false);
+      setEchoPageIndex(0);
+    }
+  }, [readEntry?.id]);
+
+  useEffect(() => {
     void syncRecentThoughtsToWidget(entries);
   }, [entries]);
 
@@ -655,6 +714,9 @@ export function CaptureScreen({
     Keyboard.dismiss();
     inputRef.current?.blur();
     searchInputRef.current?.blur();
+    if (!isDemoStreamEntryId(entry.id)) {
+      void recordEntryOpened(entry.id).catch(() => {});
+    }
     readEntryOpenCleanupRef.current = openAfterKeyboardHidden(() => {
       readEntryOpenCleanupRef.current = null;
       setReadEntryAnchor(anchor ?? null);
@@ -1092,7 +1154,15 @@ export function CaptureScreen({
   const onReadEntryUpdated = useCallback((updated: Entry) => {
     setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
     setSearchResults((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
-  }, []);
+    if (ECHO_LAYER_ENABLED) {
+      void resolveEchoCandidates({
+        fallbackEntries: streamDisplayEntries,
+        preferStreamFallback: streamDisplayEntries.length > 0,
+      })
+        .then(setEchoCandidates)
+        .catch(() => {});
+    }
+  }, [streamDisplayEntries]);
 
   const onVoiceTranscriptPartial = useCallback((partial: string) => {
     setText(mergeVoiceTranscript(voiceCaptureBaseRef.current, partial));
@@ -1247,10 +1317,39 @@ export function CaptureScreen({
   const headerLogoAlignStyle = { marginLeft: -chinottoLogoLeadingOutset(headerLogoSize) };
 
   const showWritePeekAffordance =
+    echoPageIndex === 0 &&
     streamDisplayEntries.length > 0 &&
     streamScrollY >= STREAM_WRITE_PEEK_MIN_SCROLL_Y;
 
   const searchActive = searchTrimmed.length > 0;
+  const echoLayerEligible = isEchoLayerEligible({
+    active: ECHO_LAYER_ENABLED,
+    searchActive,
+    readSheetOpen: readEntry != null,
+    totalEntryCount: Math.max(totalEntryCount, streamDisplayEntries.length),
+    candidateCount: echoCandidates.length,
+  });
+  const echoPagerInteractive = isEchoPagerInteractive({
+    eligible: echoLayerEligible,
+    searchActive,
+    readSheetOpen: readEntry != null,
+    onEchoPage: echoPageIndex === 1,
+  });
+  const echoOnEchoPage = echoPageIndex === 1 && echoLayerEligible;
+  const echoChrome = useMemo(() => echoChromeFromTheme(t), [t]);
+
+  useLayoutEffect(() => {
+    if (echoLayerEligible && echoPageWidth > 0) {
+      echoPagerScrollX.setValue(streamEchoPagerHomeOffset(echoPageWidth));
+    }
+  }, [echoLayerEligible, echoPagerScrollX, echoPageWidth]);
+
+  useEffect(() => {
+    if (echoOnEchoPage) {
+      Keyboard.dismiss();
+    }
+  }, [echoOnEchoPage]);
+
   const temporalNavActive = isTemporalNavigationActive(
     TEMPORAL_NAV_ENABLED,
     __DEV__ && devTemporalNavEnabled,
@@ -1263,6 +1362,7 @@ export function CaptureScreen({
     bypassMinEntryCount: __DEV__ && devTemporalNavEnabled,
   });
   const showTemporalScrubber =
+    echoPageIndex === 0 &&
     temporalScrubberEligible &&
     !temporalRackAtCapture &&
     shouldPeekTemporalScrubber(streamScrollY, streamScrollVelocityY);
@@ -1384,220 +1484,243 @@ export function CaptureScreen({
 
   return (
     <View style={styles.shell}>
-      <AmbientBackground />
+      <EchoSpatialBackground
+        scrollX={echoPagerScrollX}
+        pageWidth={echoPageWidth}
+        echoMounted={echoLayerEligible}
+        chrome={echoChrome}
+      />
       <SafeAreaView style={styles.safe} edges={['top', 'right', 'left']}>
         <KeyboardAvoidingView
           style={styles.flex}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           enabled={readEntry == null}
         >
-          <View
-            style={[
-              styles.headerBar,
-              {
-                paddingHorizontal: gutter,
-                paddingTop: t.spacing.xs,
-                marginBottom: t.spacing.sm,
-              },
-            ]}
+          <StreamEchoPager
+            ref={streamEchoPagerRef}
+            pageWidth={echoPageWidth}
+            echoMounted={echoLayerEligible}
+            pagerInteractive={echoPagerInteractive}
+            scrollX={echoLayerEligible ? echoPagerScrollX : undefined}
+            onPageIndexChange={setEchoPageIndex}
+            echo={
+              <EchoPageShell
+                candidates={echoCandidates}
+                onEntryPress={onStreamEntryPress}
+              />
+            }
           >
-            <View
-              style={[
-                styles.headerLogoSlot,
-                showCaptureSyncHeader && styles.headerReserveDevMenuTray,
-              ]}
-            >
-              <Pressable
-                accessibilityLabel="Chinotto"
-                accessibilityHint="Opens Settings"
-                hitSlop={12}
-                onPress={() => setSettingsRoute('settings')}
+            <View style={styles.flex}>
+              <View
+                style={[
+                  styles.headerBar,
+                  {
+                    paddingHorizontal: gutter,
+                    paddingTop: t.spacing.xs,
+                    marginBottom: t.spacing.sm,
+                  },
+                ]}
               >
-                <ChinottoLogo
-                  testID="header-logo"
-                  size={headerLogoSize}
-                  color={headerLogoColor}
-                  style={headerLogoAlignStyle}
-                />
-              </Pressable>
-              {showCaptureSyncHeader ? (
-                <SyncHeaderStatus
-                  phase={demoStreamMode ? 'signed_in' : authRestorePhase}
-                  uploadPending={!demoStreamMode && authRestorePhase === 'signed_in' && uploadPending}
-                  uploadStuck={!demoStreamMode && authRestorePhase === 'signed_in' && uploadStuck}
-                  onPress={openSyncModalFromHeader}
-                  enableSyncLabelShimmer={enableSyncLabelShimmer}
-                  onEnableSyncLabelShimmerComplete={onEnableSyncLabelShimmerComplete}
-                  style={[styles.syncAfterLogo, { marginLeft: spacing.xs }]}
-                />
-              ) : null}
-            </View>
-          </View>
-          <View style={styles.captureStreamStack}>
-            <View style={{ paddingHorizontal: gutter }}>
-              <Animated.View style={[styles.composerBlock, { opacity: composerSearchDim }]}>
-                <View style={styles.composerInputRow}>
-                  <View style={styles.composerInputWrap}>
-                    <CaptureInput
-                      ref={inputRef}
-                      value={text}
-                      onChangeText={setText}
-                      onFocus={onCaptureComposerFocus}
-                      onSubmit={handleSubmit}
-                      minHeight={composerMinHeight}
-                      maxHeight={composerMaxHeight}
-                      placeholder="Jot a thought…"
-                      placeholderTextColor={capturePlaceholderColor}
-                      autoFocus={allowCaptureFocus && !deferKeyboardForFirstLaunchReveal && readEntry == null}
-                      editable={readEntry == null}
-                      showSoftInputOnFocus={readEntry == null}
+                <View
+                  style={[
+                    styles.headerLogoSlot,
+                    showCaptureSyncHeader && styles.headerReserveDevMenuTray,
+                  ]}
+                >
+                  <Pressable
+                    accessibilityLabel="Chinotto"
+                    accessibilityHint="Opens Settings"
+                    hitSlop={12}
+                    onPress={() => setSettingsRoute('settings')}
+                  >
+                    <ChinottoLogo
+                      testID="header-logo"
+                      size={headerLogoSize}
+                      color={headerLogoColor}
+                      style={headerLogoAlignStyle}
                     />
-                  </View>
-                  {showVoiceCapture ? (
-                    <VoiceMicButton
-                      phase={voicePhase}
-                      theme={t}
-                      onPress={() => {
-                        if (voicePhase === 'listening') {
-                          stopVoiceCaptureSession();
-                        } else {
-                          voiceCaptureBaseRef.current = text;
-                          void startVoiceCaptureSession();
-                        }
-                      }}
+                  </Pressable>
+                  {showCaptureSyncHeader ? (
+                    <SyncHeaderStatus
+                      phase={demoStreamMode ? 'signed_in' : authRestorePhase}
+                      uploadPending={!demoStreamMode && authRestorePhase === 'signed_in' && uploadPending}
+                      uploadStuck={!demoStreamMode && authRestorePhase === 'signed_in' && uploadStuck}
+                      onPress={openSyncModalFromHeader}
+                      enableSyncLabelShimmer={enableSyncLabelShimmer}
+                      onEnableSyncLabelShimmerComplete={onEnableSyncLabelShimmerComplete}
+                      style={[styles.syncAfterLogo, { marginLeft: spacing.xs }]}
                     />
                   ) : null}
                 </View>
-              </Animated.View>
-            </View>
-            {streamDisplayEntries.length > 0 ? (
-              <View
-                testID="stream-search-sticky"
-                style={[styles.searchStickyHeader, { paddingHorizontal: gutter }]}
-              >
-                <StreamSearchField
-                  ref={searchInputRef}
-                  glassSticky
-                  expanded={searchExpanded}
-                  focused={searchFocused}
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  onFocus={onSearchFocus}
-                  onBlur={onSearchBlur}
-                  onPressExpand={expandSearch}
-                  onPressClose={collapseSearch}
-                  resultLabel={searchResultLabel}
-                />
               </View>
-            ) : null}
-            <ScrollView
-                testID="capture-stream-scroll"
-                ref={streamScrollViewRef}
-                style={styles.scrollFlex}
-                keyboardShouldPersistTaps="handled"
-                keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-                nestedScrollEnabled
-                directionalLockEnabled
-                scrollEventThrottle={16}
-                onScroll={handleScroll}
-                onLayout={(e) => setStreamViewportHeight(e.nativeEvent.layout.height)}
-                contentContainerStyle={[
-                  styles.scrollContent,
-                  {
-                    flexGrow: 1,
-                  },
-                ]}
-              >
-                <RecentList
-                  entries={searchTrimmed.length > 0 ? searchResults : streamDisplayEntries}
-                  visible
-                  deferEmptyStreamMotion={!allowCaptureFocus}
-                  streamEmptyAmbient={searchTrimmed.length === 0 && streamDisplayEntries.length === 0}
-                  streamEmptyAmbientSuppressed={streamEmptyAmbientSuppressed}
-                  streamScrollY={streamScrollY}
-                  streamViewportHeight={streamViewportHeight}
-                  streamScrollViewRef={streamScrollViewRef as unknown as RefObject<View | null>}
-                  streamViewportFocusEnabled={
-                    searchTrimmed.length > 0 ? searchResults.length > 0 : streamDisplayEntries.length > 0
-                  }
-                  highlightEntryId={searchTrimmed.length > 0 ? null : streamHighlightEntryId}
-                  searchHighlightQuery={searchTrimmed.length > 0 ? searchTrimmed : undefined}
-                  emptyHint={
-                    searchTrimmed.length > 0
-                      ? undefined
-                      : streamDisplayEntries.length === 0
-                        ? 'Write it down.\nIt stays.'
-                        : undefined
-                  }
-                  listFooterHint={
-                    searchTrimmed.length > 0 && searchTruncated
-                      ? `Showing first ${SEARCH_MAX_RESULTS} matches`
-                      : undefined
-                  }
-                  onEntryPress={onStreamEntryPress}
-                  onEntryDelete={handleEntryDelete}
-                  onActiveStreamEntryChange={
-                    searchActive || temporalRackScrubbing ? undefined : setStreamActiveEntry
-                  }
-                  scrollToEntryId={scrollToEntryId}
-                  streamScrollYRef={streamScrollYRef}
-                  onScrollToEntryOffset={onScrollToEntryOffset}
-                  onScrollToEntryComplete={onScrollToEntryComplete}
-                />
-                <Pressable
-                  style={[styles.bottomFill, { flexGrow: 1, minHeight: 1 }]}
-                  accessible={false}
-                  onPress={Keyboard.dismiss}
-                />
-            </ScrollView>
-            {temporalScrubberEligible ? (
-              <TemporalMonthRack
-                months={monthSummaries}
-                streamMonthKey={temporalChromeMonthKey}
-                visible={showTemporalScrubber}
-                rightInset={TEMPORAL_TRAILING_CHROME_RIGHT_INSET}
-                topInset={temporalRackTop}
-                bottomInset={temporalRackBottom}
-                onScrubbingChange={setTemporalRackScrubbing}
-                onMonthCommitted={onTemporalMonthCommitted}
-                onActiveMonthPress={onTemporalActiveMonthPress}
-                hapticsEnabled={hapticsEnabled}
-                onMonthBoundaryHaptic={playTemporalBoundaryHaptic}
-              />
-            ) : null}
-            {showWritePeekAffordance ? (
-              <Pressable
-                testID="capture-chrome-peek"
-                accessibilityLabel="Write"
-                accessibilityHint="Scrolls back to capture"
-                accessibilityRole="button"
-                hitSlop={10}
-                onPress={onWritePeekPress}
-                style={({ pressed }) => [
-                  styles.streamWritePeek,
-                  {
-                    right: TEMPORAL_TRAILING_CHROME_RIGHT_INSET,
-                    bottom: Math.max(insets.bottom, 10) + 6,
-                    width: TEMPORAL_MONTH_RACK_CHROME_WIDTH,
-                    borderColor: searchBorderIdle,
-                    backgroundColor: pressed ? searchPressedSurface : searchSurface,
-                    opacity: pressed ? 0.92 : 0.78,
-                  },
-                ]}
-              >
-                <Text
-                  style={{
-                    fontFamily: fonts.regular,
-                    fontSize: t.typography.meta.fontSize,
-                    letterSpacing: 0.35,
-                    color: t.colors.metaFg,
-                  }}
+              <View style={styles.captureStreamStack}>
+                <View style={{ paddingHorizontal: gutter }}>
+                  <Animated.View style={[styles.composerBlock, { opacity: composerSearchDim }]}>
+                    <View style={styles.composerInputRow}>
+                      <View style={styles.composerInputWrap}>
+                        <CaptureInput
+                          ref={inputRef}
+                          value={text}
+                          onChangeText={setText}
+                          onFocus={onCaptureComposerFocus}
+                          onSubmit={handleSubmit}
+                          minHeight={composerMinHeight}
+                          maxHeight={composerMaxHeight}
+                          placeholder="Jot a thought…"
+                          placeholderTextColor={capturePlaceholderColor}
+                          autoFocus={allowCaptureFocus && !deferKeyboardForFirstLaunchReveal && readEntry == null}
+                          editable={readEntry == null}
+                          showSoftInputOnFocus={readEntry == null}
+                        />
+                      </View>
+                      {showVoiceCapture ? (
+                        <VoiceMicButton
+                          phase={voicePhase}
+                          theme={t}
+                          onPress={() => {
+                            if (voicePhase === 'listening') {
+                              stopVoiceCaptureSession();
+                            } else {
+                              voiceCaptureBaseRef.current = text;
+                              void startVoiceCaptureSession();
+                            }
+                          }}
+                        />
+                      ) : null}
+                    </View>
+                  </Animated.View>
+                </View>
+                {streamDisplayEntries.length > 0 ? (
+                  <View
+                    testID="stream-search-sticky"
+                    style={[styles.searchStickyHeader, { paddingHorizontal: gutter }]}
+                  >
+                    <StreamSearchField
+                      ref={searchInputRef}
+                      glassSticky
+                      expanded={searchExpanded}
+                      focused={searchFocused}
+                      value={searchQuery}
+                      onChangeText={setSearchQuery}
+                      onFocus={onSearchFocus}
+                      onBlur={onSearchBlur}
+                      onPressExpand={expandSearch}
+                      onPressClose={collapseSearch}
+                      resultLabel={searchResultLabel}
+                    />
+                  </View>
+                ) : null}
+                <ScrollView
+                  testID="capture-stream-scroll"
+                  ref={streamScrollViewRef}
+                  style={styles.scrollFlex}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+                  nestedScrollEnabled
+                  directionalLockEnabled
+                  scrollEventThrottle={16}
+                  onScroll={handleScroll}
+                  onLayout={(e) => setStreamViewportHeight(e.nativeEvent.layout.height)}
+                  contentContainerStyle={[
+                    styles.scrollContent,
+                    {
+                      flexGrow: 1,
+                    },
+                  ]}
                 >
-                  Write
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
+                  <RecentList
+                    entries={searchTrimmed.length > 0 ? searchResults : streamDisplayEntries}
+                    visible
+                    deferEmptyStreamMotion={!allowCaptureFocus}
+                    streamEmptyAmbient={searchTrimmed.length === 0 && streamDisplayEntries.length === 0}
+                    streamEmptyAmbientSuppressed={streamEmptyAmbientSuppressed}
+                    streamScrollY={streamScrollY}
+                    streamViewportHeight={streamViewportHeight}
+                    streamScrollViewRef={streamScrollViewRef as unknown as RefObject<View | null>}
+                    streamViewportFocusEnabled={
+                      searchTrimmed.length > 0 ? searchResults.length > 0 : streamDisplayEntries.length > 0
+                    }
+                    highlightEntryId={searchTrimmed.length > 0 ? null : streamHighlightEntryId}
+                    searchHighlightQuery={searchTrimmed.length > 0 ? searchTrimmed : undefined}
+                    emptyHint={
+                      searchTrimmed.length > 0
+                        ? undefined
+                        : streamDisplayEntries.length === 0
+                          ? 'Write it down.\nIt stays.'
+                          : undefined
+                    }
+                    listFooterHint={
+                      searchTrimmed.length > 0 && searchTruncated
+                        ? `Showing first ${SEARCH_MAX_RESULTS} matches`
+                        : undefined
+                    }
+                    onEntryPress={onStreamEntryPress}
+                    onEntryDelete={handleEntryDelete}
+                    onActiveStreamEntryChange={
+                      searchActive || temporalRackScrubbing ? undefined : setStreamActiveEntry
+                    }
+                    scrollToEntryId={scrollToEntryId}
+                    streamScrollYRef={streamScrollYRef}
+                    onScrollToEntryOffset={onScrollToEntryOffset}
+                    onScrollToEntryComplete={onScrollToEntryComplete}
+                  />
+                  <Pressable
+                    style={[styles.bottomFill, { flexGrow: 1, minHeight: 1 }]}
+                    accessible={false}
+                    onPress={Keyboard.dismiss}
+                  />
+                </ScrollView>
+                {temporalScrubberEligible ? (
+                  <TemporalMonthRack
+                    months={monthSummaries}
+                    streamMonthKey={temporalChromeMonthKey}
+                    visible={showTemporalScrubber}
+                    rightInset={TEMPORAL_TRAILING_CHROME_RIGHT_INSET}
+                    topInset={temporalRackTop}
+                    bottomInset={temporalRackBottom}
+                    onScrubbingChange={setTemporalRackScrubbing}
+                    onMonthCommitted={onTemporalMonthCommitted}
+                    onActiveMonthPress={onTemporalActiveMonthPress}
+                    hapticsEnabled={hapticsEnabled}
+                    onMonthBoundaryHaptic={playTemporalBoundaryHaptic}
+                  />
+                ) : null}
+                {showWritePeekAffordance ? (
+                  <Pressable
+                    testID="capture-chrome-peek"
+                    accessibilityLabel="Write"
+                    accessibilityHint="Scrolls back to capture"
+                    accessibilityRole="button"
+                    hitSlop={10}
+                    onPress={onWritePeekPress}
+                    style={({ pressed }) => [
+                      styles.streamWritePeek,
+                      {
+                        right: TEMPORAL_TRAILING_CHROME_RIGHT_INSET,
+                        bottom: Math.max(insets.bottom, 10) + 6,
+                        width: TEMPORAL_MONTH_RACK_CHROME_WIDTH,
+                        borderColor: searchBorderIdle,
+                        backgroundColor: pressed ? searchPressedSurface : searchSurface,
+                        opacity: pressed ? 0.92 : 0.78,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        fontFamily: fonts.regular,
+                        fontSize: t.typography.meta.fontSize,
+                        letterSpacing: 0.35,
+                        color: t.colors.metaFg,
+                      }}
+                    >
+                      Write
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+          </StreamEchoPager>
         </KeyboardAvoidingView>
       </SafeAreaView>
       {settingsRoute === 'settings' ? (
