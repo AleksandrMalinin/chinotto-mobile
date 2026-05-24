@@ -10,6 +10,10 @@ export type TemporalChromeColors = {
   rackBorderActive: string;
   rackFadeTo: string;
   rackShadow: ViewStyle;
+  compactSurface: string;
+  compactBorder: string;
+  compactShadow: ViewStyle;
+  compactYearLabel: string;
   yearLabel: string;
   monthActive: string;
   monthNear: string;
@@ -42,6 +46,18 @@ export function temporalChromeColors(t: AppTheme): TemporalChromeColors {
             shadowRadius: 14,
           }
         : { elevation: isDark ? 8 : 4 },
+    compactSurface: isDark ? 'rgba(24, 26, 38, 0.98)' : 'rgba(255, 255, 255, 0.98)',
+    compactBorder: isDark ? 'rgba(150, 162, 224, 0.42)' : colors.borderFocus,
+    compactShadow:
+      Platform.OS === 'ios'
+        ? {
+            shadowColor: isDark ? 'rgba(0,0,0,0.7)' : 'rgba(40,48,80,0.28)',
+            shadowOffset: { width: -2, height: 4 },
+            shadowOpacity: isDark ? 0.5 : 0.22,
+            shadowRadius: 16,
+          }
+        : { elevation: isDark ? 10 : 6 },
+    compactYearLabel: isDark ? 'rgba(200, 206, 230, 0.88)' : colors.metaFg,
     yearLabel: colors.sectionFg,
     monthActive: colors.accent,
     monthNear: colors.metaFg,

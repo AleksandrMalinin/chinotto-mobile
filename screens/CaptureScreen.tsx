@@ -76,9 +76,9 @@ import {
 } from '../constants/echoLayer';
 import {
   TEMPORAL_NAV_ENABLED,
-  TEMPORAL_RACK_BOTTOM_INSET,
   TEMPORAL_NAV_MIN_SCROLL_Y,
   TEMPORAL_NAV_SCRUBBER_IDLE_MS,
+  TEMPORAL_RACK_BOTTOM_INSET,
   TEMPORAL_TRAILING_CHROME_RIGHT_INSET,
 } from '../constants/temporalNavigation';
 import {
@@ -1483,6 +1483,7 @@ export function CaptureScreen({
   const temporalScrubberEligible = isTemporalScrubberEligible({
     active: temporalNavActive,
     searchActive,
+    readSheetOpen: readEntry != null,
     totalEntryCount,
     hasStreamRows: streamDisplayEntries.length > 0,
     bypassMinEntryCount: __DEV__ && devTemporalNavEnabled,
@@ -1500,7 +1501,6 @@ export function CaptureScreen({
         ? monthKeyFromIso(streamDisplayEntries[0].createdAt)
         : referenceMonthKey;
   const temporalChromeMonthKey = temporalCommittedMonthKey ?? visibleMonthKey;
-  const temporalRackBottom = Math.max(insets.bottom, 8) + TEMPORAL_RACK_BOTTOM_INSET;
 
   const playTemporalBoundaryHaptic = useCallback(() => {
     if (!hapticsEnabled || Platform.OS === 'web') {
@@ -1802,7 +1802,7 @@ export function CaptureScreen({
                     streamMonthKey={temporalChromeMonthKey}
                     visible={showTemporalScrubber}
                     rightInset={TEMPORAL_TRAILING_CHROME_RIGHT_INSET}
-                    bottomInset={temporalRackBottom}
+                    bottomInset={TEMPORAL_RACK_BOTTOM_INSET + insets.bottom}
                     onScrubbingChange={setTemporalRackScrubbing}
                     onMonthCommitted={onTemporalMonthCommitted}
                     onActiveMonthPress={onTemporalActiveMonthPress}
