@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { EchoCandidate } from '../../utils/selectEchoCandidates';
@@ -6,7 +6,7 @@ import { fonts, screenContentInnerPad, useAppTheme } from '../../theme';
 import { formatEchoRelativeAge } from '../../utils/formatEchoRelativeAge';
 import type { EchoChromeColors } from './echoChrome';
 import { echoAccentForKind } from './echoChrome';
-import { ECHO_VESSEL_RADIUS, echoVesselChrome } from './echoVesselChrome';
+import { ECHO_FRAGMENT_RADIUS, echoFragmentChrome } from './echoVesselChrome';
 
 export type EchoMemoryVesselProps = {
   candidates: readonly EchoCandidate[];
@@ -14,23 +14,19 @@ export type EchoMemoryVesselProps = {
   onEntryPress?: (entry: EchoCandidate) => void;
 };
 
-type EchoMemoryRowProps = {
+type EchoMemoryFragmentProps = {
   entry: EchoCandidate;
   chrome: EchoChromeColors;
-  rowPressedFill: string;
-  separatorColor: string;
-  isLast: boolean;
+  fragment: ReturnType<typeof echoFragmentChrome>;
   onPress?: () => void;
 };
 
-function EchoMemoryRow({
+function EchoMemoryFragment({
   entry,
   chrome,
-  rowPressedFill,
-  separatorColor,
-  isLast,
+  fragment,
   onPress,
-}: EchoMemoryRowProps) {
+}: EchoMemoryFragmentProps) {
   const [pressed, setPressed] = useState(false);
   const isGravity = entry.kind === 'gravity';
   const accent = echoAccentForKind(chrome, entry.kind);
@@ -46,15 +42,18 @@ function EchoMemoryRow({
       {...(Platform.OS === 'android' ? { android_ripple: null } : {})}
     >
       <View
+        testID={`echo-fragment-surface-${entry.id}`}
         style={[
-          styles.row,
-          !isLast && styles.rowWithDivider,
-          !isLast && { borderBottomColor: separatorColor },
-          pressed && { backgroundColor: rowPressedFill },
+          styles.fragment,
+          {
+            backgroundColor: fragment.fill,
+            borderColor: fragment.border,
+          },
+          pressed && { backgroundColor: fragment.pressed },
         ]}
       >
         <View style={[styles.dot, { backgroundColor: accent }]} />
-        <View style={styles.rowBody}>
+        <View style={styles.fragmentBody}>
           <Text style={[styles.age, { color: chrome.metaMuted }]}>
             {formatEchoRelativeAge(entry.createdAt)}
           </Text>
@@ -77,54 +76,43 @@ function EchoMemoryRow({
   );
 }
 
-/** One inset-grouped memory register — editorial rows, not repeated glass tiles. */
+/** Stacked memory fragments — each thought reads as its own recall anchor. */
 export function EchoMemoryVessel({ candidates, chrome, onEntryPress }: EchoMemoryVesselProps) {
   const t = useAppTheme();
-  const vessel = useMemo(() => echoVesselChrome(t, chrome), [t, chrome]);
+  const fragment = useMemo(() => echoFragmentChrome(t, chrome), [t, chrome]);
 
   if (candidates.length === 0) {
     return null;
   }
 
   return (
-    <View style={[styles.outer, vessel.shadow]} testID="echo-memory-vessel">
-      <View style={[styles.shell, { backgroundColor: vessel.fill }]}>
-        {candidates.map((entry, index) => (
-          <Fragment key={entry.id}>
-            <EchoMemoryRow
-              entry={entry}
-              chrome={chrome}
-              rowPressedFill={vessel.rowPressed}
-              separatorColor={vessel.separator}
-              isLast={index === candidates.length - 1}
-              onPress={onEntryPress != null ? () => onEntryPress(entry) : undefined}
-            />
-          </Fragment>
-        ))}
-      </View>
+    <View style={styles.stack} testID="echo-memory-vessel">
+      {candidates.map((entry) => (
+        <EchoMemoryFragment
+          key={entry.id}
+          entry={entry}
+          chrome={chrome}
+          fragment={fragment}
+          onPress={onEntryPress != null ? () => onEntryPress(entry) : undefined}
+        />
+      ))}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  outer: {
+  stack: {
     width: '100%',
-    borderRadius: ECHO_VESSEL_RADIUS,
+    gap: 10,
   },
-  shell: {
-    borderRadius: ECHO_VESSEL_RADIUS,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  row: {
+  fragment: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    gap: 12,
     paddingVertical: 16,
     paddingHorizontal: screenContentInnerPad + 4,
-    gap: 12,
-  },
-  rowWithDivider: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderRadius: ECHO_FRAGMENT_RADIUS,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   dot: {
     width: 6,
@@ -133,7 +121,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
     opacity: 0.72,
   },
-  rowBody: {
+  fragmentBody: {
     flex: 1,
     minWidth: 0,
   },

@@ -27,7 +27,7 @@ const safeMetrics = {
 };
 
 describe('EchoMemoryVessel', () => {
-  it('renders one grouped register with editorial rows', () => {
+  it('renders stacked memory fragments with separate surfaces', () => {
     const { getByTestId, getByText, queryByText } = render(
       <SafeAreaProvider initialMetrics={safeMetrics}>
         <EchoMemoryVessel candidates={candidates} chrome={echoChromeColors(true)} />
@@ -37,6 +37,8 @@ describe('EchoMemoryVessel', () => {
     expect(getByTestId('echo-memory-vessel')).toBeTruthy();
     expect(getByTestId('echo-fragment-1')).toBeTruthy();
     expect(getByTestId('echo-fragment-2')).toBeTruthy();
+    expect(getByTestId('echo-fragment-surface-1')).toBeTruthy();
+    expect(getByTestId('echo-fragment-surface-2')).toBeTruthy();
     expect(getByText('Persistent thought')).toBeTruthy();
     expect(getByText(formatEchoRelativeAge(candidates[0]!.createdAt))).toBeTruthy();
     expect(queryByText('Revisited')).toBeNull();

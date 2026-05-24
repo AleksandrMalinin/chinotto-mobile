@@ -1,35 +1,21 @@
-import { Platform, type ViewStyle } from 'react-native';
-
 import type { useAppTheme } from '../../theme';
 import type { EchoChromeColors } from './echoChrome';
 
 type AppTheme = ReturnType<typeof useAppTheme>;
 
-export const ECHO_VESSEL_RADIUS = 18;
+export const ECHO_FRAGMENT_RADIUS = 14;
 
-export type EchoVesselChrome = {
+export type EchoFragmentChrome = {
   fill: string;
-  separator: string;
-  rowPressed: string;
-  shadow: ViewStyle;
+  border: string;
+  pressed: string;
 };
 
-/** Single inset-grouped register — solid fill, no page-edge blur clip. */
-export function echoVesselChrome(t: AppTheme, _echo: EchoChromeColors): EchoVesselChrome {
-  const { isDark, colors } = t;
-
+/** Per-thought fragment surfaces — stacked insets, not one monolithic register. */
+export function echoFragmentChrome(t: AppTheme, echo: EchoChromeColors): EchoFragmentChrome {
   return {
-    fill: colors.surfaceSearch,
-    separator: colors.streamDivider,
-    rowPressed: colors.accentSubtle,
-    shadow:
-      Platform.OS === 'ios'
-        ? {
-            shadowColor: isDark ? 'rgba(70, 82, 130, 0.85)' : 'rgba(60, 70, 120, 0.35)',
-            shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: isDark ? 0.16 : 0.08,
-            shadowRadius: 14,
-          }
-        : { elevation: 2 },
+    fill: echo.fragmentFill,
+    border: echo.fragmentBorder,
+    pressed: t.colors.accentSubtle,
   };
 }

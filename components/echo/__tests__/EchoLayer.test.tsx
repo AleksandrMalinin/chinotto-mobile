@@ -35,7 +35,7 @@ function renderEcho() {
 }
 
 describe('EchoLayer', () => {
-  it('reads as one grouped memory register, not stream rows or kind badges', () => {
+  it('reads as stacked memory fragments, not stream rows or kind badges', () => {
     const { getByTestId, queryByTestId, queryByText } = renderEcho();
 
     expect(getByTestId('echo-layer-kicker').props.children).toBe('Echo');
