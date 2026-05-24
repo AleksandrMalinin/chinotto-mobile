@@ -69,6 +69,17 @@ export function formatMonthRackYearLabel(monthKey: MonthKey, locale?: string): s
   return formatTemporalYearLabel(yearFromMonthKey(monthKey), locale);
 }
 
+/** Bottom-anchored compact rack — month primary, year secondary. */
+export function formatMonthRackCompactLabels(
+  monthKey: MonthKey,
+  locale?: string,
+): { monthLabel: string; yearLabel: string } {
+  return {
+    monthLabel: formatMonthRackLabel(monthKey, locale),
+    yearLabel: formatMonthRackYearLabel(monthKey, locale),
+  };
+}
+
 /**
  * Ambient count line — avoids “notes” / productivity wording.
  */
