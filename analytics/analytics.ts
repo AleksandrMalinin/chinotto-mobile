@@ -51,7 +51,9 @@ export type AnalyticsEvent =
       event: 'delete_account_failed';
       failure_kind: 'network' | 'unknown' | 'user_cancelled' | 'not_signed_in' | 'not_configured';
     }
-  | { event: 'delete_account_success' };
+  | { event: 'delete_account_success' }
+  | { event: 'echo_layer_revealed' }
+  | { event: 'echo_entry_opened' };
 
 type QueuedEvent = AnalyticsEvent & { ts: string };
 
