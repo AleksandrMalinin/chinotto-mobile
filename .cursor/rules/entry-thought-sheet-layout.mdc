@@ -17,8 +17,8 @@ Modal (transparent, overFullScreen)
 └── GestureHandlerRootView { flex: 1 }          // RNGH in Modal needs this on iOS
     └── View { flex: 1, backgroundColor: scrim } // testID: entry-read-sheet
         ├── Pressable { flex: 1 }                // dismiss backdrop
-        └── View { sheet styles }                // testID: entry-thought-sheet — LAST child
-            └── content (PanGestureHandler on grabber strip only, ScrollView / TextInput)
+        └── PanGestureHandler → Animated.View { sheet styles }  // testID: entry-thought-sheet — LAST child
+            └── content (ScrollView / TextInput)
 ```
 
 Sheet is pinned to the **bottom by flex column** (dismiss grows, sheet is last sibling). Content-sized height + `paddingBottom: max(safeArea, spacing)`.
@@ -27,7 +27,7 @@ Sheet is pinned to the **bottom by flex column** (dismiss grows, sheet is last s
 
 - `KeyboardAvoidingView` wrapping the sheet (leaves bottom padding / lifts sheet at rest)
 - `position: 'absolute'`, `bottom: 0`, `justifyContent: 'flex-end'` on modal root
-- `translateY` / `Animated.View` motion wrapper on the sheet container
+- `translateY` on a **static** inner wrapper while the sheet chrome stays fixed (splits background from content during drag)
 - `StyleSheet.absoluteFillObject` instead of `flex: 1` on modal root
 - Nested `GestureHandlerRootView` beyond the single root inside Modal
 - `Dimensions.get('screen')` fixed height on modal root
@@ -37,8 +37,8 @@ Sheet is pinned to the **bottom by flex column** (dismiss grows, sheet is last s
 - `maxHeight: '88%'` (compact) or numeric cap (expanded) on the **sheet View**
 - `KeyboardAvoidingView` only inside CaptureScreen — **never** inside this Modal
 - Keyboard inset: adjust **inner** editor `paddingBottom` via `keyboardWillShow` listeners — not the shell
-- Pan gestures: detection only on grabber strip; no drag translation on shell
-- **Enter animation:** `Modal animationType="none"`; animate scrim opacity + **inner** content opacity/translateY only — never the sheet shell (`testID="entry-thought-sheet"`)
+- Pan + drag/enter: `Animated.View` with `testID="entry-thought-sheet"` is the **last flex child**; `translateY` applies to that node so the whole sheet (background + chrome) moves together (same pattern as `TemporalMapSheet`)
+- **Enter animation:** `Modal animationType="none"`; scrim opacity + sheet `opacity` / `translateY` on `entry-thought-sheet` — not a separate static shell + inner motion layer
 
 ## Keyboard / edit mode
 

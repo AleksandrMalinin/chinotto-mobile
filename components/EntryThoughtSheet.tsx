@@ -8,14 +8,23 @@ import {
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
-import { GestureHandlerRootView, PanGestureHandler } from 'react-native-gesture-handler';
+import {
+  GestureHandlerRootView,
+  NativeViewGestureHandler,
+  PanGestureHandler,
+  ScrollView as GestureScrollView,
+  State,
+} from 'react-native-gesture-handler';
+import type {
+  NativeViewGestureHandler as NativeViewGestureHandlerType,
+  PanGestureHandler as PanGestureHandlerType,
+} from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useEntryContinuation } from '../hooks/useEntryContinuation';
@@ -24,11 +33,14 @@ import { fonts, screenContentGutter, useAppTheme } from '../theme';
 import { displayHostForUrl, extractHttpUrlsFromText } from '../utils/extractHttpUrlsFromText';
 import { formatEntryTime } from '../utils/groupEntriesByDate';
 import {
+  shouldCollapseExpandedThoughtSheet,
+  shouldDismissThoughtSheet,
+  shouldExpandThoughtSheet,
   thoughtSheetCompactScrollMaxHeight,
   thoughtSheetExpandedHeight,
   type ThoughtSheetOpenAnchor,
 } from './thoughtSheet/detents';
-import { useSheetPanActions } from './thoughtSheet/useSheetPanActions';
+import { useSheetDragDismiss } from './thoughtSheet/useSheetDragDismiss';
 import { useSheetEnterAnimation } from './thoughtSheet/useSheetEnterAnimation';
 import {
   thoughtSheetBackdropA11yLabel,
@@ -36,8 +48,8 @@ import {
 
 /**
  * SHEET SHELL LAYOUT (do not break — see .cursor/rules/entry-thought-sheet-layout.mdc):
- * Modal → GestureHandlerRootView flex:1 → root flex:1 + scrim → dismiss flex:1 → sheet View (last child).
- * No KeyboardAvoidingView, absolute bottom, translateY, or Animated wrapper on the sheet shell.
+ * Modal → GestureHandlerRootView flex:1 → root flex:1 + scrim → dismiss flex:1 → Pan → Animated sheet (last child).
+ * No KeyboardAvoidingView or absolute bottom on the modal root. Drag/enter translate the whole sheet node.
  */
 export type EntryThoughtSheetProps = {
   visible: boolean;
@@ -66,12 +78,16 @@ export function EntryThoughtSheet({
   const [copied, setCopied] = useState(false);
   const [phase, setPhase] = useState<SheetPhase>('compact');
   const [keyboardInset, setKeyboardInset] = useState(0);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<GestureScrollView>(null);
   const inputRef = useRef<TextInput>(null);
   const closingRef = useRef(false);
   const phaseRef = useRef<SheetPhase>('compact');
   const scrollYRef = useRef(0);
+  const panRef = useRef<PanGestureHandlerType>(null);
+  const scrollGestureRef = useRef<NativeViewGestureHandlerType>(null);
+  const dragKeyboardDismissedRef = useRef(false);
   const expandedHeight = thoughtSheetExpandedHeight(windowHeight, insets);
+  const dismissTravel = Math.round(windowHeight);
   const lastBodyTapAtRef = useRef(0);
 
   const { draft, setDraft, isEditing, beginEditing, endEditing, resetForClose, flushSave } =
@@ -125,21 +141,31 @@ export function EntryThoughtSheet({
     });
   }, [onClose, resetForClose]);
 
-  const expandSheetRef = useRef<() => void>(() => {});
-  const collapseSheetRef = useRef<() => void>(() => {});
-
-  const { onHandlerStateChange } = useSheetPanActions({
-    mode: phase,
-    scrollYRef,
-    onExpand: () => expandSheetRef.current(),
-    onCollapse: () => collapseSheetRef.current(),
+  const {
+    dragY,
+    onGestureEvent,
+    animateDismiss,
+    springBack,
+    resetDrag,
+    scrimDragMultiplier,
+  } = useSheetDragDismiss({
+    travel: dismissTravel,
     onDismiss: handleClose,
+    canDrag: () => phaseRef.current === 'expanded' || scrollYRef.current <= 4,
   });
+
+  const requestDismiss = useCallback(
+    (fromY = 0, velocityY = 0) => {
+      animateDismiss(fromY, velocityY);
+    },
+    [animateDismiss],
+  );
 
   const expandSheet = useCallback(() => {
     if (phaseRef.current === 'expanded') {
       return;
     }
+    resetDrag();
     beginEditing();
     setPhase('expanded');
     phaseRef.current = 'expanded';
@@ -147,7 +173,7 @@ export function EntryThoughtSheet({
     requestAnimationFrame(() => {
       inputRef.current?.focus();
     });
-  }, [beginEditing, playSheetHaptic]);
+  }, [beginEditing, playSheetHaptic, resetDrag]);
 
   const collapseSheet = useCallback(() => {
     if (phaseRef.current === 'compact') {
@@ -160,10 +186,70 @@ export function EntryThoughtSheet({
     playSheetHaptic();
     setPhase('compact');
     phaseRef.current = 'compact';
-  }, [endEditing, flushSave, playSheetHaptic]);
+    springBack();
+  }, [endEditing, flushSave, playSheetHaptic, springBack]);
 
-  expandSheetRef.current = expandSheet;
-  collapseSheetRef.current = collapseSheet;
+  const onSheetPanStateChange = useCallback(
+    (event: { nativeEvent: { oldState: number; state: number; translationY: number; velocityY: number } }) => {
+      const { oldState, state, translationY, velocityY } = event.nativeEvent;
+      if (state === State.BEGAN) {
+        dragKeyboardDismissedRef.current = false;
+      }
+      if (
+        !dragKeyboardDismissedRef.current &&
+        state === State.ACTIVE &&
+        translationY > 10 &&
+        phaseRef.current === 'expanded'
+      ) {
+        dragKeyboardDismissedRef.current = true;
+        Keyboard.dismiss();
+        setKeyboardInset(0);
+      }
+      if (oldState !== State.ACTIVE) {
+        return;
+      }
+      if (state !== State.END && state !== State.CANCELLED) {
+        return;
+      }
+
+      if (translationY < 0) {
+        if (
+          phaseRef.current === 'compact' &&
+          (scrollYRef.current ?? 0) <= 4 &&
+          shouldExpandThoughtSheet(translationY, velocityY)
+        ) {
+          expandSheet();
+        } else {
+          springBack();
+        }
+        return;
+      }
+
+      if (phaseRef.current === 'compact') {
+        if ((scrollYRef.current ?? 0) > 4 && translationY > 0) {
+          springBack();
+          return;
+        }
+        if (shouldDismissThoughtSheet(translationY, velocityY)) {
+          requestDismiss(translationY, velocityY);
+        } else {
+          springBack();
+        }
+        return;
+      }
+
+      if (shouldDismissThoughtSheet(translationY, velocityY)) {
+        requestDismiss(translationY, velocityY);
+        return;
+      }
+      if (shouldCollapseExpandedThoughtSheet(translationY, velocityY)) {
+        collapseSheet();
+        return;
+      }
+      springBack();
+    },
+    [collapseSheet, expandSheet, requestDismiss, springBack],
+  );
 
   useEffect(() => {
     if (!visible) {
@@ -174,8 +260,10 @@ export function EntryThoughtSheet({
       scrollYRef.current = 0;
       return;
     }
+    scrollYRef.current = 0;
+    resetDrag();
     scrollRef.current?.scrollTo({ y: 0, animated: false });
-  }, [visible, entry?.id]);
+  }, [visible, entry?.id, resetDrag]);
 
   useEffect(() => {
     if (!visible || !isExpanded) {
@@ -232,8 +320,18 @@ export function EntryThoughtSheet({
   }, [draft, entry]);
 
   const handleBackdropPress = useCallback(() => {
-    handleClose();
-  }, [handleClose]);
+    requestDismiss(0, 0);
+  }, [requestDismiss]);
+
+  const sheetTranslateY = useMemo(
+    () => Animated.add(contentTranslateY, dragY),
+    [contentTranslateY, dragY],
+  );
+
+  const combinedScrimOpacity = useMemo(
+    () => Animated.multiply(scrimOpacity, scrimDragMultiplier),
+    [scrimOpacity, scrimDragMultiplier],
+  );
 
   const backdropA11yLabel = thoughtSheetBackdropA11yLabel();
 
@@ -366,7 +464,7 @@ export function EntryThoughtSheet({
               styles.scrimLayer,
               {
                 backgroundColor: scrimColor,
-                opacity: scrimOpacity,
+                opacity: combinedScrimOpacity,
               },
             ]}
           />
@@ -377,33 +475,32 @@ export function EntryThoughtSheet({
             accessibilityLabel={backdropA11yLabel}
           />
 
-          <View
-            testID="entry-thought-sheet"
-            style={[
-              styles.sheet,
-              {
-                backgroundColor: colors.bgElevated,
-                borderColor: colors.border,
-                borderTopLeftRadius: radius.lg,
-                borderTopRightRadius: radius.lg,
-                paddingBottom: Math.max(insets.bottom, spacing.md),
-                maxHeight: isExpanded ? expandedHeight : '88%',
-              },
-            ]}
+          <PanGestureHandler
+            ref={panRef}
+            style={styles.sheetPanHost}
+            simultaneousHandlers={scrollGestureRef}
+            activeOffsetY={[-12, 12]}
+            failOffsetX={[-24, 24]}
+            onGestureEvent={onGestureEvent}
+            onHandlerStateChange={onSheetPanStateChange}
           >
             <Animated.View
-              style={{
-                opacity: contentOpacity,
-                transform: [{ translateY: contentTranslateY }],
-              }}
+              testID="entry-thought-sheet"
+              style={[
+                styles.sheet,
+                {
+                  backgroundColor: colors.bgElevated,
+                  borderColor: colors.border,
+                  borderTopLeftRadius: radius.lg,
+                  borderTopRightRadius: radius.lg,
+                  paddingBottom: Math.max(insets.bottom, spacing.md),
+                  maxHeight: isExpanded ? expandedHeight : '88%',
+                  opacity: contentOpacity,
+                  transform: [{ translateY: sheetTranslateY }],
+                },
+              ]}
             >
-              <PanGestureHandler
-                onHandlerStateChange={onHandlerStateChange}
-                activeOffsetY={[-12, 12]}
-                failOffsetX={[-24, 24]}
-              >
-                <View>{dragStrip}</View>
-              </PanGestureHandler>
+              {dragStrip}
 
               {linkCount > 1 && !isExpanded ? (
                 <View
@@ -505,48 +602,55 @@ export function EntryThoughtSheet({
                   />
                 </View>
               ) : (
-                <ScrollView
-                  ref={scrollRef}
-                  testID="entry-read-scroll"
-                  style={[styles.scroll, { maxHeight: scrollMaxHeight }]}
-                  onScroll={(event) => {
-                    scrollYRef.current = event.nativeEvent.contentOffset.y;
-                  }}
-                  scrollEventThrottle={16}
-                  contentContainerStyle={{
-                    paddingHorizontal: contentInset,
-                    paddingTop: spacing.sm,
-                    paddingBottom: comfortableReading ? spacing.lg + spacing.sm : spacing.lg,
-                  }}
-                  keyboardShouldPersistTaps="handled"
-                  showsVerticalScrollIndicator={comfortableReading}
+                <NativeViewGestureHandler
+                  ref={scrollGestureRef}
+                  waitFor={panRef}
+                  simultaneousHandlers={panRef}
                 >
-                  <Pressable
-                    onPress={handleBodyPress}
-                    accessibilityRole="text"
-                    accessibilityHint="Double tap to continue this thought"
+                  <GestureScrollView
+                    ref={scrollRef}
+                    testID="entry-read-scroll"
+                    style={[styles.scroll, { maxHeight: scrollMaxHeight }]}
+                    onScroll={(event) => {
+                      scrollYRef.current = event.nativeEvent.contentOffset.y;
+                    }}
+                    scrollEventThrottle={16}
+                    bounces
+                    contentContainerStyle={{
+                      paddingHorizontal: contentInset,
+                      paddingTop: spacing.sm,
+                      paddingBottom: comfortableReading ? spacing.lg + spacing.sm : spacing.lg,
+                    }}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={comfortableReading}
                   >
-                    <Text
-                      testID="entry-read-body"
-                      selectable
-                      style={[
-                        styles.bodyText,
-                        {
-                          color: colors.entryBody,
-                          fontFamily: body.fontFamily,
-                          fontSize: 17,
-                          lineHeight: comfortableReading ? 28 : 26,
-                          letterSpacing: 0.15,
-                        },
-                      ]}
+                    <Pressable
+                      onPress={handleBodyPress}
+                      accessibilityRole="text"
+                      accessibilityHint="Double tap to continue this thought"
                     >
-                      {draft}
-                    </Text>
-                  </Pressable>
-                </ScrollView>
+                      <Text
+                        testID="entry-read-body"
+                        selectable
+                        style={[
+                          styles.bodyText,
+                          {
+                            color: colors.entryBody,
+                            fontFamily: body.fontFamily,
+                            fontSize: 17,
+                            lineHeight: comfortableReading ? 28 : 26,
+                            letterSpacing: 0.15,
+                          },
+                        ]}
+                      >
+                        {draft}
+                      </Text>
+                    </Pressable>
+                  </GestureScrollView>
+                </NativeViewGestureHandler>
               )}
             </Animated.View>
-          </View>
+          </PanGestureHandler>
         </View>
       </GestureHandlerRootView>
     </Modal>
@@ -566,7 +670,11 @@ const styles = StyleSheet.create({
   dismissRegion: {
     flex: 1,
   },
+  sheetPanHost: {
+    width: '100%',
+  },
   sheet: {
+    width: '100%',
     borderWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: 0,
     overflow: 'hidden',

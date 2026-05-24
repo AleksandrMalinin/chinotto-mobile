@@ -1,6 +1,6 @@
 import * as Clipboard from 'expo-clipboard';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
-import { Linking, StyleSheet } from 'react-native';
+import { Animated, Linking, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { EntryThoughtSheet } from '../EntryThoughtSheet';
@@ -33,6 +33,15 @@ describe('EntryThoughtSheet', () => {
   beforeEach(() => {
     jest.mocked(Clipboard.setStringAsync).mockClear();
     jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined as never);
+    jest.spyOn(Animated, 'spring').mockImplementation(() => ({ start: jest.fn() }) as never);
+    jest.spyOn(Animated, 'timing').mockImplementation(
+      () =>
+        ({
+          start: (callback?: (result: { finished: boolean }) => void) => {
+            callback?.({ finished: true });
+          },
+        }) as never,
+    );
   });
 
   afterEach(() => {
@@ -174,7 +183,7 @@ describe('EntryThoughtSheet', () => {
     });
   });
 
-  it('pins sheet with flex column shell (no absolute or transform on sheet)', () => {
+  it('pins sheet with flex column shell (no absolute bottom or KAV)', () => {
     const { getByTestId, toJSON } = render(
       <SafeAreaProvider initialMetrics={safeAreaMetrics}>
         <EntryThoughtSheet visible entry={sampleEntry} onClose={jest.fn()} />
@@ -185,7 +194,7 @@ describe('EntryThoughtSheet', () => {
     const flat = StyleSheet.flatten(sheet.props.style);
     expect(flat.position).toBeUndefined();
     expect(flat.bottom).toBeUndefined();
-    expect(flat.transform).toBeUndefined();
+    expect(flat.transform).toEqual([{ translateY: expect.anything() }]);
 
     const tree = JSON.stringify(toJSON());
     expect(tree).not.toContain('KeyboardAvoidingView');
