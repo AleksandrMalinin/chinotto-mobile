@@ -24,18 +24,10 @@ export type EchoLayerProps = {
   onEntryPress?: (entry: EchoCandidate, anchor?: ThoughtSheetOpenAnchor) => void;
 };
 
-function whisperTitleForCandidates(candidates: readonly EchoCandidate[]): EchoHeadline {
-  const hasGravity = candidates.some((c) => c.kind === 'gravity');
-  if (hasGravity) {
-    return { kicker: 'Echo', title: 'Still here' };
-  }
-  return { kicker: 'Echo', title: 'From earlier' };
-}
-
-type EchoHeadline = {
-  kicker: string;
-  title: string;
-};
+const ECHO_HEADLINE = {
+  kicker: 'Echo',
+  caption: 'Thoughts that resurfaced over time.',
+} as const;
 
 export function EchoLayer({ candidates, onEntryPress }: EchoLayerProps) {
   const t = useAppTheme();
@@ -43,8 +35,7 @@ export function EchoLayer({ candidates, onEntryPress }: EchoLayerProps) {
   const insets = useSafeAreaInsets();
   const gutter = screenContentGutter(width);
   const chrome = useMemo(() => echoChromeFromTheme(t), [t]);
-  const headline = whisperTitleForCandidates(candidates);
-  const { meta } = t.typography;
+  const headline = ECHO_HEADLINE;
 
   const onRowPress = useCallback(
     (entry: EchoCandidate) => {
@@ -71,15 +62,15 @@ export function EchoLayer({ candidates, onEntryPress }: EchoLayerProps) {
         <View style={[styles.whisperBlock, { paddingHorizontal: gutter + screenContentInnerPad }]}>
           <Text
             testID="echo-layer-kicker"
-            style={[meta, styles.kicker, { color: chrome.metaMuted }]}
+            style={[styles.kicker, { color: chrome.headline }]}
           >
             {headline.kicker}
           </Text>
           <Text
-            testID="echo-layer-title"
-            style={[styles.whisper, { color: chrome.headline, fontFamily: fonts.medium }]}
+            testID="echo-layer-caption"
+            style={[styles.caption, { color: chrome.subtitle }]}
           >
-            {headline.title}
+            {headline.caption}
           </Text>
         </View>
 
@@ -108,14 +99,16 @@ const styles = StyleSheet.create({
   },
   kicker: {
     fontFamily: fonts.medium,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    fontSize: 11,
-    marginBottom: 6,
-  },
-  whisper: {
     fontSize: 22,
     lineHeight: 28,
     letterSpacing: -0.2,
+    marginBottom: 8,
+  },
+  caption: {
+    fontFamily: fonts.regular,
+    fontSize: 14,
+    lineHeight: 20,
+    letterSpacing: 0.1,
+    fontStyle: 'italic',
   },
 });

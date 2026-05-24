@@ -39,7 +39,10 @@ describe('EchoLayer', () => {
     const { getByTestId, queryByTestId, queryByText } = renderEcho();
 
     expect(getByTestId('echo-layer-kicker').props.children).toBe('Echo');
-    expect(getByTestId('echo-layer-title').props.children).toBe('Still here');
+    expect(getByTestId('echo-layer-caption').props.children).toBe(
+      'Thoughts that resurfaced over time.',
+    );
+    expect(queryByTestId('echo-layer-title')).toBeNull();
     expect(getByTestId('echo-memory-vessel')).toBeTruthy();
     expect(getByTestId('echo-fragment-1')).toBeTruthy();
     expect(queryByTestId('echo-header-logo')).toBeNull();
