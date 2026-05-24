@@ -35,6 +35,7 @@ import {
 } from '../theme';
 import { replaceHttpUrlsWithCompactDisplay } from '../utils/extractHttpUrlsFromText';
 import { formatEntryTime, groupEntriesByDate } from '../utils/groupEntriesByDate';
+import { splitTextBySearchQuery } from '../utils/splitTextBySearchQuery';
 import {
   findActiveFlatIndex,
   findActiveFlatIndexFromWindowMeasurements,
@@ -62,6 +63,8 @@ export type RecentListProps = {
   emptyHint?: string;
   /** Muted line below the list (e.g. search capped at N results). */
   listFooterHint?: string;
+  /** When set, highlights case-insensitive matches in entry preview lines. */
+  searchHighlightQuery?: string;
   /** Opens full-text read sheet (companion recall). Optional anchor for row→sheet motion. */
   onEntryPress?: (entry: Entry, anchor?: ThoughtSheetOpenAnchor) => void;
   onEntryDelete?: (entry: Entry) => void;
@@ -177,11 +180,58 @@ type StreamRowProps = {
   /** Viewport highlight: flatIndex - activeIndex (opacity); typography stays `isNewest`-driven. */
   streamFocusDelta?: number;
   streamFocusReduceMotion?: boolean;
+  searchHighlightQuery?: string;
   /** Matches `CaptureScreen` scroll `paddingHorizontal` so rows can full-bleed under press/trace. */
   streamGutter: number;
   onEntryPress?: (entry: Entry, anchor?: ThoughtSheetOpenAnchor) => void;
   onEntryDelete?: (entry: Entry) => void;
 };
+
+type EntryBodyPreviewProps = {
+  lineDisplay: string;
+  searchHighlightQuery?: string;
+  bodyStyle: object;
+  matchHighlightColor: string;
+  numberOfLines: number;
+  bodyOpacity: Animated.Value;
+};
+
+function EntryBodyPreview({
+  lineDisplay,
+  searchHighlightQuery,
+  bodyStyle,
+  matchHighlightColor,
+  numberOfLines,
+  bodyOpacity,
+}: EntryBodyPreviewProps) {
+  const segments = useMemo(
+    () => splitTextBySearchQuery(lineDisplay, searchHighlightQuery ?? ''),
+    [lineDisplay, searchHighlightQuery],
+  );
+  const highlightActive = (searchHighlightQuery?.trim().length ?? 0) > 0;
+
+  return (
+    <Animated.Text style={[bodyStyle, { opacity: bodyOpacity }]} numberOfLines={numberOfLines}>
+      {highlightActive
+        ? segments.map((segment, index) => (
+            <Text
+              key={`${index}-${segment.text.slice(0, 8)}`}
+              style={
+                segment.match
+                  ? {
+                      backgroundColor: matchHighlightColor,
+                      fontFamily: fonts.medium,
+                    }
+                  : undefined
+              }
+            >
+              {segment.text}
+            </Text>
+          ))
+        : lineDisplay}
+    </Animated.Text>
+  );
+}
 
 const RecentStreamRow = memo(function RecentStreamRowInner({
   item,
@@ -189,6 +239,7 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
   isNewest,
   streamFocusDelta,
   streamFocusReduceMotion = false,
+  searchHighlightQuery,
   streamGutter,
   onEntryPress,
   onEntryDelete,
@@ -323,8 +374,13 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
               { paddingHorizontal: streamGutter + screenContentInnerPad },
             ]}
           >
-            <Animated.Text
-              style={[
+            <EntryBodyPreview
+              lineDisplay={lineDisplay}
+              searchHighlightQuery={searchHighlightQuery}
+              numberOfLines={2}
+              bodyOpacity={bodyOpacityAnim.current!}
+              matchHighlightColor={colors.accentSubtle}
+              bodyStyle={[
                 styles.line,
                 {
                   flex: 1,
@@ -338,13 +394,9 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
                   lineHeight: showNewest ? 26 : body.lineHeight,
                   letterSpacing: showNewest ? 0.17 : 0.16,
                   marginRight: t.spacing.sm,
-                  opacity: bodyOpacityAnim.current!,
                 },
               ]}
-              numberOfLines={2}
-            >
-              {lineDisplay}
-            </Animated.Text>
+            />
             <Animated.Text
               style={[
                 styles.time,
@@ -373,6 +425,8 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
     <Swipeable
       friction={2}
       overshootRight={false}
+      /** Full-width reveal before commit — reduces accidental delete vs horizontal chrome. */
+      rightThreshold={DELETE_ACTION_WIDTH}
       renderRightActions={() => (
         <View
           style={[
@@ -626,6 +680,7 @@ function RecentListInner({
   visible,
   emptyHint,
   listFooterHint,
+  searchHighlightQuery,
   onEntryPress,
   onEntryDelete,
   highlightEntryId = null,
@@ -1062,6 +1117,7 @@ function RecentListInner({
               isNewest={item.entry.id === newestShownId}
               streamFocusDelta={streamFocusDelta}
               streamFocusReduceMotion={reduceMotion}
+              searchHighlightQuery={searchHighlightQuery}
               streamGutter={streamGutter}
               onEntryPress={onEntryPress}
               onEntryDelete={onEntryDelete}

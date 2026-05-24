@@ -134,4 +134,14 @@ describe('RecentList', () => {
     expect(getByTestId('recent-list')).toBeTruthy();
     expect(getByText('just landed')).toBeTruthy();
   });
+
+  it('highlights search matches in entry preview lines', () => {
+    const e = entryToday('Rest is not expecting anything');
+    const { getByText } = render(
+      <RecentList entries={[e]} visible searchHighlightQuery="rest" />
+    );
+
+    expect(getByText('Rest')).toBeTruthy();
+    expect(getByText(' is not expecting anything')).toBeTruthy();
+  });
 });

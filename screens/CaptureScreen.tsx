@@ -6,7 +6,9 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import {
   Alert,
+  Animated,
   DevSettings,
+  Easing,
   Keyboard,
   KeyboardAvoidingView,
   LayoutAnimation,
@@ -33,6 +35,7 @@ import { ChinottoLogo, chinottoLogoLeadingOutset } from '../components/ChinottoL
 import { EnableSyncModal } from '../components/EnableSyncModal';
 import { EntryThoughtSheet } from '../components/EntryThoughtSheet';
 import { RecentList } from '../components/RecentList';
+import { StreamSearchField } from '../components/StreamSearchField';
 import { TemporalMapSheet } from '../components/temporal/TemporalMapSheet';
 import { TemporalMonthRack } from '../components/temporal/TemporalMonthRack';
 import type { ThoughtSheetOpenAnchor } from '../components/thoughtSheet/detents';
@@ -115,6 +118,7 @@ import {
 } from '../theme';
 import type { MonthKey, MonthSummary } from '../types/temporal';
 import { monthKeyFromIso } from '../utils/streamMonthIndex';
+import { streamSearchResultLabel } from '../utils/streamSearchResultLabel';
 import { loadStreamUntilEntryIncluded, resolveMonthJumpAnchor } from '../utils/temporalJump';
 import {
   isTemporalNavigationActive,
@@ -301,6 +305,7 @@ export function CaptureScreen({
   const searchSignalLoggedRef = useRef(false);
   const inputRef = useRef<TextInput>(null);
   const searchInputRef = useRef<TextInput>(null);
+  const composerSearchDim = useRef(new Animated.Value(1)).current;
   const readEntryOpenCleanupRef = useRef<(() => void) | null>(null);
   const searchBlurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const entriesRef = useRef<Entry[]>([]);
@@ -336,6 +341,21 @@ export function CaptureScreen({
   searchQueryRef.current = searchQuery;
   const searchTrimmed = searchQuery.trim();
   searchActiveRef.current = searchTrimmed.length > 0;
+  const searchModeActive = searchExpanded || searchTrimmed.length > 0;
+
+  const searchResultLabel = useMemo(
+    () => streamSearchResultLabel(searchExpanded, searchTrimmed, searchResults.length),
+    [searchExpanded, searchTrimmed, searchResults.length],
+  );
+
+  useEffect(() => {
+    Animated.timing(composerSearchDim, {
+      toValue: searchModeActive ? 0.58 : 1,
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [composerSearchDim, searchModeActive]);
 
   useEffect(() => {
     void getHapticsEnabled().then(setHapticsEnabledState);
@@ -361,6 +381,7 @@ export function CaptureScreen({
 
   const expandSearch = useCallback(() => {
     playSearchChromeHaptic();
+    inputRef.current?.blur();
     animateSearchLayout();
     setSearchExpanded(true);
     requestAnimationFrame(() => {
@@ -1151,6 +1172,7 @@ export function CaptureScreen({
     streamDisplayEntries.length === 0 && (firstLaunchRevealDone !== true || !composerHasFocusedOnce);
 
   const onCaptureComposerFocus = useCallback(() => {
+    searchInputRef.current?.blur();
     if (composerHasFocusedOnce) {
       return;
     }
@@ -1209,33 +1231,24 @@ export function CaptureScreen({
   /** Taller composer so capture reads clearly as the primary surface on device. */
   const composerMinHeight = 76;
   const composerMaxHeight = 120;
-  /** Search: default dark whisper; sunlight = spec tokens (surface / border / placeholder). */
+  const searchBorderIdle = t.colors.searchBorder;
   const searchSurface = t.sunlightMode
     ? t.colors.surfaceSearch
     : t.isDark
-      ? 'rgba(255,255,255,0.015)'
-      : 'rgba(0,0,0,0.02)';
-  const searchBorderIdle = t.colors.searchBorder;
-  const searchBorderFocus = t.sunlightMode
-    ? t.colors.searchBorder
-    : t.isDark
-      ? 'rgba(255,255,255,0.1)'
-      : 'rgba(0,0,0,0.14)';
+      ? 'rgba(255,255,255,0.04)'
+      : 'rgba(0,0,0,0.035)';
   const searchPressedSurface = t.sunlightMode ? t.colors.accentSubtle : t.isDark
     ? 'rgba(255,255,255,0.03)'
     : 'rgba(0,0,0,0.04)';
-  const searchBorderWidth = t.sunlightMode ? 1 : StyleSheet.hairlineWidth;
-  const searchIconColor = t.colors.sectionFg;
-  const searchPlaceholderColor = t.colors.searchPlaceholder;
   const capturePlaceholderColor = t.colors.capturePlaceholder;
-  const searchFieldFg = t.sunlightMode ? t.colors.fg : t.colors.fgDim;
   const headerLogoColor = t.colors.logoMark;
   const headerLogoSize = 42;
   /** Ring geometry: align **outer ring** with search field (gutter only); composer is inset +`screenContentInnerPad`. */
   const headerLogoAlignStyle = { marginLeft: -chinottoLogoLeadingOutset(headerLogoSize) };
 
   const showWritePeekAffordance =
-    streamDisplayEntries.length > 0 && streamScrollY >= STREAM_WRITE_PEEK_MIN_SCROLL_Y;
+    streamDisplayEntries.length > 0 &&
+    streamScrollY >= STREAM_WRITE_PEEK_MIN_SCROLL_Y;
 
   const searchActive = searchTrimmed.length > 0;
   const temporalNavActive = isTemporalNavigationActive(
@@ -1421,195 +1434,121 @@ export function CaptureScreen({
             </View>
           </View>
           <View style={styles.captureStreamStack}>
-            <ScrollView
-              testID="capture-stream-scroll"
-              ref={streamScrollViewRef}
-              style={styles.scrollFlex}
-              keyboardShouldPersistTaps="handled"
-              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-              nestedScrollEnabled
-              scrollEventThrottle={16}
-              onScroll={handleScroll}
-              onLayout={(e) => setStreamViewportHeight(e.nativeEvent.layout.height)}
-              contentContainerStyle={[
-                styles.scrollContent,
-                {
-                  flexGrow: 1,
-                },
-              ]}
-            >
-              {/*
-                Gutter on composer + search affordance. Stream stays full width (see RecentList).
-              */}
-              <View style={{ paddingHorizontal: gutter }}>
-                <View style={styles.composerBlock}>
-                  <View style={styles.composerInputRow}>
-                    <View style={styles.composerInputWrap}>
-                      <CaptureInput
-                        ref={inputRef}
-                        value={text}
-                        onChangeText={setText}
-                        onFocus={onCaptureComposerFocus}
-                        onSubmit={handleSubmit}
-                        minHeight={composerMinHeight}
-                        maxHeight={composerMaxHeight}
-                        placeholder="Jot a thought…"
-                        placeholderTextColor={capturePlaceholderColor}
-                        autoFocus={allowCaptureFocus && !deferKeyboardForFirstLaunchReveal && readEntry == null}
-                        editable={readEntry == null}
-                        showSoftInputOnFocus={readEntry == null}
-                      />
-                    </View>
-                    {showVoiceCapture ? (
-                      <VoiceMicButton
-                        phase={voicePhase}
-                        theme={t}
-                        onPress={() => {
-                          if (voicePhase === 'listening') {
-                            stopVoiceCaptureSession();
-                          } else {
-                            voiceCaptureBaseRef.current = text;
-                            void startVoiceCaptureSession();
-                          }
-                        }}
-                      />
-                    ) : null}
+            <View style={{ paddingHorizontal: gutter }}>
+              <Animated.View style={[styles.composerBlock, { opacity: composerSearchDim }]}>
+                <View style={styles.composerInputRow}>
+                  <View style={styles.composerInputWrap}>
+                    <CaptureInput
+                      ref={inputRef}
+                      value={text}
+                      onChangeText={setText}
+                      onFocus={onCaptureComposerFocus}
+                      onSubmit={handleSubmit}
+                      minHeight={composerMinHeight}
+                      maxHeight={composerMaxHeight}
+                      placeholder="Jot a thought…"
+                      placeholderTextColor={capturePlaceholderColor}
+                      autoFocus={allowCaptureFocus && !deferKeyboardForFirstLaunchReveal && readEntry == null}
+                      editable={readEntry == null}
+                      showSoftInputOnFocus={readEntry == null}
+                    />
                   </View>
+                  {showVoiceCapture ? (
+                    <VoiceMicButton
+                      phase={voicePhase}
+                      theme={t}
+                      onPress={() => {
+                        if (voicePhase === 'listening') {
+                          stopVoiceCaptureSession();
+                        } else {
+                          voiceCaptureBaseRef.current = text;
+                          void startVoiceCaptureSession();
+                        }
+                      }}
+                    />
+                  ) : null}
                 </View>
-                {streamDisplayEntries.length > 0 ? (
-                  <View>
-                    {searchExpanded ? (
-                      <View
-                        style={[
-                          styles.searchPill,
-                          styles.searchPillExpanded,
-                          {
-                            backgroundColor: searchSurface,
-                            borderColor: searchFocused ? searchBorderFocus : searchBorderIdle,
-                            borderWidth: searchBorderWidth,
-                          },
-                        ]}
-                      >
-                        <Ionicons name="search" size={15} color={searchIconColor} style={styles.searchPillIcon} />
-                        <TextInput
-                          ref={searchInputRef}
-                          testID="stream-search-input"
-                          value={searchQuery}
-                          onChangeText={setSearchQuery}
-                          onFocus={onSearchFocus}
-                          onBlur={onSearchBlur}
-                          placeholder="Find in stream…"
-                          placeholderTextColor={searchPlaceholderColor}
-                          accessibilityLabel="Find in stream"
-                          style={[
-                            styles.searchFieldExpanded,
-                            {
-                              fontFamily: fonts.regular,
-                              color: searchFieldFg,
-                            },
-                          ]}
-                          keyboardAppearance={t.isDark ? 'dark' : 'light'}
-                          returnKeyType="search"
-                          selectionColor={t.colors.accent}
-                          {...(Platform.OS === 'ios' ? { clearButtonMode: 'while-editing' as const } : {})}
-                        />
-                        <Pressable
-                          testID="stream-search-collapse"
-                          accessibilityLabel="Close search"
-                          accessibilityRole="button"
-                          hitSlop={8}
-                          onPress={collapseSearch}
-                          style={({ pressed }) => [
-                            styles.searchCloseOrb,
-                            {
-                              backgroundColor: pressed ? searchPressedSurface : 'transparent',
-                            },
-                          ]}
-                        >
-                          <Ionicons name="close" size={18} color={t.colors.metaFg} />
-                        </Pressable>
-                      </View>
-                    ) : (
-                      <Pressable
-                        testID="stream-search-toggle"
-                        accessibilityLabel="Find in stream"
-                        accessibilityRole="button"
-                        onPress={expandSearch}
-                        style={({ pressed }) => [
-                          styles.searchPill,
-                          styles.searchPillCollapsed,
-                          {
-                            backgroundColor: pressed ? searchPressedSurface : searchSurface,
-                            borderColor: searchBorderIdle,
-                            borderWidth: searchBorderWidth,
-                            opacity: pressed ? 0.96 : 1,
-                          },
-                        ]}
-                        android_ripple={{
-                          color: t.sunlightMode ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.03)',
-                          borderless: false,
-                        }}
-                      >
-                        <Ionicons name="search" size={15} color={searchIconColor} style={styles.searchPillIcon} />
-                        <Text
-                          style={[
-                            styles.searchPillHint,
-                            {
-                              color: searchIconColor,
-                              fontFamily: fonts.regular,
-                              fontSize: t.typography.meta.fontSize,
-                              lineHeight: 18,
-                            },
-                          ]}
-                          numberOfLines={1}
-                        >
-                          Find in stream…
-                        </Text>
-                      </Pressable>
-                    )}
-                  </View>
-                ) : null}
+              </Animated.View>
+            </View>
+            {streamDisplayEntries.length > 0 ? (
+              <View
+                testID="stream-search-sticky"
+                style={[styles.searchStickyHeader, { paddingHorizontal: gutter }]}
+              >
+                <StreamSearchField
+                  ref={searchInputRef}
+                  glassSticky
+                  expanded={searchExpanded}
+                  focused={searchFocused}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  onFocus={onSearchFocus}
+                  onBlur={onSearchBlur}
+                  onPressExpand={expandSearch}
+                  onPressClose={collapseSearch}
+                  resultLabel={searchResultLabel}
+                />
               </View>
-            <RecentList
-              entries={searchTrimmed.length > 0 ? searchResults : streamDisplayEntries}
-              visible
-              deferEmptyStreamMotion={!allowCaptureFocus}
-              streamEmptyAmbient={searchTrimmed.length === 0 && streamDisplayEntries.length === 0}
-              streamEmptyAmbientSuppressed={streamEmptyAmbientSuppressed}
-              streamScrollY={streamScrollY}
-              streamViewportHeight={streamViewportHeight}
-              streamScrollViewRef={streamScrollViewRef as unknown as RefObject<View | null>}
-              streamViewportFocusEnabled={
-                searchTrimmed.length > 0 ? searchResults.length > 0 : streamDisplayEntries.length > 0
-              }
-              highlightEntryId={searchTrimmed.length > 0 ? null : streamHighlightEntryId}
-              emptyHint={
-                searchTrimmed.length > 0
-                  ? 'Nothing matches that search.'
-                  : streamDisplayEntries.length === 0
-                    ? 'Write it down.\nIt stays.'
-                    : undefined
-              }
-              listFooterHint={
-                searchTrimmed.length > 0 && searchTruncated
-                  ? `Showing first ${SEARCH_MAX_RESULTS} matches`
-                  : undefined
-              }
-              onEntryPress={onStreamEntryPress}
-              onEntryDelete={handleEntryDelete}
-              onActiveStreamEntryChange={
-                searchActive || temporalRackScrubbing ? undefined : setStreamActiveEntry
-              }
-              scrollToEntryId={scrollToEntryId}
-              streamScrollYRef={streamScrollYRef}
-              onScrollToEntryOffset={onScrollToEntryOffset}
-              onScrollToEntryComplete={onScrollToEntryComplete}
-            />
-            <Pressable
-              style={[styles.bottomFill, { flexGrow: 1, minHeight: 1 }]}
-              accessible={false}
-              onPress={Keyboard.dismiss}
-            />
+            ) : null}
+            <ScrollView
+                testID="capture-stream-scroll"
+                ref={streamScrollViewRef}
+                style={styles.scrollFlex}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+                nestedScrollEnabled
+                directionalLockEnabled
+                scrollEventThrottle={16}
+                onScroll={handleScroll}
+                onLayout={(e) => setStreamViewportHeight(e.nativeEvent.layout.height)}
+                contentContainerStyle={[
+                  styles.scrollContent,
+                  {
+                    flexGrow: 1,
+                  },
+                ]}
+              >
+                <RecentList
+                  entries={searchTrimmed.length > 0 ? searchResults : streamDisplayEntries}
+                  visible
+                  deferEmptyStreamMotion={!allowCaptureFocus}
+                  streamEmptyAmbient={searchTrimmed.length === 0 && streamDisplayEntries.length === 0}
+                  streamEmptyAmbientSuppressed={streamEmptyAmbientSuppressed}
+                  streamScrollY={streamScrollY}
+                  streamViewportHeight={streamViewportHeight}
+                  streamScrollViewRef={streamScrollViewRef as unknown as RefObject<View | null>}
+                  streamViewportFocusEnabled={
+                    searchTrimmed.length > 0 ? searchResults.length > 0 : streamDisplayEntries.length > 0
+                  }
+                  highlightEntryId={searchTrimmed.length > 0 ? null : streamHighlightEntryId}
+                  searchHighlightQuery={searchTrimmed.length > 0 ? searchTrimmed : undefined}
+                  emptyHint={
+                    searchTrimmed.length > 0
+                      ? undefined
+                      : streamDisplayEntries.length === 0
+                        ? 'Write it down.\nIt stays.'
+                        : undefined
+                  }
+                  listFooterHint={
+                    searchTrimmed.length > 0 && searchTruncated
+                      ? `Showing first ${SEARCH_MAX_RESULTS} matches`
+                      : undefined
+                  }
+                  onEntryPress={onStreamEntryPress}
+                  onEntryDelete={handleEntryDelete}
+                  onActiveStreamEntryChange={
+                    searchActive || temporalRackScrubbing ? undefined : setStreamActiveEntry
+                  }
+                  scrollToEntryId={scrollToEntryId}
+                  streamScrollYRef={streamScrollYRef}
+                  onScrollToEntryOffset={onScrollToEntryOffset}
+                  onScrollToEntryComplete={onScrollToEntryComplete}
+                />
+                <Pressable
+                  style={[styles.bottomFill, { flexGrow: 1, minHeight: 1 }]}
+                  accessible={false}
+                  onPress={Keyboard.dismiss}
+                />
             </ScrollView>
             {temporalScrubberEligible ? (
               <TemporalMonthRack
@@ -1854,46 +1793,9 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
-  /** Full-width capsule — metadata scale; reads as chrome, not a second composer. */
-  searchPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: radius.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-    minHeight: 40,
-  },
-  searchPillCollapsed: {
-    paddingLeft: 12,
-    paddingRight: 14,
-    paddingVertical: 10,
-  },
-  searchPillExpanded: {
-    paddingLeft: 12,
-  },
-  searchPillIcon: {
-    marginRight: 8,
-  },
-  searchPillHint: {
-    flex: 1,
-    letterSpacing: 0.2,
-  },
-  searchFieldExpanded: {
-    flex: 1,
-    fontSize: 15,
-    lineHeight: 21,
-    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
-    paddingRight: 8,
-    margin: 0,
-    minWidth: 0,
-  },
-  searchCloseOrb: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 4,
-    marginVertical: 4,
+  searchStickyHeader: {
+    zIndex: 2,
+    paddingTop: 2,
+    paddingBottom: 10,
   },
 });
