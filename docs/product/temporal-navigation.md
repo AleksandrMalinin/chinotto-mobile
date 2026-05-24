@@ -58,7 +58,7 @@ Same month label in both places. Scrubber is **velocity-aware** and **non-blocki
 2. **Stream-first** — uninterrupted list; overlay uses `pointerEvents="box-none"` except on the pill.
 3. **Human labels** — day headers stay as today (`groupEntriesByDate`); scrubber uses **month** (+ year when needed).
 4. **Calm copy** — “12 thoughts” not “12 notes”; no “archive”, “manage”, “organize”.
-5. **Coexist with Write peek** — scrubber upper-trailing; “Write” bottom-trailing (existing).
+5. **Trailing chrome** — month rack is bottom-trailing (fixed height, not vertically centered); composer stays fixed above the stream.
 6. **Search exclusion** — temporal chrome off when `Find in stream` is active.
 
 ---

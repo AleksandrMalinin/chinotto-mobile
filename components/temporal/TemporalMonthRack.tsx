@@ -20,6 +20,8 @@ import {
   TEMPORAL_MONTH_RACK_MAX_HEIGHT,
   TEMPORAL_MONTH_RACK_PAD_H,
   TEMPORAL_MONTH_RACK_ROW_HEIGHT,
+  TEMPORAL_MONTH_RACK_SCROLL_HEIGHT,
+  TEMPORAL_MONTH_RACK_YEAR_HEIGHT,
 } from '../../constants/temporalNavigation';
 import { fonts, useAppTheme } from '../../theme';
 import type { MonthKey, MonthSummary } from '../../types/temporal';
@@ -39,14 +41,13 @@ import {
 import { temporalChromeColors } from './temporalChrome';
 
 const FADE_EASING = Easing.out(Easing.cubic);
-const YEAR_HEADER_HEIGHT = 24;
+const LABEL_LINE_HEIGHT = 14;
 
 export type TemporalMonthRackProps = {
   months: readonly MonthSummary[];
   streamMonthKey: MonthKey;
   visible: boolean;
   rightInset: number;
-  topInset: number;
   bottomInset: number;
   onScrubbingChange?: (scrubbing: boolean) => void;
   onMonthCommitted: (monthKey: MonthKey) => void;
@@ -60,7 +61,6 @@ export function TemporalMonthRack({
   streamMonthKey,
   visible,
   rightInset,
-  topInset,
   bottomInset,
   onScrubbingChange,
   onMonthCommitted,
@@ -222,7 +222,7 @@ export function TemporalMonthRack({
   return (
     <View
       pointerEvents="box-none"
-      style={[styles.host, { right: rightInset, top: topInset, bottom: bottomInset }]}
+      style={[styles.host, { right: rightInset, bottom: bottomInset }]}
       testID="temporal-month-rack-host"
     >
       <Animated.View
@@ -248,18 +248,18 @@ export function TemporalMonthRack({
                 {
                   color: chrome.yearLabel,
                   fontFamily: fonts.regular,
-                  fontSize: 10,
-                  letterSpacing: 0.45,
                 },
               ]}
-              numberOfLines={1}
             >
               {yearLabel}
             </Text>
             <View style={[styles.yearRule, { backgroundColor: chrome.rackBorder }]} />
           </Animated.View>
 
-          <View style={styles.scrollArea} onLayout={onScrollAreaLayout}>
+          <View
+            style={[styles.scrollArea, { height: TEMPORAL_MONTH_RACK_SCROLL_HEIGHT }]}
+            onLayout={onScrollAreaLayout}
+          >
             <ScrollView
               ref={scrollRef}
               testID="temporal-month-rack-scroll"
@@ -306,24 +306,22 @@ export function TemporalMonthRack({
                       {
                         height: TEMPORAL_MONTH_RACK_ROW_HEIGHT,
                         opacity: visual.opacity,
-                        transform: [{ scale: visual.scale }],
                         backgroundColor: isCenter && pressed ? chrome.mapRowPressed : 'transparent',
                       },
                     ]}
                   >
                     <Text
                       style={[
-                        styles.rowText,
+                        styles.labelText,
                         {
                           fontFamily: isCenter ? fonts.medium : fonts.regular,
                           fontSize: 11,
+                          lineHeight: LABEL_LINE_HEIGHT,
                           color: labelColor,
                           letterSpacing: 0.1,
                         },
                       ]}
                       numberOfLines={1}
-                      adjustsFontSizeToFit={isCenter}
-                      minimumFontScale={0.85}
                     >
                       {label}
                     </Text>
@@ -336,7 +334,7 @@ export function TemporalMonthRack({
           <LinearGradient
             pointerEvents="none"
             colors={[chrome.rackSurface, chrome.rackFadeTo]}
-            style={[styles.fadeTop, { top: YEAR_HEADER_HEIGHT }]}
+            style={[styles.fadeTop, { top: TEMPORAL_MONTH_RACK_YEAR_HEIGHT }]}
           />
           <LinearGradient
             pointerEvents="none"
@@ -354,27 +352,29 @@ const styles = StyleSheet.create({
     position: 'absolute',
     zIndex: 3,
     width: TEMPORAL_MONTH_RACK_CHROME_WIDTH,
-    justifyContent: 'center',
   },
   rackWrap: {
-    flex: 1,
     maxHeight: TEMPORAL_MONTH_RACK_MAX_HEIGHT,
-    justifyContent: 'center',
   },
   rail: {
-    flex: 1,
-    borderRadius: 16,
+    borderRadius: 14,
     overflow: 'hidden',
     borderWidth: Platform.OS === 'ios' ? StyleSheet.hairlineWidth : 1,
   },
   yearBlock: {
-    height: YEAR_HEADER_HEIGHT,
+    height: TEMPORAL_MONTH_RACK_YEAR_HEIGHT,
+    width: '100%',
     paddingHorizontal: TEMPORAL_MONTH_RACK_PAD_H,
     justifyContent: 'center',
-    alignItems: 'flex-end',
+    alignItems: 'center',
   },
   yearText: {
-    textAlign: 'right',
+    width: '100%',
+    textAlign: 'center',
+    fontSize: 10,
+    lineHeight: LABEL_LINE_HEIGHT,
+    letterSpacing: 0.2,
+    ...(Platform.OS === 'android' ? { includeFontPadding: false } : null),
   },
   yearRule: {
     position: 'absolute',
@@ -384,15 +384,18 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
   },
   scrollArea: {
-    flex: 1,
+    width: '100%',
   },
   row: {
-    alignItems: 'flex-end',
-    justifyContent: 'center',
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
     paddingHorizontal: TEMPORAL_MONTH_RACK_PAD_H,
   },
-  rowText: {
+  labelText: {
     textAlign: 'right',
+    ...(Platform.OS === 'android' ? { includeFontPadding: false } : null),
   },
   fadeTop: {
     position: 'absolute',

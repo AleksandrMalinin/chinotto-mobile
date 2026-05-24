@@ -75,8 +75,8 @@ import {
   ECHO_LAYER_ENABLED,
 } from '../constants/echoLayer';
 import {
-  TEMPORAL_MONTH_RACK_CHROME_WIDTH,
   TEMPORAL_NAV_ENABLED,
+  TEMPORAL_RACK_BOTTOM_INSET,
   TEMPORAL_NAV_MIN_SCROLL_Y,
   TEMPORAL_NAV_SCRUBBER_IDLE_MS,
   TEMPORAL_TRAILING_CHROME_RIGHT_INSET,
@@ -168,8 +168,6 @@ function animateSearchLayout() {
 const PAGE_SIZE = 20;
 /** Near bottom of scroll content → fetch next page. */
 const SCROLL_END_THRESHOLD_PX = 160;
-/** After scrolling the stream this far, show the subtle “Write” affordance (scroll-to-capture). */
-const STREAM_WRITE_PEEK_MIN_SCROLL_Y = 140;
 const SEARCH_DEBOUNCE_MS = 250;
 const SEARCH_MAX_RESULTS = 300;
 type SettingsRoute = 'settings' | 'manifesto' | 'app_icon';
@@ -309,7 +307,7 @@ export function CaptureScreen({
   const [streamActiveEntry, setStreamActiveEntry] = useState<Entry | null>(null);
   const [monthSummaries, setMonthSummaries] = useState<MonthSummary[]>([]);
   const [temporalRackScrubbing, setTemporalRackScrubbing] = useState(false);
-  /** True at capture / after Write — rack stays off until user scrolls into the stream again. */
+  /** True at capture — rack stays off until user scrolls into the stream again. */
   const [temporalRackAtCapture, setTemporalRackAtCapture] = useState(true);
   const [temporalMapVisible, setTemporalMapVisible] = useState(false);
   const [scrollToEntryId, setScrollToEntryId] = useState<string | null>(null);
@@ -1237,20 +1235,6 @@ export function CaptureScreen({
     setComposerHasFocusedOnce(true);
   }, [composerHasFocusedOnce]);
 
-  const onWritePeekPress = useCallback(() => {
-    if (hapticsEnabled && Platform.OS !== 'web') {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    }
-    setTemporalRackAtCapture(true);
-    setStreamScrollY(0);
-    setStreamScrollVelocityY(0);
-    setTemporalMapVisible(false);
-    streamScrollViewRef.current?.scrollTo({ y: 0, animated: true });
-    requestAnimationFrame(() => {
-      inputRef.current?.focus();
-    });
-  }, [hapticsEnabled]);
-
   const handleSubmit = useCallback(() => {
     const trimmed = text.trim();
     if (!trimmed) {
@@ -1288,25 +1272,11 @@ export function CaptureScreen({
   /** Taller composer so capture reads clearly as the primary surface on device. */
   const composerMinHeight = 76;
   const composerMaxHeight = 120;
-  const searchBorderIdle = t.colors.searchBorder;
-  const searchSurface = t.sunlightMode
-    ? t.colors.surfaceSearch
-    : t.isDark
-      ? 'rgba(255,255,255,0.04)'
-      : 'rgba(0,0,0,0.035)';
-  const searchPressedSurface = t.sunlightMode ? t.colors.accentSubtle : t.isDark
-    ? 'rgba(255,255,255,0.03)'
-    : 'rgba(0,0,0,0.04)';
   const capturePlaceholderColor = t.colors.capturePlaceholder;
   const headerLogoColor = t.colors.logoMark;
   const headerLogoSize = 42;
   /** Ring geometry: align **outer ring** with search field (gutter only); composer is inset +`screenContentInnerPad`. */
   const headerLogoAlignStyle = { marginLeft: -chinottoLogoLeadingOutset(headerLogoSize) };
-
-  const showWritePeekAffordance =
-    echoPageIndex === 0 &&
-    streamDisplayEntries.length > 0 &&
-    streamScrollY >= STREAM_WRITE_PEEK_MIN_SCROLL_Y;
 
   const searchActive = searchTrimmed.length > 0;
   const echoLayerEligible = isEchoLayerEligible({
@@ -1530,8 +1500,7 @@ export function CaptureScreen({
         ? monthKeyFromIso(streamDisplayEntries[0].createdAt)
         : referenceMonthKey;
   const temporalChromeMonthKey = temporalCommittedMonthKey ?? visibleMonthKey;
-  const temporalRackTop = insets.top + 72;
-  const temporalRackBottom = Math.max(insets.bottom, 10) + (showWritePeekAffordance ? 56 : 16);
+  const temporalRackBottom = Math.max(insets.bottom, 8) + TEMPORAL_RACK_BOTTOM_INSET;
 
   const playTemporalBoundaryHaptic = useCallback(() => {
     if (!hapticsEnabled || Platform.OS === 'web') {
@@ -1833,7 +1802,6 @@ export function CaptureScreen({
                     streamMonthKey={temporalChromeMonthKey}
                     visible={showTemporalScrubber}
                     rightInset={TEMPORAL_TRAILING_CHROME_RIGHT_INSET}
-                    topInset={temporalRackTop}
                     bottomInset={temporalRackBottom}
                     onScrubbingChange={setTemporalRackScrubbing}
                     onMonthCommitted={onTemporalMonthCommitted}
@@ -1841,38 +1809,6 @@ export function CaptureScreen({
                     hapticsEnabled={hapticsEnabled}
                     onMonthBoundaryHaptic={playTemporalBoundaryHaptic}
                   />
-                ) : null}
-                {showWritePeekAffordance ? (
-                  <Pressable
-                    testID="capture-chrome-peek"
-                    accessibilityLabel="Write"
-                    accessibilityHint="Scrolls back to capture"
-                    accessibilityRole="button"
-                    hitSlop={10}
-                    onPress={onWritePeekPress}
-                    style={({ pressed }) => [
-                      styles.streamWritePeek,
-                      {
-                        right: TEMPORAL_TRAILING_CHROME_RIGHT_INSET,
-                        bottom: Math.max(insets.bottom, 10) + 6,
-                        width: TEMPORAL_MONTH_RACK_CHROME_WIDTH,
-                        borderColor: searchBorderIdle,
-                        backgroundColor: pressed ? searchPressedSurface : searchSurface,
-                        opacity: pressed ? 0.92 : 0.78,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={{
-                        fontFamily: fonts.regular,
-                        fontSize: t.typography.meta.fontSize,
-                        letterSpacing: 0.35,
-                        color: t.colors.metaFg,
-                      }}
-                    >
-                      Write
-                    </Text>
-                  </Pressable>
                 ) : null}
               </View>
             </View>
@@ -2021,15 +1957,6 @@ const styles = StyleSheet.create({
   captureStreamStack: {
     flex: 1,
     position: 'relative',
-  },
-  streamWritePeek: {
-    position: 'absolute',
-    zIndex: 4,
-    paddingVertical: 9,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   scrollFlex: {
     flex: 1,
