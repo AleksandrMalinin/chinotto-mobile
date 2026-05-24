@@ -52,10 +52,11 @@ describe('temporalScrubberVisibility', () => {
     ).toBe(true);
   });
 
-  it('shouldPeekTemporalScrubber uses scroll depth and velocity', () => {
+  it('shouldPeekTemporalScrubber hides at capture and when returning to top', () => {
     expect(shouldPeekTemporalScrubber(0, 0)).toBe(false);
+    expect(shouldPeekTemporalScrubber(0, TEMPORAL_NAV_SCROLL_VELOCITY_PEEK)).toBe(false);
+    expect(shouldPeekTemporalScrubber(24, -TEMPORAL_NAV_SCROLL_VELOCITY_PEEK)).toBe(false);
     expect(shouldPeekTemporalScrubber(TEMPORAL_NAV_MIN_SCROLL_Y, 0)).toBe(true);
-    expect(shouldPeekTemporalScrubber(0, TEMPORAL_NAV_SCROLL_VELOCITY_PEEK)).toBe(true);
-    expect(shouldPeekTemporalScrubber(0, -TEMPORAL_NAV_SCROLL_VELOCITY_PEEK)).toBe(true);
+    expect(shouldPeekTemporalScrubber(48, TEMPORAL_NAV_SCROLL_VELOCITY_PEEK)).toBe(true);
   });
 });

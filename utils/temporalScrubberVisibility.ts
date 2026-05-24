@@ -26,10 +26,16 @@ export function isTemporalScrubberEligible(params: {
   return params.totalEntryCount >= TEMPORAL_NAV_MIN_ENTRY_COUNT;
 }
 
-/** Passive scrubber may peek in while exploring the stream. */
+/**
+ * Passive scrubber may peek in while exploring the stream — never at capture (top).
+ * Velocity peek only applies below the depth gate when the user is moving deeper into history.
+ */
 export function shouldPeekTemporalScrubber(streamScrollY: number, scrollVelocityY: number): boolean {
-  return (
-    streamScrollY >= TEMPORAL_NAV_MIN_SCROLL_Y ||
-    Math.abs(scrollVelocityY) >= TEMPORAL_NAV_SCROLL_VELOCITY_PEEK
-  );
+  if (streamScrollY >= TEMPORAL_NAV_MIN_SCROLL_Y) {
+    return true;
+  }
+  if (streamScrollY <= 32 || scrollVelocityY <= 0) {
+    return false;
+  }
+  return scrollVelocityY >= TEMPORAL_NAV_SCROLL_VELOCITY_PEEK;
 }
