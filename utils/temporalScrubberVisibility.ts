@@ -12,12 +12,14 @@ export function isTemporalNavigationActive(globalEnabled: boolean, devEnabled: b
 export function isTemporalScrubberEligible(params: {
   active: boolean;
   searchActive: boolean;
+  /** Thought sheet open — hide rack chrome. */
+  readSheetOpen?: boolean;
   totalEntryCount: number;
   hasStreamRows: boolean;
   /** Dev QA: show scrubber before `TEMPORAL_NAV_MIN_ENTRY_COUNT`. */
   bypassMinEntryCount?: boolean;
 }): boolean {
-  if (!params.active || params.searchActive || !params.hasStreamRows) {
+  if (!params.active || params.searchActive || params.readSheetOpen || !params.hasStreamRows) {
     return false;
   }
   if (params.bypassMinEntryCount) {

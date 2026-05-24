@@ -16,11 +16,20 @@ describe('temporalScrubberVisibility', () => {
     expect(isTemporalNavigationActive(false, true)).toBe(true);
   });
 
-  it('isTemporalScrubberEligible gates search and entry count', () => {
+  it('isTemporalScrubberEligible gates search, read sheet, and entry count', () => {
     expect(
       isTemporalScrubberEligible({
         active: true,
         searchActive: true,
+        totalEntryCount: 100,
+        hasStreamRows: true,
+      }),
+    ).toBe(false);
+    expect(
+      isTemporalScrubberEligible({
+        active: true,
+        searchActive: false,
+        readSheetOpen: true,
         totalEntryCount: 100,
         hasStreamRows: true,
       }),
