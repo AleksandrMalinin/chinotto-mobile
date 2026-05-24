@@ -1,6 +1,7 @@
 import {
   findMonthIndex,
   monthRackIndexFromScrollOffset,
+  monthRackLabelColor,
   monthRackRowVisual,
   monthRackScrollOffsetForIndex,
 } from '../monthRack';
@@ -24,6 +25,14 @@ describe('monthRack', () => {
 
   it('monthRackRowVisual emphasizes center row', () => {
     expect(monthRackRowVisual(0, false).opacity).toBe(1);
-    expect(monthRackRowVisual(2, false).opacity).toBeLessThan(0.4);
+    expect(monthRackRowVisual(0, false).scale).toBe(1);
+    expect(monthRackRowVisual(2, false).opacity).toBeLessThan(0.45);
+  });
+
+  it('monthRackLabelColor tiers by distance', () => {
+    const chrome = { monthActive: 'active', monthNear: 'near', monthFar: 'far' };
+    expect(monthRackLabelColor(0, chrome)).toBe('active');
+    expect(monthRackLabelColor(1, chrome)).toBe('near');
+    expect(monthRackLabelColor(3, chrome)).toBe('far');
   });
 });

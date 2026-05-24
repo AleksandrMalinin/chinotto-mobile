@@ -38,17 +38,31 @@ export function findMonthIndex(monthKeys: readonly MonthKey[], monthKey: MonthKe
  */
 export function monthRackRowVisual(delta: number, reduceMotion: boolean): MonthRackRowVisual {
   if (reduceMotion) {
-    return { opacity: delta === 0 ? 1 : 0.55, scale: 1 };
+    return { opacity: delta === 0 ? 1 : 0.5, scale: 1 };
   }
   const abs = Math.abs(delta);
   if (abs === 0) {
-    return { opacity: 1, scale: 1.04 };
+    return { opacity: 1, scale: 1 };
   }
   if (abs === 1) {
-    return { opacity: 0.58, scale: 1 };
+    return { opacity: 0.62, scale: 1 };
   }
   if (abs === 2) {
-    return { opacity: 0.38, scale: 0.98 };
+    return { opacity: 0.4, scale: 0.99 };
   }
-  return { opacity: 0.22, scale: 0.96 };
+  return { opacity: 0.24, scale: 0.98 };
+}
+
+/** Text color tier for rack month labels by distance from center. */
+export function monthRackLabelColor(
+  delta: number,
+  chrome: { monthActive: string; monthNear: string; monthFar: string },
+): string {
+  if (delta === 0) {
+    return chrome.monthActive;
+  }
+  if (Math.abs(delta) === 1) {
+    return chrome.monthNear;
+  }
+  return chrome.monthFar;
 }
