@@ -68,7 +68,7 @@ describe('useSheetPanActions', () => {
     );
 
     act(() => {
-      result.current.onHandlerStateChange(panEnd(48, 400) as never);
+      result.current.onHandlerStateChange(panEnd(10, 500) as never);
     });
 
     expect(onCollapse).toHaveBeenCalledTimes(1);
