@@ -1,17 +1,29 @@
 import * as Haptics from 'expo-haptics';
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Modal,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
+  PanResponder,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from 'react-native';
-import { GestureHandlerRootView, PanGestureHandler } from 'react-native-gesture-handler';
+import {
+  GestureHandlerRootView,
+  NativeViewGestureHandler,
+  PanGestureHandler,
+  ScrollView,
+  State,
+} from 'react-native-gesture-handler';
+import type {
+  NativeViewGestureHandler as NativeViewGestureHandlerType,
+  PanGestureHandler as PanGestureHandlerType,
+} from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { MonthKey, MonthSummary } from '../../types/temporal';
@@ -23,8 +35,9 @@ import {
 } from '../../utils/streamMonthIndex';
 import { groupMonthSummariesByYear, maxMonthThoughtCount } from '../../utils/temporalMapGroups';
 import { thoughtSheetBackdropA11yLabel } from '../thoughtSheet/backdropAction';
+import { shouldDismissThoughtSheet } from '../thoughtSheet/detents';
 import { useSheetEnterAnimation } from '../thoughtSheet/useSheetEnterAnimation';
-import { useSheetPanActions } from '../thoughtSheet/useSheetPanActions';
+import { temporalChromeColors } from './temporalChrome';
 
 export type TemporalMapSheetProps = {
   visible: boolean;
@@ -35,10 +48,11 @@ export type TemporalMapSheetProps = {
   hapticsEnabled?: boolean;
 };
 
-/**
- * Memory timeline sheet — vertical months by year (not a calendar grid).
- * Shell matches EntryThoughtSheet layout rule (flex dismiss + sheet last child).
- */
+const ACTIVITY_BAR_H = 26;
+const ACTIVITY_BAR_W = 3;
+const SHEET_HEIGHT_RATIO = 0.76;
+const CHROME_ESTIMATE = 108;
+
 export function TemporalMapSheet({
   visible,
   months,
@@ -48,13 +62,22 @@ export function TemporalMapSheet({
   hapticsEnabled = true,
 }: TemporalMapSheetProps) {
   const t = useAppTheme();
-  const { width: windowWidth } = useWindowDimensions();
+  const chrome = useMemo(() => temporalChromeColors(t), [t]);
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { colors, typography, spacing, radius } = t;
   const contentInset = screenContentGutter(windowWidth);
-  const { meta } = typography;
+  const { meta, body } = typography;
   const scrollYRef = useRef(0);
+  const [scrollAtTop, setScrollAtTop] = useState(true);
   const closingRef = useRef(false);
+  const panRef = useRef<PanGestureHandlerType>(null);
+  const scrollGestureRef = useRef<NativeViewGestureHandlerType>(null);
+  const dragY = useRef(new Animated.Value(0)).current;
+
+  const sheetMaxHeight = Math.round(windowHeight * SHEET_HEIGHT_RATIO);
+  const listMaxHeight = Math.max(120, sheetMaxHeight - CHROME_ESTIMATE);
+  const listBottomPadding = Math.max(insets.bottom, spacing.md) + spacing.xl;
 
   const yearGroups = useMemo(() => groupMonthSummariesByYear(months), [months]);
   const activityMax = useMemo(() => maxMonthThoughtCount(months), [months]);
@@ -63,7 +86,7 @@ export function TemporalMapSheet({
     visible,
     highlightedMonthKey ?? 'timeline',
   );
-  const scrimColor = 'rgba(0,0,0,0.48)';
+  const scrimColor = 'rgba(0,0,0,0.5)';
 
   const playHaptic = useCallback(() => {
     if (!hapticsEnabled || Platform.OS === 'web') {
@@ -77,19 +100,114 @@ export function TemporalMapSheet({
       return;
     }
     closingRef.current = true;
+    dragY.setValue(0);
     onClose();
     requestAnimationFrame(() => {
       closingRef.current = false;
     });
-  }, [onClose]);
+  }, [dragY, onClose]);
 
-  const { onHandlerStateChange } = useSheetPanActions({
-    mode: 'compact',
-    scrollYRef,
-    onExpand: () => {},
-    onCollapse: () => {},
-    onDismiss: handleClose,
-  });
+  const resetDrag = useCallback(() => {
+    Animated.spring(dragY, {
+      toValue: 0,
+      useNativeDriver: true,
+      damping: 24,
+      stiffness: 280,
+    }).start();
+  }, [dragY]);
+
+  const tryDismissFromDrag = useCallback(
+    (translationY: number, velocityY: number) => {
+      if ((scrollYRef.current ?? 0) > 4 && translationY > 0) {
+        resetDrag();
+        return;
+      }
+      if (shouldDismissThoughtSheet(translationY, velocityY)) {
+        handleClose();
+        return;
+      }
+      resetDrag();
+    },
+    [handleClose, resetDrag],
+  );
+
+  const onMapScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const y = event.nativeEvent.contentOffset.y;
+    scrollYRef.current = y;
+    setScrollAtTop(y <= 4);
+  }, []);
+
+  const onMapScrollEndDrag = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { contentOffset, velocity } = event.nativeEvent;
+      const y = contentOffset.y;
+      scrollYRef.current = y;
+      setScrollAtTop(y <= 4);
+      if (y <= 4 && (velocity?.y ?? 0) > 0.55) {
+        handleClose();
+      }
+    },
+    [handleClose],
+  );
+
+  const onSheetPanGesture = useMemo(
+    () =>
+      Animated.event([{ nativeEvent: { translationY: dragY } }], {
+        useNativeDriver: true,
+        listener: (event: NativeSyntheticEvent<{ translationY: number }>) => {
+          const y = event.nativeEvent.translationY;
+          if ((scrollYRef.current ?? 0) > 4 && y > 0) {
+            dragY.setValue(0);
+          } else {
+            dragY.setValue(Math.max(0, y));
+          }
+        },
+      }),
+    [dragY],
+  );
+
+  const onSheetPanStateChange = useCallback(
+    (event: { nativeEvent: { oldState: number; state: number; translationY: number; velocityY: number } }) => {
+      const { oldState, state, translationY, velocityY } = event.nativeEvent;
+      if (oldState === State.ACTIVE && (state === State.END || state === State.CANCELLED)) {
+        tryDismissFromDrag(translationY, velocityY);
+      }
+      if (state === State.CANCELLED || state === State.FAILED) {
+        resetDrag();
+      }
+    },
+    [resetDrag, tryDismissFromDrag],
+  );
+
+  const chromePanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          gesture.dy > 6 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+        onPanResponderMove: (_, gesture) => {
+          if ((scrollYRef.current ?? 0) > 4) {
+            return;
+          }
+          dragY.setValue(Math.max(0, gesture.dy));
+        },
+        onPanResponderRelease: (_, gesture) => {
+          tryDismissFromDrag(gesture.dy, gesture.vy);
+        },
+        onPanResponderTerminate: () => {
+          resetDrag();
+        },
+      }),
+    [dragY, resetDrag, tryDismissFromDrag],
+  );
+
+  useEffect(() => {
+    if (!visible) {
+      return;
+    }
+    scrollYRef.current = 0;
+    setScrollAtTop(true);
+    dragY.setValue(0);
+  }, [visible, highlightedMonthKey, dragY]);
 
   const handleSelectMonth = useCallback(
     (monthKey: MonthKey) => {
@@ -98,6 +216,11 @@ export function TemporalMapSheet({
       handleClose();
     },
     [handleClose, onSelectMonth, playHaptic],
+  );
+
+  const sheetTranslateY = useMemo(
+    () => Animated.add(contentTranslateY, dragY),
+    [contentTranslateY, dragY],
   );
 
   if (!visible) {
@@ -126,31 +249,31 @@ export function TemporalMapSheet({
             accessibilityLabel={thoughtSheetBackdropA11yLabel()}
           />
 
-          <View
-            testID="temporal-map-sheet"
-            style={[
-              styles.sheet,
-              {
-                backgroundColor: colors.bgElevated,
-                borderColor: colors.border,
-                borderTopLeftRadius: radius.lg,
-                borderTopRightRadius: radius.lg,
-                paddingBottom: Math.max(insets.bottom, spacing.md),
-                maxHeight: '72%',
-              },
-            ]}
+          <PanGestureHandler
+            ref={panRef}
+            enabled={scrollAtTop}
+            simultaneousHandlers={scrollGestureRef}
+            activeOffsetY={[-12, 12]}
+            failOffsetX={[-28, 28]}
+            onGestureEvent={onSheetPanGesture}
+            onHandlerStateChange={onSheetPanStateChange}
           >
             <Animated.View
-              style={{
-                opacity: contentOpacity,
-                transform: [{ translateY: contentTranslateY }],
-              }}
+              testID="temporal-map-sheet"
+              style={[
+                styles.sheet,
+                {
+                  backgroundColor: colors.bgElevated,
+                  borderColor: colors.border,
+                  borderTopLeftRadius: radius.lg,
+                  borderTopRightRadius: radius.lg,
+                  maxHeight: sheetMaxHeight,
+                  opacity: contentOpacity,
+                  transform: [{ translateY: sheetTranslateY }],
+                },
+              ]}
             >
-              <PanGestureHandler
-                onHandlerStateChange={onHandlerStateChange}
-                activeOffsetY={[-12, 12]}
-                failOffsetX={[-24, 24]}
-              >
+              <View style={styles.sheetChrome} {...chromePanResponder.panHandlers}>
                 <View style={styles.dragStrip}>
                   <View
                     testID="temporal-map-grabber"
@@ -159,123 +282,180 @@ export function TemporalMapSheet({
                     accessibilityLabel="Drag down to close"
                   />
                 </View>
-              </PanGestureHandler>
 
-              <ScrollView
-                testID="temporal-map-scroll"
-                style={styles.scroll}
-                contentContainerStyle={{
-                  paddingHorizontal: contentInset,
-                  paddingBottom: spacing.md,
-                }}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
-              >
-                {yearGroups.map((group, groupIndex) => (
-                  <View
-                    key={String(group.year)}
-                    style={groupIndex > 0 ? { marginTop: spacing.lg } : undefined}
+                <View style={[styles.sheetHeader, { paddingHorizontal: contentInset }]}>
+                  <Text
+                    accessibilityRole="header"
+                    style={{
+                      color: colors.fg,
+                      fontFamily: fonts.medium,
+                      fontSize: 17,
+                      lineHeight: 24,
+                      letterSpacing: -0.2,
+                    }}
                   >
-                    <Text
-                      accessibilityRole="header"
-                      style={[
-                        styles.yearHeader,
-                        {
+                    Timeline
+                  </Text>
+                  <Text
+                    style={{
+                      marginTop: 4,
+                      color: colors.sectionFg,
+                      fontFamily: meta.fontFamily,
+                      fontSize: meta.fontSize,
+                      lineHeight: 18,
+                      letterSpacing: 0.15,
+                    }}
+                  >
+                    Jump to a month in your stream
+                  </Text>
+                </View>
+              </View>
+
+              <NativeViewGestureHandler
+                ref={scrollGestureRef}
+                waitFor={panRef}
+                simultaneousHandlers={panRef}
+              >
+                <ScrollView
+                  testID="temporal-map-scroll"
+                  style={[styles.scroll, { maxHeight: listMaxHeight }]}
+                  onScroll={onMapScroll}
+                  onScrollEndDrag={onMapScrollEndDrag}
+                  scrollEventThrottle={16}
+                  bounces
+                  alwaysBounceVertical
+                  nestedScrollEnabled
+                  contentContainerStyle={{
+                    paddingHorizontal: contentInset,
+                    paddingTop: spacing.sm,
+                    paddingBottom: listBottomPadding,
+                  }}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
+                >
+                  {yearGroups.map((group, groupIndex) => (
+                    <View
+                      key={String(group.year)}
+                      style={groupIndex > 0 ? { marginTop: spacing.lg } : { marginTop: spacing.xs }}
+                    >
+                      <Text
+                        accessibilityRole="header"
+                        style={{
                           color: colors.sectionFg,
                           fontFamily: meta.fontFamily,
-                          fontSize: meta.fontSize,
-                          letterSpacing: 0.25,
+                          fontSize: 12,
+                          lineHeight: 16,
+                          letterSpacing: 0.35,
                           marginBottom: spacing.sm,
-                        },
-                      ]}
-                    >
-                      {group.yearLabel}
-                    </Text>
-                    {group.months.map((month) => {
-                      const isHighlighted = month.monthKey === highlightedMonthKey;
-                      const countLine = formatMonthThoughtCount(month.count);
-                      const activity = monthActivityRatio(month.count, activityMax);
-                      const monthLabel = formatMonthScrubberLabel(month.monthKey, month.monthKey);
-                      return (
-                        <Pressable
-                          key={month.monthKey}
-                          testID={`temporal-map-month-${month.monthKey}`}
-                          accessibilityRole="button"
-                          accessibilityLabel={
-                            countLine != null ? `${monthLabel}, ${countLine}` : monthLabel
-                          }
-                          accessibilityHint="Moves the stream to this month"
-                          onPress={() => handleSelectMonth(month.monthKey)}
-                          style={({ pressed }) => [
-                            styles.monthRow,
-                            {
-                              borderBottomColor: colors.border,
-                              backgroundColor: isHighlighted
-                                ? t.isDark
-                                  ? 'rgba(128, 138, 188, 0.12)'
-                                  : 'rgba(100, 110, 180, 0.08)'
-                                : pressed
-                                  ? t.isDark
-                                    ? 'rgba(128, 138, 188, 0.08)'
-                                    : 'rgba(100, 110, 180, 0.05)'
-                                  : 'transparent',
-                            },
-                          ]}
-                        >
-                          <View style={styles.monthRowMain}>
-                            <Text
-                              style={{
-                                color: colors.fg,
-                                fontFamily: fonts.regular,
-                                fontSize: 17,
-                                lineHeight: 24,
-                                letterSpacing: 0.1,
-                              }}
-                            >
-                              {monthLabel}
-                            </Text>
-                            {countLine != null ? (
-                              <Text
-                                style={{
-                                  marginTop: 2,
-                                  color: colors.muted,
-                                  fontFamily: meta.fontFamily,
-                                  fontSize: 12,
-                                  lineHeight: 16,
-                                }}
-                              >
-                                {countLine}
-                              </Text>
-                            ) : null}
-                          </View>
-                          {activity > 0 ? (
-                            <View
-                              style={[
-                                styles.activityTrack,
-                                { backgroundColor: t.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' },
+                          paddingLeft: 2,
+                        }}
+                      >
+                        {group.yearLabel}
+                      </Text>
+                      <View
+                        style={[
+                          styles.monthGroup,
+                          {
+                            borderColor: colors.border,
+                            borderRadius: radius.md,
+                          },
+                        ]}
+                      >
+                        {group.months.map((month, monthIndex) => {
+                          const isHighlighted = month.monthKey === highlightedMonthKey;
+                          const isLast = monthIndex === group.months.length - 1;
+                          const countLine = formatMonthThoughtCount(month.count);
+                          const activity = monthActivityRatio(month.count, activityMax);
+                          const monthLabel = formatMonthScrubberLabel(month.monthKey, month.monthKey);
+                          return (
+                            <Pressable
+                              key={month.monthKey}
+                              testID={`temporal-map-month-${month.monthKey}`}
+                              accessibilityRole="button"
+                              accessibilityLabel={
+                                countLine != null ? `${monthLabel}, ${countLine}` : monthLabel
+                              }
+                              accessibilityHint="Moves the stream to this month"
+                              onPress={() => handleSelectMonth(month.monthKey)}
+                              style={({ pressed }) => [
+                                styles.monthRow,
+                                {
+                                  borderBottomWidth: isLast ? 0 : StyleSheet.hairlineWidth,
+                                  borderBottomColor: colors.border,
+                                  backgroundColor: isHighlighted
+                                    ? chrome.mapRowHighlight
+                                    : pressed
+                                      ? chrome.mapRowPressed
+                                      : 'transparent',
+                                },
                               ]}
                             >
-                              <View
-                                style={[
-                                  styles.activityFill,
-                                  {
-                                    width: `${Math.round(activity * 100)}%`,
-                                    backgroundColor: t.isDark
-                                      ? 'rgba(160, 170, 220, 0.35)'
-                                      : 'rgba(100, 110, 180, 0.28)',
-                                  },
-                                ]}
-                              />
-                            </View>
-                          ) : null}
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                ))}
-              </ScrollView>
+                              {isHighlighted ? (
+                                <View
+                                  pointerEvents="none"
+                                  style={[
+                                    styles.highlightBar,
+                                    { backgroundColor: chrome.activeAccentBar },
+                                  ]}
+                                />
+                              ) : null}
+                              <View style={styles.monthRowMain}>
+                                <Text
+                                  style={{
+                                    color: isHighlighted ? colors.fg : colors.fgDim,
+                                    fontFamily: isHighlighted ? fonts.medium : body.fontFamily,
+                                    fontSize: body.fontSize,
+                                    lineHeight: body.lineHeight,
+                                    letterSpacing: 0.12,
+                                  }}
+                                >
+                                  {monthLabel}
+                                </Text>
+                                {countLine != null ? (
+                                  <Text
+                                    style={{
+                                      marginTop: 3,
+                                      color: colors.muted,
+                                      fontFamily: meta.fontFamily,
+                                      fontSize: 12,
+                                      lineHeight: 16,
+                                      letterSpacing: 0.1,
+                                    }}
+                                  >
+                                    {countLine}
+                                  </Text>
+                                ) : null}
+                              </View>
+                              {activity > 0 ? (
+                                <View
+                                  style={[
+                                    styles.activityTrack,
+                                    { backgroundColor: chrome.activityTrack },
+                                  ]}
+                                >
+                                  <View
+                                    style={[
+                                      styles.activityFill,
+                                      {
+                                        flex: activity,
+                                        backgroundColor: chrome.activityFill,
+                                      },
+                                    ]}
+                                  />
+                                </View>
+                              ) : (
+                                <View style={styles.activitySpacer} />
+                              )}
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  ))}
+                </ScrollView>
+              </NativeViewGestureHandler>
             </Animated.View>
-          </View>
+          </PanGestureHandler>
         </View>
       </GestureHandlerRootView>
     </Modal>
@@ -297,40 +477,66 @@ const styles = StyleSheet.create({
   },
   sheet: {
     borderTopWidth: StyleSheet.hairlineWidth,
+    width: '100%',
+  },
+  sheetChrome: {
+    width: '100%',
   },
   dragStrip: {
     alignItems: 'center',
     paddingTop: 10,
-    paddingBottom: 8,
+    paddingBottom: 6,
   },
   grabber: {
     width: 36,
     height: 4,
     borderRadius: 2,
   },
-  scroll: {
-    flexGrow: 0,
+  sheetHeader: {
+    paddingBottom: 8,
   },
-  yearHeader: {},
+  scroll: {
+    width: '100%',
+  },
+  monthGroup: {
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+  },
   monthRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 12,
+    paddingVertical: 15,
+    paddingLeft: 14,
+    paddingRight: 12,
+    gap: 14,
+  },
+  highlightBar: {
+    position: 'absolute',
+    left: 0,
+    top: 10,
+    bottom: 10,
+    width: 3,
+    borderTopRightRadius: 2,
+    borderBottomRightRadius: 2,
   },
   monthRowMain: {
     flex: 1,
     minWidth: 0,
   },
   activityTrack: {
-    width: 40,
-    height: 3,
+    width: ACTIVITY_BAR_W,
+    height: ACTIVITY_BAR_H,
     borderRadius: 2,
     overflow: 'hidden',
+    justifyContent: 'flex-end',
   },
   activityFill: {
-    height: '100%',
+    width: '100%',
     borderRadius: 2,
+    minHeight: 4,
+  },
+  activitySpacer: {
+    width: ACTIVITY_BAR_W,
+    height: ACTIVITY_BAR_H,
   },
 });
