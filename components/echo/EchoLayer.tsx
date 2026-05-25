@@ -1,87 +1,170 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ScrollView,
+  AccessibilityInfo,
+  Animated,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { EchoCandidate } from '../../utils/selectEchoCandidates';
-import {
-  fonts,
-  screenContentGutter,
-  screenContentInnerPad,
-  useAppTheme,
-} from '../../theme';
+import { echoContentOpacity, echoContentParallaxX } from '../../utils/echoPagerMotion';
+import { screenContentGutter, useAppTheme } from '../../theme';
 import type { ThoughtSheetOpenAnchor } from '../thoughtSheet/detents';
-import { EchoMemoryVessel } from './EchoMemoryVessel';
+import {
+  ECHO_FIELD_ENABLED,
+  ECHO_FILAMENT_ENABLED,
+  ECHO_PALIMPSEST_ENABLED,
+} from '../../constants/echoLayer';
+import type { EchoUiVariant } from '../../constants/echoUiVariant';
+import { EchoFieldVessel } from './EchoFieldVessel';
+import { EchoFilamentVessel } from './EchoFilamentVessel';
+import { EchoPalimpsestVessel } from './EchoPalimpsestVessel';
+import { EchoThresholdVessel } from './EchoThresholdVessel';
 import { echoChromeFromTheme } from './echoChrome';
 
 export type EchoLayerProps = {
   candidates: readonly EchoCandidate[];
   onEntryPress?: (entry: EchoCandidate, anchor?: ThoughtSheetOpenAnchor) => void;
+  /** Pager scroll — drives delayed content fade + parallax. */
+  scrollX?: Animated.Value;
+  pageWidth?: number;
+  /** Dev dogfood UI variant (production uses Threshold). */
+  uiVariant?: EchoUiVariant;
+  /** Dims Echo when recall sheet is open (Echo-origin enter). */
+  recallDim?: Animated.Value;
 };
 
-const ECHO_HEADLINE = {
-  kicker: 'Echo',
-  caption: 'Thoughts that resurfaced over time.',
-} as const;
-
-export function EchoLayer({ candidates, onEntryPress }: EchoLayerProps) {
+/** Threshold register — no scroll, no feature explanation copy. */
+export function EchoLayer({
+  candidates,
+  onEntryPress,
+  scrollX,
+  pageWidth = 0,
+  uiVariant = 'threshold',
+  recallDim,
+}: EchoLayerProps) {
   const t = useAppTheme();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const gutter = screenContentGutter(width);
   const chrome = useMemo(() => echoChromeFromTheme(t), [t]);
-  const headline = ECHO_HEADLINE;
+  const [reduceMotion, setReduceMotion] = useState(false);
 
-  const onRowPress = useCallback(
+  useEffect(() => {
+    void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+  }, []);
+
+  const motionEnabled = scrollX != null && pageWidth > 0 && !reduceMotion;
+
+  const contentOpacity = useMemo(() => {
+    if (!motionEnabled || scrollX == null) {
+      return undefined;
+    }
+    return echoContentOpacity(scrollX, pageWidth);
+  }, [motionEnabled, pageWidth, scrollX]);
+
+  const contentTranslateX = useMemo(() => {
+    if (!motionEnabled || scrollX == null) {
+      return undefined;
+    }
+    return echoContentParallaxX(scrollX, pageWidth);
+  }, [motionEnabled, pageWidth, scrollX]);
+
+  const onPrimaryPress = useCallback(
     (entry: EchoCandidate) => {
       onEntryPress?.(entry, undefined);
     },
     [onEntryPress],
   );
 
-  return (
-    <View style={styles.shell} testID="echo-layer">
-      <ScrollView
-        testID="echo-layer-scroll"
-        style={styles.flex}
-        contentContainerStyle={[
-          styles.content,
-          {
-            paddingTop: t.spacing.lg,
-            paddingBottom: Math.max(insets.bottom, t.spacing.lg) + t.spacing.xl,
-          },
-        ]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={[styles.whisperBlock, { paddingHorizontal: gutter + screenContentInnerPad }]}>
-          <Text
-            testID="echo-layer-kicker"
-            style={[styles.kicker, { color: chrome.headline }]}
-          >
-            {headline.kicker}
-          </Text>
-          <Text
-            testID="echo-layer-caption"
-            style={[styles.caption, { color: chrome.subtitle }]}
-          >
-            {headline.caption}
-          </Text>
-        </View>
+  const resolvedVariant: EchoUiVariant = (() => {
+    if (uiVariant !== 'threshold') {
+      return uiVariant;
+    }
+    if (ECHO_FIELD_ENABLED) {
+      return 'field';
+    }
+    if (ECHO_FILAMENT_ENABLED) {
+      return 'filament';
+    }
+    if (ECHO_PALIMPSEST_ENABLED) {
+      return 'palimpsest';
+    }
+    return 'threshold';
+  })();
 
-        <View style={{ paddingHorizontal: gutter }}>
-          <EchoMemoryVessel
+  const body = (() => {
+    switch (resolvedVariant) {
+      case 'field':
+        return (
+          <EchoFieldVessel
             candidates={candidates}
             chrome={chrome}
-            onEntryPress={onEntryPress != null ? onRowPress : undefined}
+            onEntryPress={onEntryPress != null ? onPrimaryPress : undefined}
           />
-        </View>
-      </ScrollView>
+        );
+      case 'filament':
+        return (
+          <EchoFilamentVessel
+            candidates={candidates}
+            chrome={chrome}
+            onEntryPress={onEntryPress != null ? onPrimaryPress : undefined}
+          />
+        );
+      case 'palimpsest':
+        return (
+          <EchoPalimpsestVessel
+            candidates={candidates}
+            chrome={chrome}
+            onEntryPress={onEntryPress != null ? onPrimaryPress : undefined}
+          />
+        );
+      default:
+        return (
+          <EchoThresholdVessel
+            candidates={candidates}
+            chrome={chrome}
+            onEntryPress={onEntryPress != null ? onPrimaryPress : undefined}
+          />
+        );
+    }
+  })();
+
+  const motionBody =
+    contentOpacity != null || contentTranslateX != null ? (
+      <Animated.View
+        testID="echo-layer-presence"
+        style={{
+          flex: 1,
+          opacity: contentOpacity ?? 1,
+          transform: contentTranslateX != null ? [{ translateX: contentTranslateX }] : undefined,
+        }}
+      >
+        {body}
+      </Animated.View>
+    ) : (
+      body
+    );
+
+  return (
+    <View
+      style={[
+        styles.shell,
+        {
+          paddingTop: t.spacing.xl,
+          paddingBottom: Math.max(insets.bottom, t.spacing.lg) + t.spacing.xl,
+          paddingHorizontal: gutter,
+        },
+      ]}
+      testID="echo-layer"
+    >
+      {recallDim != null ? (
+        <Animated.View style={{ flex: 1, opacity: recallDim }}>{motionBody}</Animated.View>
+      ) : (
+        motionBody
+      )}
     </View>
   );
 }
@@ -89,26 +172,5 @@ export function EchoLayer({ candidates, onEntryPress }: EchoLayerProps) {
 const styles = StyleSheet.create({
   shell: {
     flex: 1,
-  },
-  flex: { flex: 1 },
-  content: {
-    flexGrow: 1,
-  },
-  whisperBlock: {
-    marginBottom: 28,
-  },
-  kicker: {
-    fontFamily: fonts.medium,
-    fontSize: 22,
-    lineHeight: 28,
-    letterSpacing: -0.2,
-    marginBottom: 8,
-  },
-  caption: {
-    fontFamily: fonts.regular,
-    fontSize: 14,
-    lineHeight: 20,
-    letterSpacing: 0.1,
-    fontStyle: 'italic',
   },
 });

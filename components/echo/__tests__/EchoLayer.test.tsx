@@ -35,30 +35,37 @@ function renderEcho() {
 }
 
 describe('EchoLayer', () => {
-  it('reads as stacked memory fragments, not stream rows or kind badges', () => {
+  it('uses threshold vessel without scroll or explanatory headline', () => {
     const { getByTestId, queryByTestId, queryByText } = renderEcho();
 
-    expect(getByTestId('echo-layer-kicker').props.children).toBe('Echo');
-    expect(getByTestId('echo-layer-caption').props.children).toBe(
-      'Thoughts that resurfaced over time.',
-    );
-    expect(queryByTestId('echo-layer-title')).toBeNull();
-    expect(getByTestId('echo-memory-vessel')).toBeTruthy();
-    expect(getByTestId('echo-fragment-1')).toBeTruthy();
-    expect(queryByTestId('echo-header-logo')).toBeNull();
-    expect(queryByTestId('echo-entry-1')).toBeNull();
-    expect(queryByTestId('echo-ambience')).toBeNull();
+    expect(getByTestId('echo-layer')).toBeTruthy();
+    expect(getByTestId('echo-threshold-vessel')).toBeTruthy();
+    expect(queryByTestId('echo-layer-scroll')).toBeNull();
+    expect(queryByTestId('echo-layer-kicker')).toBeNull();
+    expect(queryByTestId('echo-memory-vessel')).toBeNull();
+    expect(queryByText('Thoughts that resurfaced over time.')).toBeNull();
     expect(queryByText('Revisited')).toBeNull();
     expect(queryByText('Earlier')).toBeNull();
   });
 
-  it('opens thought from fragment press', () => {
+  it('opens thought from primary press', () => {
     const { getByTestId, onEntryPress } = renderEcho();
 
-    fireEvent.press(getByTestId('echo-fragment-1'));
+    fireEvent.press(getByTestId('echo-threshold-primary-1'));
     expect(onEntryPress).toHaveBeenCalledWith(
       expect.objectContaining({ id: '1' }),
       undefined,
     );
+  });
+
+  it('renders field vessel when uiVariant is field', () => {
+    const { getByTestId, queryByTestId } = render(
+      <SafeAreaProvider initialMetrics={safeMetrics}>
+        <EchoLayer candidates={candidates} uiVariant="field" />
+      </SafeAreaProvider>,
+    );
+
+    expect(getByTestId('echo-field-vessel')).toBeTruthy();
+    expect(queryByTestId('echo-threshold-vessel')).toBeNull();
   });
 });
