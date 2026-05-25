@@ -1,3 +1,5 @@
+import { motion } from './motion';
+
 /** Feature gate — Remote Config kill switch later. */
 export const ECHO_LAYER_ENABLED = true;
 
@@ -59,7 +61,7 @@ export const ECHO_AI_RERANK_ENABLED = false;
 export const ECHO_DWELL_RERANK_ENABLED = false;
 
 /** Content fade-in duration after atmosphere crossfade (ms). */
-export const ECHO_CONTENT_FADE_MS = 420;
+export const ECHO_CONTENT_FADE_MS = motion.echo.contentFade;
 
 /** Filament — max stations on the thread (alternate UI; not shipped). */
 export const ECHO_FILAMENT_MAX_STATIONS = 4;
@@ -98,19 +100,19 @@ export const ECHO_PALIMPSEST_PEEL_FADE_MS = 140;
 export const ECHO_RECALL_SHEET_DIM = 0.42;
 
 /** Echo presence dim in/out (ms). */
-export const ECHO_RECALL_DIM_IN_MS = 220;
-export const ECHO_RECALL_DIM_OUT_MS = 280;
+export const ECHO_RECALL_DIM_IN_MS = motion.echo.recallDimIn;
+export const ECHO_RECALL_DIM_OUT_MS = motion.echo.recallDimOut;
 
 /** Pause before Echo brightens after sheet dismiss (ms). */
-export const ECHO_RECALL_DIM_OUT_DELAY_MS = 50;
+export const ECHO_RECALL_DIM_OUT_DELAY_MS = motion.echo.recallDimOutDelay;
 
 /** Palimpsest primary press settle (ms). */
-export const ECHO_PALIMPSEST_PRESS_IN_MS = 120;
-export const ECHO_PALIMPSEST_PRESS_OUT_MS = 220;
+export const ECHO_PALIMPSEST_PRESS_IN_MS = motion.echo.palimpsestPressIn;
+export const ECHO_PALIMPSEST_PRESS_OUT_MS = motion.echo.palimpsestPressOut;
 
 /** Horizontal reveal — enter Echo slower than return to stream (ms). */
-export const ECHO_PAGER_REVEAL_IN_MS = 320;
-export const ECHO_PAGER_REVEAL_OUT_MS = 280;
+export const ECHO_PAGER_REVEAL_IN_MS = motion.echo.pagerRevealIn;
+export const ECHO_PAGER_REVEAL_OUT_MS = motion.echo.pagerRevealOut;
 
 /** Composer stays full-dim until this fraction of swipe toward stream. */
 export const ECHO_COMPOSER_DIM_RELEASE_AT = 0.65;
@@ -122,7 +124,7 @@ export const ECHO_EMOTIONAL_VEIL_CAP = 0.1;
 export const ECHO_VESSEL_OPTICAL_LIFT_PT = 6;
 
 /** Soft land after Echo page settles (ms). */
-export const ECHO_PRESENCE_SETTLE_MS = 420;
+export const ECHO_PRESENCE_SETTLE_MS = motion.echo.presenceSettle;
 
 /** Palimpsest peel via long press when reduce motion (ms). */
-export const ECHO_PALIMPSEST_PEEL_LONG_PRESS_MS = 550;
+export const ECHO_PALIMPSEST_PEEL_LONG_PRESS_MS = motion.echo.palimpsestPeelLongPress;

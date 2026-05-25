@@ -124,6 +124,27 @@ Flip `ECHO_UI_VARIANT_SHIPPED` / `ECHO_PALIMPSEST_ENABLED` only after the above 
 
 ---
 
+## How We Feel → Chinotto UI (not visual imitation)
+
+HWF teaches **pacing, touch weight, atmosphere, and cognitive safety** — not pill buttons or mood cards. Chinotto maps that to two registers:
+
+| Register | HWF quality | Chinotto expression |
+|----------|-------------|---------------------|
+| **Capture + stream** | Fast, low decisions | Composer stays central; stream rows full-bleed (no card feed); viewport focus = attention, not ranking |
+| **Echo** | Slow, one object | Wash before content; no Echo-page scroll; peel (Palimpsest) or threshold ghosts; no “why this” copy |
+
+**Shared motion scale:** [`constants/motion.ts`](../constants/motion.ts) — `capture` / `stream` / `echo` tiers (ms). Stream focus, echo pager, sheet enter, and empty-state hints pull from one scale.
+
+**Selective softness (rounded UI):**
+- **Composer** — flat on ambient (no second capsule beside search); primary surface is typography, not a box.
+- **Search** — glass pill only when stream has rows (secondary chrome).
+- **Stream rows** — stay flat; press = animated shade only.
+- **Echo vessels** — fragment radius on cards (Palimpsest / Threshold); do not bubble the whole app.
+
+**Do not import from HWF:** emotion scales, check-ins, streaks, explanatory recall, second horizontal tabs, card-based stream.
+
+---
+
 ## Hard constraints
 
 - Stream + fixed composer default on cold open
@@ -149,4 +170,5 @@ Flip `ECHO_UI_VARIANT_SHIPPED` / `ECHO_PALIMPSEST_ENABLED` only after the above 
 | 2026-05-25 | P1–P2: presence settle on Echo land; ghost trace excerpts; optical lift; edge peek repeat every 7d (skip while typing) |
 | 2026-05-25 | P3: 21d Echo display cooldown when opened ≥2× without edit; dwell rerank flag stub |
 | 2026-05-25 | Main stream: slower focus cross-fade (280ms), section/row breathing room, soft row press, stream sheet content lag |
+| 2026-05-25 | HWF UI pass start: `constants/motion.ts`; calmer empty-hint timing; doc table main vs echo (composer shell tried, reverted — fights search pill) |
 | 2026-05-25 | Behavior pass B1–B5: trace rims, peel resistance, press settle, echo sheet enter + recall dim |

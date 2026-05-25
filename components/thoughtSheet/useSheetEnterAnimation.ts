@@ -1,16 +1,16 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing } from 'react-native';
 
+import { motion } from '../../constants/motion';
+
 export type SheetEnterProfile = 'stream' | 'echo';
 
 const STREAM_ENTER_SPRING = {
-  damping: 30,
-  stiffness: 170,
-  mass: 1,
+  ...motion.sheet.streamSpring,
   useNativeDriver: true as const,
 };
 
-const ECHO_ENTER_MS = 380;
+const ECHO_ENTER_MS = motion.echo.sheetEnter;
 
 /** Scrim + inner content enter — never apply to the sheet shell (see layout rule). */
 export function useSheetEnterAnimation(
