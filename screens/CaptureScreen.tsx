@@ -10,6 +10,7 @@ import {
   AppState,
   DevSettings,
   Easing,
+  InteractionManager,
   Keyboard,
   KeyboardAvoidingView,
   LayoutAnimation,
@@ -76,6 +77,11 @@ import {
   ECHO_RECALL_SHEET_DIM,
 } from '../constants/echoLayer';
 import {
+  STREAM_MONTH_JUMP_PULSE_MS,
+  STREAM_MONTH_JUMP_SCROLL_INSET_PX,
+  STREAM_TIDE_INTERRUPTION_MS,
+} from '../constants/streamBoundedContinuity';
+import {
   TEMPORAL_NAV_ENABLED,
   TEMPORAL_NAV_MIN_SCROLL_Y,
   TEMPORAL_NAV_SCRUBBER_IDLE_MS,
@@ -97,6 +103,12 @@ import {
   setEchoLastBackgroundAt,
   setEchoSessionThread,
 } from '../storage/echoLayerPrefs';
+import {
+  getStreamTideCooldownIds,
+  getStreamTideLastBackgroundAt,
+  recordStreamTideShown,
+  setStreamTideLastBackgroundAt,
+} from '../storage/streamTidePrefs';
 import {
   getEchoCandidates,
   recordEntryOpened,
@@ -146,6 +158,8 @@ import {
 } from '../theme';
 import type { MonthKey, MonthSummary } from '../types/temporal';
 import type { EchoCandidate } from '../utils/selectEchoCandidates';
+import { isStreamBoundedContinuityActive } from '../utils/streamBoundedContinuity';
+import { mergeStreamTideEntries, pickStreamTideEntryIds } from '../utils/streamTide';
 import { monthKeyFromIso } from '../utils/streamMonthIndex';
 import { streamSearchResultLabel } from '../utils/streamSearchResultLabel';
 import { loadStreamUntilEntryIncluded, resolveMonthJumpAnchor } from '../utils/temporalJump';
@@ -263,6 +277,7 @@ export function CaptureScreen({
     () => mergeDemoStreamWithEntries(entries, demoStreamMode),
     [entries, demoStreamMode],
   );
+  const streamBoundedContinuityActive = isStreamBoundedContinuityActive(devStreamBoundedContinuityEnabled);
   const [hasMore, setHasMore] = useState(true);
   const [syncModalVisibleInternal, setSyncModalVisibleInternal] = useState(false);
   const syncModalControlled = onSyncModalVisibleChange != null;
@@ -314,6 +329,10 @@ export function CaptureScreen({
   const [streamViewportHeight, setStreamViewportHeight] = useState(0);
   const [totalEntryCount, setTotalEntryCount] = useState(0);
   const [devTemporalNavEnabled, setDevTemporalNavEnabled] = useState(false);
+  const [devStreamBoundedContinuityEnabled, setDevStreamBoundedContinuityEnabled] = useState(false);
+  const [streamTideEntryIds, setStreamTideEntryIds] = useState<string[]>([]);
+  const [monthHeaderPulseKey, setMonthHeaderPulseKey] = useState<MonthKey | null>(null);
+  const lastReadEntryIdRef = useRef<string | null>(null);
   const [devEchoUiVariant, setDevEchoUiVariant] = useState<
     'threshold' | 'palimpsest' | 'filament' | 'field'
   >(__DEV__ ? 'palimpsest' : 'threshold');
@@ -405,6 +424,53 @@ export function CaptureScreen({
     () => streamSearchResultLabel(searchExpanded, searchTrimmed, searchResults.length),
     [searchExpanded, searchTrimmed, searchResults.length],
   );
+
+  const streamListEntries = useMemo(() => {
+    if (!streamBoundedContinuityActive || searchTrimmed.length > 0 || streamTideEntryIds.length === 0) {
+      return streamDisplayEntries;
+    }
+    return mergeStreamTideEntries(streamDisplayEntries, streamTideEntryIds);
+  }, [streamBoundedContinuityActive, streamDisplayEntries, streamTideEntryIds, searchTrimmed]);
+
+  const streamTideEntryIdSet = useMemo(() => new Set(streamTideEntryIds), [streamTideEntryIds]);
+
+  const applyStreamTide = useCallback(
+    async (opts?: { lastOpenedId?: string | null }) => {
+      if (!streamBoundedContinuityActive || searchTrimmed.length > 0 || readEntry != null) {
+        return;
+      }
+      const cooldown = await getStreamTideCooldownIds();
+      const ids = pickStreamTideEntryIds(streamDisplayEntries, {
+        lastOpenedId: opts?.lastOpenedId ?? undefined,
+        echoCandidateIds: echoCandidatesRef.current.map((c) => c.entry.id),
+        cooldownIds: cooldown,
+      });
+      if (ids.length === 0) {
+        return;
+      }
+      setStreamTideEntryIds(ids);
+      void recordStreamTideShown(ids);
+    },
+    [streamBoundedContinuityActive, searchTrimmed, readEntry, streamDisplayEntries],
+  );
+
+  useEffect(() => {
+    if (!streamBoundedContinuityActive || searchTrimmed.length > 0) {
+      setStreamTideEntryIds([]);
+    }
+  }, [streamBoundedContinuityActive, searchTrimmed]);
+
+  useEffect(() => {
+    if (!streamBoundedContinuityActive) {
+      setMonthHeaderPulseKey(null);
+      return;
+    }
+    if (monthHeaderPulseKey == null) {
+      return;
+    }
+    const t = setTimeout(() => setMonthHeaderPulseKey(null), STREAM_MONTH_JUMP_PULSE_MS);
+    return () => clearTimeout(t);
+  }, [streamBoundedContinuityActive, monthHeaderPulseKey]);
 
   useEffect(() => {
     void getHapticsEnabled().then(setHapticsEnabledState);
@@ -696,10 +762,26 @@ export function CaptureScreen({
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'background' || state === 'inactive') {
         void setEchoLastBackgroundAt().catch(() => {});
+        void setStreamTideLastBackgroundAt(new Date().toISOString()).catch(() => {});
+        return;
       }
+      if (state !== 'active' || !streamBoundedContinuityActive) {
+        return;
+      }
+      void (async () => {
+        const at = await getStreamTideLastBackgroundAt();
+        if (at == null) {
+          return;
+        }
+        const awayMs = Date.now() - Date.parse(at);
+        if (awayMs < STREAM_TIDE_INTERRUPTION_MS) {
+          return;
+        }
+        await applyStreamTide();
+      })();
     });
     return () => sub.remove();
-  }, []);
+  }, [applyStreamTide, streamBoundedContinuityActive]);
 
   useEffect(() => {
     if (searchTrimmed.length > 0) {
@@ -809,6 +891,7 @@ export function CaptureScreen({
       void recordEntryOpened(entry.id).catch(() => {});
       void setEchoSessionThread(entry.id).catch(() => {});
     }
+    lastReadEntryIdRef.current = entry.id;
     readEntryOpenCleanupRef.current = openAfterKeyboardHidden(() => {
       readEntryOpenCleanupRef.current = null;
       setReadEntryAnchor(anchor ?? null);
@@ -1582,9 +1665,12 @@ export function CaptureScreen({
                 : 'threshold',
         ),
       echoUiVariantDevLabel: devEchoUiVariant,
+      onToggleStreamBoundedContinuity: () => setDevStreamBoundedContinuityEnabled((on) => !on),
+      streamBoundedContinuityDevState: devStreamBoundedContinuityEnabled ? 'on' : 'off',
     });
   }, [
     devEchoUiVariant,
+    devStreamBoundedContinuityEnabled,
     devTemporalNavEnabled,
     onDevPreviewAppUpdate,
     onResetAnalyticsPrompt,
@@ -1666,6 +1752,9 @@ export function CaptureScreen({
             setHasMore(true);
           }
           setScrollToEntryId(anchor.id);
+          if (streamBoundedContinuityActive) {
+            setMonthHeaderPulseKey(monthKey);
+          }
           onScheduleStreamHighlight?.(anchor.id);
         } catch (err) {
           setTemporalCommittedMonthKey(null);
@@ -1675,7 +1764,7 @@ export function CaptureScreen({
         }
       })();
     },
-    [demoStreamMode, onScheduleStreamHighlight, temporalChromeMonthKey],
+    [demoStreamMode, onScheduleStreamHighlight, streamBoundedContinuityActive, temporalChromeMonthKey],
   );
 
   useEffect(() => {
@@ -1704,12 +1793,20 @@ export function CaptureScreen({
     [jumpToMonth],
   );
 
-  const onScrollToEntryOffset = useCallback((contentOffsetY: number) => {
-    streamScrollViewRef.current?.scrollTo({
-      y: Math.max(0, contentOffsetY - 8),
-      animated: true,
-    });
-  }, []);
+  const onScrollToEntryOffset = useCallback(
+    (contentOffsetY: number) => {
+      const y = Math.max(0, contentOffsetY - STREAM_MONTH_JUMP_SCROLL_INSET_PX);
+      const scroll = () => {
+        streamScrollViewRef.current?.scrollTo({ y, animated: true });
+      };
+      if (streamBoundedContinuityActive) {
+        void InteractionManager.runAfterInteractions(scroll);
+      } else {
+        scroll();
+      }
+    },
+    [streamBoundedContinuityActive],
+  );
 
   const onScrollToEntryComplete = useCallback(() => {
     setScrollToEntryId(null);
@@ -1891,7 +1988,7 @@ export function CaptureScreen({
                   ]}
                 >
                   <RecentList
-                    entries={searchTrimmed.length > 0 ? searchResults : streamDisplayEntries}
+                    entries={searchTrimmed.length > 0 ? searchResults : streamListEntries}
                     visible
                     deferEmptyStreamMotion={!allowCaptureFocus}
                     streamEmptyAmbient={searchTrimmed.length === 0 && streamDisplayEntries.length === 0}
@@ -1900,8 +1997,13 @@ export function CaptureScreen({
                     streamViewportHeight={streamViewportHeight}
                     streamScrollViewRef={streamScrollViewRef as unknown as RefObject<View | null>}
                     streamViewportFocusEnabled={
-                      searchTrimmed.length > 0 ? searchResults.length > 0 : streamDisplayEntries.length > 0
+                      searchTrimmed.length > 0 ? searchResults.length > 0 : streamListEntries.length > 0
                     }
+                    streamFocusSettleEnabled={streamBoundedContinuityActive && searchTrimmed.length === 0}
+                    streamScrollVelocityY={streamScrollVelocityY}
+                    streamTideEntryIds={streamBoundedContinuityActive ? streamTideEntryIdSet : undefined}
+                    monthHeaderPulseKey={streamBoundedContinuityActive ? monthHeaderPulseKey : null}
+                    suspendViewportMeasurement={readEntry != null}
                     highlightEntryId={searchTrimmed.length > 0 ? null : streamHighlightEntryId}
                     searchHighlightQuery={searchTrimmed.length > 0 ? searchTrimmed : undefined}
                     emptyHint={
@@ -2068,10 +2170,17 @@ export function CaptureScreen({
               useNativeDriver: true,
             }).start();
           }
+          const lastId = lastReadEntryIdRef.current;
           setReadEntry(null);
           setReadEntryAnchor(null);
           setReadEntryHapticOnPresent(false);
           setReadEntryEnterProfile('stream');
+          if (streamBoundedContinuityActive && lastId != null) {
+            const openedId = lastId;
+            void InteractionManager.runAfterInteractions(() => {
+              void applyStreamTide({ lastOpenedId: openedId });
+            });
+          }
         }}
         enterProfile={readEntryEnterProfile}
         onEntryUpdated={onReadEntryUpdated}

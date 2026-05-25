@@ -27,6 +27,9 @@ export type DevMenuOptions = {
   onCycleEchoUiVariant?: () => void;
   /** Current variant label for dev menu. */
   echoUiVariantDevLabel?: string;
+  /** Toggle B3/B4/B5 stream calm scroll experiments (`__DEV__`). */
+  onToggleStreamBoundedContinuity?: () => void;
+  streamBoundedContinuityDevState?: 'on' | 'off';
 };
 
 /**
@@ -98,6 +101,13 @@ export function showDevMenu(options: DevMenuOptions): void {
     buttons.push({
       text: `Echo UI (${label})`,
       onPress: options.onCycleEchoUiVariant,
+    });
+  }
+  if (options.onToggleStreamBoundedContinuity != null) {
+    const state = options.streamBoundedContinuityDevState ?? 'off';
+    buttons.push({
+      text: `Stream calm scroll (${state})`,
+      onPress: options.onToggleStreamBoundedContinuity,
     });
   }
   buttons.push({ text: 'Cancel', style: 'cancel' });
