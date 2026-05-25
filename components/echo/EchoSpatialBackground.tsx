@@ -10,6 +10,8 @@ export type EchoSpatialBackgroundProps = {
   pageWidth: number;
   echoMounted: boolean;
   chrome: EchoChromeColors;
+  /** 0–1 proxy intensity — slightly deepens echo wash (no labels). */
+  emotionalIntensity?: number;
 };
 
 /**
@@ -21,6 +23,7 @@ export function EchoSpatialBackground({
   pageWidth,
   echoMounted,
   chrome,
+  emotionalIntensity = 0,
 }: EchoSpatialBackgroundProps) {
   if (!echoMounted || pageWidth <= 0) {
     return <AmbientBackground />;
@@ -61,6 +64,19 @@ export function EchoSpatialBackground({
         pointerEvents="none"
         testID="echo-spatial-echo-bg"
       />
+      {emotionalIntensity > 0.08 ? (
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              opacity: Animated.multiply(echoPresence, emotionalIntensity * 0.14),
+              backgroundColor: chrome.echoDepth,
+            },
+          ]}
+          pointerEvents="none"
+          testID="echo-spatial-emotional-veil"
+        />
+      ) : null}
       <Animated.View
         style={[StyleSheet.absoluteFill, { opacity: echoPresence }]}
         pointerEvents="none"
