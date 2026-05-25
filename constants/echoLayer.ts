@@ -49,19 +49,10 @@ export const ECHO_AI_RERANK_ENABLED = false;
 /** Content fade-in duration after atmosphere crossfade (ms). */
 export const ECHO_CONTENT_FADE_MS = 420;
 
-/** Direction B — palimpsest peel deck (dev dogfood; default threshold). */
-export const ECHO_PALIMPSEST_ENABLED = false;
-
-/** Direction C — filament thread scrub (dev dogfood). */
-export const ECHO_FILAMENT_ENABLED = false;
-
-/** Filament — max stations on the thread. */
+/** Filament — max stations on the thread (alternate UI; not shipped). */
 export const ECHO_FILAMENT_MAX_STATIONS = 4;
 
-/** Direction D — gravity field (dev dogfood). Palimpsest remains preferred dogfood default. */
-export const ECHO_FIELD_ENABLED = false;
-
-/** Field — max visible nodes (readability on small screens). */
+/** Field — max visible nodes (alternate UI; not shipped). */
 export const ECHO_FIELD_MAX_NODES = 4;
 
 /** Palimpsest — pool size for peel rotation. */

@@ -12,12 +12,8 @@ import type { EchoCandidate } from '../../utils/selectEchoCandidates';
 import { echoContentOpacity, echoContentParallaxX } from '../../utils/echoPagerMotion';
 import { screenContentGutter, useAppTheme } from '../../theme';
 import type { ThoughtSheetOpenAnchor } from '../thoughtSheet/detents';
-import {
-  ECHO_FIELD_ENABLED,
-  ECHO_FILAMENT_ENABLED,
-  ECHO_PALIMPSEST_ENABLED,
-} from '../../constants/echoLayer';
 import type { EchoUiVariant } from '../../constants/echoUiVariant';
+import { ECHO_UI_VARIANT_SHIPPED } from '../../constants/echoUiVariant';
 import { EchoFieldVessel } from './EchoFieldVessel';
 import { EchoFilamentVessel } from './EchoFilamentVessel';
 import { EchoPalimpsestVessel } from './EchoPalimpsestVessel';
@@ -30,19 +26,19 @@ export type EchoLayerProps = {
   /** Pager scroll — drives delayed content fade + parallax. */
   scrollX?: Animated.Value;
   pageWidth?: number;
-  /** Dev dogfood UI variant (production uses Threshold). */
+  /** Echo UI variant (defaults to shipped palimpsest). */
   uiVariant?: EchoUiVariant;
   /** Dims Echo when recall sheet is open (Echo-origin enter). */
   recallDim?: Animated.Value;
 };
 
-/** Threshold register — no scroll, no feature explanation copy. */
+/** Echo presence — no scroll, no feature explanation copy. */
 export function EchoLayer({
   candidates,
   onEntryPress,
   scrollX,
   pageWidth = 0,
-  uiVariant = 'threshold',
+  uiVariant = ECHO_UI_VARIANT_SHIPPED,
   recallDim,
 }: EchoLayerProps) {
   const t = useAppTheme();
@@ -79,24 +75,8 @@ export function EchoLayer({
     [onEntryPress],
   );
 
-  const resolvedVariant: EchoUiVariant = (() => {
-    if (uiVariant !== 'threshold') {
-      return uiVariant;
-    }
-    if (ECHO_FIELD_ENABLED) {
-      return 'field';
-    }
-    if (ECHO_FILAMENT_ENABLED) {
-      return 'filament';
-    }
-    if (ECHO_PALIMPSEST_ENABLED) {
-      return 'palimpsest';
-    }
-    return 'threshold';
-  })();
-
   const body = (() => {
-    switch (resolvedVariant) {
+    switch (uiVariant) {
       case 'field':
         return (
           <EchoFieldVessel

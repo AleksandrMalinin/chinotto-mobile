@@ -35,11 +35,11 @@ function renderEcho() {
 }
 
 describe('EchoLayer', () => {
-  it('uses threshold vessel without scroll or explanatory headline', () => {
+  it('uses palimpsest vessel without scroll or explanatory headline', () => {
     const { getByTestId, queryByTestId, queryByText } = renderEcho();
 
     expect(getByTestId('echo-layer')).toBeTruthy();
-    expect(getByTestId('echo-threshold-vessel')).toBeTruthy();
+    expect(getByTestId('echo-palimpsest-vessel')).toBeTruthy();
     expect(queryByTestId('echo-layer-scroll')).toBeNull();
     expect(queryByTestId('echo-layer-kicker')).toBeNull();
     expect(queryByTestId('echo-memory-vessel')).toBeNull();
@@ -51,7 +51,7 @@ describe('EchoLayer', () => {
   it('opens thought from primary press', () => {
     const { getByTestId, onEntryPress } = renderEcho();
 
-    fireEvent.press(getByTestId('echo-threshold-primary-1'));
+    fireEvent.press(getByTestId('echo-palimpsest-primary-1'));
     expect(onEntryPress).toHaveBeenCalledWith(
       expect.objectContaining({ id: '1' }),
       undefined,

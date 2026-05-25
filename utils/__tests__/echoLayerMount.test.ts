@@ -1,3 +1,4 @@
+import { ECHO_LAYER_MIN_CANDIDATES, ECHO_LAYER_MIN_ENTRY_COUNT } from '../echoLayerVisibility';
 import { isEchoLayerMountedForCapture } from '../echoLayerMount';
 
 describe('isEchoLayerMountedForCapture', () => {
@@ -5,8 +6,8 @@ describe('isEchoLayerMountedForCapture', () => {
     active: true,
     searchActive: false,
     readSheetOpen: false,
-    totalEntryCount: 5,
-    candidateCount: 1,
+    totalEntryCount: ECHO_LAYER_MIN_ENTRY_COUNT,
+    candidateCount: ECHO_LAYER_MIN_CANDIDATES,
   };
 
   it('blocks when search or sheet is open', () => {
@@ -14,16 +15,21 @@ describe('isEchoLayerMountedForCapture', () => {
     expect(isEchoLayerMountedForCapture({ ...base, readSheetOpen: true })).toBe(false);
   });
 
-  it('in dev runtime mounts with one candidate regardless of entry count', () => {
-    const env = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
+  it('requires production entry and candidate thresholds', () => {
     expect(
       isEchoLayerMountedForCapture({
         ...base,
-        totalEntryCount: 2,
-        candidateCount: 1,
+        totalEntryCount: ECHO_LAYER_MIN_ENTRY_COUNT - 1,
+        candidateCount: ECHO_LAYER_MIN_CANDIDATES,
       }),
-    ).toBe(true);
-    process.env.NODE_ENV = env;
+    ).toBe(false);
+    expect(
+      isEchoLayerMountedForCapture({
+        ...base,
+        totalEntryCount: ECHO_LAYER_MIN_ENTRY_COUNT,
+        candidateCount: ECHO_LAYER_MIN_CANDIDATES - 1,
+      }),
+    ).toBe(false);
+    expect(isEchoLayerMountedForCapture(base)).toBe(true);
   });
 });

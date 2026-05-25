@@ -3,31 +3,18 @@ import {
   ECHO_LAYER_MIN_ENTRY_COUNT,
 } from '../constants/echoLayer';
 
-/** Global flag and/or dev override (caller should pass dev only when `__DEV__`). */
-export function isEchoLayerActive(globalEnabled: boolean, devEnabled: boolean): boolean {
-  return globalEnabled || devEnabled;
-}
-
 export function isEchoLayerEligible(params: {
   active: boolean;
   searchActive: boolean;
   readSheetOpen: boolean;
   totalEntryCount: number;
   candidateCount: number;
-  /** Dev QA: show echo before `ECHO_LAYER_MIN_ENTRY_COUNT`. */
-  bypassMinEntryCount?: boolean;
-  /** Dev QA: allow echo with a single visible candidate. */
-  bypassMinCandidates?: boolean;
 }): boolean {
   if (!params.active || params.searchActive || params.readSheetOpen) {
     return false;
   }
-  const minCandidates = params.bypassMinCandidates ? 1 : ECHO_LAYER_MIN_CANDIDATES;
-  if (params.candidateCount < minCandidates) {
+  if (params.candidateCount < ECHO_LAYER_MIN_CANDIDATES) {
     return false;
-  }
-  if (params.bypassMinEntryCount) {
-    return true;
   }
   return params.totalEntryCount >= ECHO_LAYER_MIN_ENTRY_COUNT;
 }
