@@ -41,7 +41,10 @@ import {
   type ThoughtSheetOpenAnchor,
 } from './thoughtSheet/detents';
 import { useSheetDragDismiss } from './thoughtSheet/useSheetDragDismiss';
-import { useSheetEnterAnimation } from './thoughtSheet/useSheetEnterAnimation';
+import {
+  useSheetEnterAnimation,
+  type SheetEnterProfile,
+} from './thoughtSheet/useSheetEnterAnimation';
 import {
   thoughtSheetBackdropA11yLabel,
 } from './thoughtSheet/backdropAction';
@@ -58,8 +61,10 @@ export type EntryThoughtSheetProps = {
   onClose: () => void;
   onEntryUpdated?: (entry: Entry) => void;
   hapticsEnabled?: boolean;
-  /** Light impact when the sheet presents (e.g. Echo recall open). */
+  /** Light impact when the sheet presents (e.g. stream recall open). */
   hapticOnPresent?: boolean;
+  /** Slower enter from Echo — lift into awareness, not route push. */
+  enterProfile?: SheetEnterProfile;
 };
 
 type SheetPhase = 'compact' | 'expanded';
@@ -71,6 +76,7 @@ export function EntryThoughtSheet({
   onEntryUpdated,
   hapticsEnabled = true,
   hapticOnPresent = false,
+  enterProfile = 'stream',
 }: EntryThoughtSheetProps) {
   const t = useAppTheme();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
@@ -108,7 +114,8 @@ export function EntryThoughtSheet({
 
   const { scrimOpacity, contentOpacity, contentTranslateY } = useSheetEnterAnimation(
     visible,
-    entry?.id
+    entry?.id,
+    enterProfile,
   );
   const scrimColor = isExpanded ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.48)';
 
