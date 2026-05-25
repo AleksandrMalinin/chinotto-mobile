@@ -68,6 +68,7 @@ import { mergeDemoStreamWithEntries, isDemoStreamEntryId } from '../dev/demoStre
 import { resetPaywallForPurchaseTesting } from '../dev/resetPaywallForPurchaseTesting';
 import { showDevMenu } from '../dev/showDevMenu';
 import { isDemoStreamMode } from '../src/features/demoStreamMode';
+import { ECHO_UI_VARIANT_SHIPPED } from '../constants/echoUiVariant';
 import {
   ECHO_COMPOSER_DIM_AT_FULL,
   ECHO_LAYER_ENABLED,
@@ -154,7 +155,6 @@ import { isEchoLayerMountedForCapture } from '../utils/echoLayerMount';
 import { isEchoPagerInteractive } from '../utils/echoLayerVisibility';
 import { echoEmotionalIntensityFromEntries } from '../utils/echoEmotionalAtmosphere';
 import {
-  isTemporalNavigationActive,
   isTemporalScrubberEligible,
   shouldPeekTemporalScrubber,
 } from '../utils/temporalScrubberVisibility';
@@ -281,6 +281,8 @@ export function CaptureScreen({
   const [readEntryAnchor, setReadEntryAnchor] = useState<ThoughtSheetOpenAnchor | null>(null);
   const [readEntryHapticOnPresent, setReadEntryHapticOnPresent] = useState(false);
   const [readEntryEnterProfile, setReadEntryEnterProfile] = useState<SheetEnterProfile>('stream');
+  /** After closing read sheet, avoid composer autoFocus until user taps the field. */
+  const [suppressComposerAutoFocus, setSuppressComposerAutoFocus] = useState(false);
   const echoRecallDim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -313,10 +315,6 @@ export function CaptureScreen({
   const [streamScrollVelocityY, setStreamScrollVelocityY] = useState(0);
   const [streamViewportHeight, setStreamViewportHeight] = useState(0);
   const [totalEntryCount, setTotalEntryCount] = useState(0);
-  const [devTemporalNavEnabled, setDevTemporalNavEnabled] = useState(false);
-  const [devEchoUiVariant, setDevEchoUiVariant] = useState<
-    'threshold' | 'palimpsest' | 'filament' | 'field'
-  >(__DEV__ ? 'palimpsest' : 'threshold');
   const [echoCandidates, setEchoCandidates] = useState<EchoCandidate[]>([]);
   const echoCandidatesRef = useRef<EchoCandidate[]>([]);
   const [echoPageIndex, setEchoPageIndex] = useState<0 | 1>(0);
@@ -659,7 +657,7 @@ export function CaptureScreen({
   }, [refreshEntries, remoteIngestVersion, externalEntriesEpoch]);
 
   useEffect(() => {
-    if (!isTemporalNavigationActive(TEMPORAL_NAV_ENABLED, __DEV__ && devTemporalNavEnabled)) {
+    if (!TEMPORAL_NAV_ENABLED) {
       return;
     }
     void getMonthSummaries()
@@ -669,7 +667,7 @@ export function CaptureScreen({
           console.warn('getMonthSummaries failed', err);
         }
       });
-  }, [devTemporalNavEnabled, entries.length]);
+  }, [entries.length]);
 
   useEffect(() => {
     if (!ECHO_LAYER_ENABLED) {
@@ -1331,6 +1329,7 @@ export function CaptureScreen({
     streamDisplayEntries.length === 0 && (firstLaunchRevealDone !== true || !composerHasFocusedOnce);
 
   const onCaptureComposerFocus = useCallback(() => {
+    setSuppressComposerAutoFocus(false);
     searchInputRef.current?.blur();
     if (composerHasFocusedOnce) {
       return;
@@ -1548,8 +1547,6 @@ export function CaptureScreen({
         setDevPostSyncPreviewNonce((n) => n + 1);
         openSyncModal('dev_menu');
       },
-      onToggleTemporalNavScrubber: () => setDevTemporalNavEnabled((on) => !on),
-      temporalNavScrubberDevState: devTemporalNavEnabled ? 'on' : 'off',
       onResetAnalyticsPrompt: onResetAnalyticsPrompt,
       onResetSyncCaptureQA: () => {
         Keyboard.dismiss();
@@ -1571,21 +1568,8 @@ export function CaptureScreen({
       onPreviewAppUpdateModal: onDevPreviewAppUpdate,
       onPreviewEchoEdgePeek: playEchoEdgePeekPreview,
       onResetEchoEdgePeek: resetEchoEdgePeekForDev,
-      onCycleEchoUiVariant: () =>
-        setDevEchoUiVariant((v) =>
-          v === 'threshold'
-            ? 'palimpsest'
-            : v === 'palimpsest'
-              ? 'filament'
-              : v === 'filament'
-                ? 'field'
-                : 'threshold',
-        ),
-      echoUiVariantDevLabel: devEchoUiVariant,
     });
   }, [
-    devEchoUiVariant,
-    devTemporalNavEnabled,
     onDevPreviewAppUpdate,
     onResetAnalyticsPrompt,
     openSyncModal,
@@ -1593,17 +1577,12 @@ export function CaptureScreen({
     resetEchoEdgePeekForDev,
   ]);
 
-  const temporalNavActive = isTemporalNavigationActive(
-    TEMPORAL_NAV_ENABLED,
-    __DEV__ && devTemporalNavEnabled,
-  );
   const temporalScrubberEligible = isTemporalScrubberEligible({
-    active: temporalNavActive,
+    active: TEMPORAL_NAV_ENABLED,
     searchActive,
     readSheetOpen: readEntry != null,
     totalEntryCount,
     hasStreamRows: streamDisplayEntries.length > 0,
-    bypassMinEntryCount: __DEV__ && devTemporalNavEnabled,
   });
   const showTemporalScrubber =
     echoPageIndex === 0 &&
@@ -1752,7 +1731,7 @@ export function CaptureScreen({
                 onEntryPress={onEchoEntryPress}
                 scrollX={echoLayerEligible ? echoPagerScrollX : undefined}
                 pageWidth={echoPageWidth}
-                uiVariant={__DEV__ ? devEchoUiVariant : 'threshold'}
+                uiVariant={ECHO_UI_VARIANT_SHIPPED}
                 recallDim={echoRecallDim}
               />
             }
@@ -1826,7 +1805,8 @@ export function CaptureScreen({
                             !deferKeyboardForFirstLaunchReveal &&
                             readEntry == null &&
                             !echoOnEchoPage &&
-                            !recallSearchActive
+                            !recallSearchActive &&
+                            !suppressComposerAutoFocus
                           }
                           editable={readEntry == null && !echoOnEchoPage && !recallSearchActive}
                           showSoftInputOnFocus={
@@ -2072,6 +2052,7 @@ export function CaptureScreen({
           setReadEntryAnchor(null);
           setReadEntryHapticOnPresent(false);
           setReadEntryEnterProfile('stream');
+          setSuppressComposerAutoFocus(true);
         }}
         enterProfile={readEntryEnterProfile}
         onEntryUpdated={onReadEntryUpdated}

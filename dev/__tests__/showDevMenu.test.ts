@@ -14,8 +14,6 @@ describe('showDevMenu', () => {
       onPreviewAppUpdateModal: jest.fn(),
       onPreviewEchoEdgePeek: jest.fn(),
       onResetEchoEdgePeek: jest.fn(),
-      onCycleEchoUiVariant: jest.fn(),
-      echoUiVariantDevLabel: 'palimpsest',
     });
 
     const buttons = alertSpy.mock.calls[0][2] as { text: string }[];
@@ -27,7 +25,8 @@ describe('showDevMenu', () => {
     expect(buttons.some((b) => b.text === 'Preview app update (forced)')).toBe(true);
     expect(buttons.some((b) => b.text === 'Preview Echo edge peek')).toBe(true);
     expect(buttons.some((b) => b.text === 'Reset Echo edge peek flag')).toBe(true);
-    expect(buttons.some((b) => b.text === 'Echo UI (palimpsest)')).toBe(true);
+    expect(buttons.some((b) => b.text.includes('Temporal scrubber'))).toBe(false);
+    expect(buttons.some((b) => b.text.includes('Echo UI'))).toBe(false);
 
     alertSpy.mockRestore();
   });

@@ -399,6 +399,42 @@ describe('CaptureScreen', () => {
     });
   });
 
+  it('does not re-enable composer autoFocus after closing the read sheet', async () => {
+    const remoteEntry = {
+      id: 'row-1',
+      text: 'Recall me',
+      createdAt: '2025-03-10T16:00:00.000Z',
+    };
+    jest.mocked(entryRepository.getRecentEntries).mockResolvedValueOnce([remoteEntry]);
+
+    const { findByTestId, getByTestId, queryByTestId, getByLabelText } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <CaptureScreen />
+      </SafeAreaProvider>
+    );
+
+    fireEvent.press(await findByTestId('recent-entry-row-1'));
+
+    await waitFor(() => {
+      expect(getByTestId('entry-read-sheet')).toBeTruthy();
+    });
+    expect(getByTestId('capture-input').props.autoFocus).toBe(false);
+
+    await act(async () => {
+      fireEvent.press(getByLabelText('Dismiss'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await waitFor(
+      () => {
+        expect(queryByTestId('entry-read-sheet')).toBeNull();
+      },
+      { timeout: 3000 },
+    );
+    expect(getByTestId('capture-input').props.autoFocus).toBe(false);
+  });
+
   it('keeps input text when saveEntry fails', async () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     jest.mocked(entryRepository.saveEntry).mockRejectedValueOnce(new Error('disk full'));
