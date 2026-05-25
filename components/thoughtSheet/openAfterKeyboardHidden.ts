@@ -22,10 +22,12 @@ export function openAfterKeyboardHidden(onOpen: () => void): () => void {
     return () => {};
   }
 
-  const sub = Keyboard.addListener('keyboardWillHide', finish);
-  const timeout = setTimeout(finish, 450);
+  const subWillHide = Keyboard.addListener('keyboardWillHide', finish);
+  const subDidHide = Keyboard.addListener('keyboardDidHide', finish);
+  const timeout = setTimeout(finish, 280);
   return () => {
-    sub.remove();
+    subWillHide.remove();
+    subDidHide.remove();
     clearTimeout(timeout);
   };
 }
