@@ -45,4 +45,28 @@ describe('selectEchoCandidates', () => {
     expect(picked.length).toBeLessThanOrEqual(7);
     expect(new Set(picked.map((e) => e.id)).size).toBe(picked.length);
   });
+
+  it('excludes cooldown entry ids', () => {
+    const rows = [
+      row('hot', '2026-05-20T10:00:00.000Z', {
+        openCount: 4,
+        lastOpenedAt: '2026-05-23T10:00:00.000Z',
+      }),
+      row('cold', '2025-01-10T10:00:00.000Z'),
+    ];
+    const picked = selectEchoCandidates(rows, 5, now, {
+      excludeEntryIds: new Set(['hot']),
+    });
+    expect(picked.map((e) => e.id)).not.toContain('hot');
+    expect(picked.map((e) => e.id)).toContain('cold');
+  });
+
+  it('promotes primary entry to front', () => {
+    const rows = [
+      row('a', '2026-05-20T10:00:00.000Z', { openCount: 1 }),
+      row('b', '2025-01-10T10:00:00.000Z', { openCount: 5, lastOpenedAt: '2026-05-23T10:00:00.000Z' }),
+    ];
+    const picked = selectEchoCandidates(rows, 5, now, { primaryEntryId: 'a' });
+    expect(picked[0]?.id).toBe('a');
+  });
 });

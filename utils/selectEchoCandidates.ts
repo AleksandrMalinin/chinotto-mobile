@@ -4,6 +4,13 @@ import {
   ECHO_GRAVITY_RECENT_DAYS,
   ECHO_LAYER_MAX_ITEMS,
 } from '../constants/echoLayer';
+import {
+  lexicalMassScore,
+  linkDensityScore,
+  unfinishedContinuityScore,
+  weekOfYearSalt,
+} from './echoContinuitySignals';
+import { entryIdsWithStemRecurrence } from './echoStems';
 
 export type EchoEngagementRow = {
   entry: Entry;
@@ -18,6 +25,14 @@ export type EchoCandidate = Entry & {
   kind: EchoCandidateKind;
 };
 
+export type SelectEchoCandidatesOptions = {
+  /** Entries recently shown on Echo — excluded from selection. */
+  excludeEntryIds?: ReadonlySet<string>;
+  /** Promote to front when present in result (session thread / interruption). */
+  primaryEntryId?: string | null;
+  now?: Date;
+};
+
 const MS_PER_DAY = 86_400_000;
 
 function daysBetween(earlierIso: string, laterMs: number): number {
@@ -28,11 +43,23 @@ function daysBetween(earlierIso: string, laterMs: number): number {
   return Math.max(0, (laterMs - earlierMs) / MS_PER_DAY);
 }
 
-function gravityScore(row: EchoEngagementRow, nowMs: number): number {
+function gravityScore(row: EchoEngagementRow, nowMs: number, stemBoost: boolean): number {
   const recentOpen =
     row.lastOpenedAt != null &&
     daysBetween(row.lastOpenedAt, nowMs) <= ECHO_GRAVITY_RECENT_DAYS;
-  return row.openCount * 10 + row.editCount * 15 + (recentOpen ? 20 : 0);
+  const unfinished = unfinishedContinuityScore(row);
+  const engaged = row.openCount > 0 || row.editCount > 0 || recentOpen;
+  if (!engaged && !stemBoost && unfinished === 0) {
+    return 0;
+  }
+  let score = row.openCount * 10 + row.editCount * 15 + (recentOpen ? 20 : 0);
+  score += unfinished;
+  score += linkDensityScore(row.entry.text, row.openCount);
+  score += lexicalMassScore(row.entry.text);
+  if (stemBoost) {
+    score += 40;
+  }
+  return score;
 }
 
 function driftScore(row: EchoEngagementRow, nowMs: number): number {
@@ -75,39 +102,89 @@ function saltedShuffle<T extends { entry: Entry }>(rows: T[], salt: string): T[]
   return copy;
 }
 
+function filterExcluded(
+  rows: EchoEngagementRow[],
+  exclude?: ReadonlySet<string>,
+): EchoEngagementRow[] {
+  if (!exclude || exclude.size === 0) {
+    return rows;
+  }
+  return rows.filter((row) => !exclude.has(row.entry.id));
+}
+
+function withPrimaryFirst(
+  candidates: EchoCandidate[],
+  primaryEntryId: string | null | undefined,
+): EchoCandidate[] {
+  if (!primaryEntryId) {
+    return candidates;
+  }
+  const idx = candidates.findIndex((c) => c.id === primaryEntryId);
+  if (idx <= 0) {
+    return candidates;
+  }
+  const copy = [...candidates];
+  const [item] = copy.splice(idx, 1);
+  return [item!, ...copy];
+}
+
 /**
  * Selects a sparse echo list: gravity (revisited/edited) + drift (long-unseen).
- * Includes a salted shuffle tail so the page never feels purely algorithmic.
+ * Continuity signals and seasonal salt — never explained in UI.
  */
 export function selectEchoCandidates(
   rows: EchoEngagementRow[],
   limit: number = ECHO_LAYER_MAX_ITEMS,
   now: Date = new Date(),
+  options: SelectEchoCandidatesOptions = {},
 ): EchoCandidate[] {
-  if (rows.length === 0 || limit <= 0) {
+  const resolvedNow = options.now ?? now;
+  const filtered = filterExcluded(rows, options.excludeEntryIds);
+  if (filtered.length === 0 || limit <= 0) {
     return [];
   }
 
-  const nowMs = now.getTime();
-  const used = new Set<string>();
-  const gravityRanked = rows
-    .map((row) => ({ row, score: gravityScore(row, nowMs) }))
+  const nowMs = resolvedNow.getTime();
+  const entries = filtered.map((r) => r.entry);
+  const stemIds = entryIdsWithStemRecurrence(entries, undefined, resolvedNow);
+
+  const gravityRanked = filtered
+    .map((row) => ({
+      row,
+      score: gravityScore(row, nowMs, stemIds.has(row.entry.id)),
+      stemRecurrent: stemIds.has(row.entry.id),
+    }))
     .filter(({ score }) => score > 0)
     .sort((a, b) => b.score - a.score);
 
-  const driftRanked = rows
+  const driftRanked = filtered
     .map((row) => ({ row, score: driftScore(row, nowMs) }))
     .filter(({ score }) => score > 0)
     .sort((a, b) => b.score - a.score);
 
+  const used = new Set<string>();
   const gravitySlots = Math.min(3, Math.ceil(limit / 2));
   const driftSlots = Math.min(3, Math.floor(limit / 2));
 
-  const gravity = pickTop(
-    gravityRanked.map(({ row, score }) => ({ entry: row.entry, score, row })),
-    gravitySlots,
-    used,
-  );
+  const gravityPicked: { entry: Entry; row: EchoEngagementRow }[] = [];
+  let stemRecurrenceSlotUsed = false;
+  for (const { row, stemRecurrent } of gravityRanked) {
+    if (gravityPicked.length >= gravitySlots) {
+      break;
+    }
+    if (used.has(row.entry.id)) {
+      continue;
+    }
+    if (stemRecurrent && stemRecurrenceSlotUsed) {
+      continue;
+    }
+    if (stemRecurrent) {
+      stemRecurrenceSlotUsed = true;
+    }
+    used.add(row.entry.id);
+    gravityPicked.push({ entry: row.entry, row });
+  }
+
   const drift = pickTop(
     driftRanked.map(({ row, score }) => ({ entry: row.entry, score, row })),
     driftSlots,
@@ -115,17 +192,17 @@ export function selectEchoCandidates(
   );
 
   const out: EchoCandidate[] = [
-    ...gravity.map(({ entry }) => ({ ...entry, kind: 'gravity' as const })),
+    ...gravityPicked.map(({ entry }) => ({ ...entry, kind: 'gravity' as const })),
     ...drift.map(({ entry }) => ({ ...entry, kind: 'drift' as const })),
   ];
 
   if (out.length >= limit) {
-    return out.slice(0, limit);
+    return withPrimaryFirst(out.slice(0, limit), options.primaryEntryId);
   }
 
   const remainder = saltedShuffle(
-    rows.filter((row) => !used.has(row.entry.id)),
-    'echo-tail',
+    filtered.filter((row) => !used.has(row.entry.id)),
+    weekOfYearSalt(resolvedNow),
   );
   for (const row of remainder) {
     if (out.length >= limit) {
@@ -134,5 +211,5 @@ export function selectEchoCandidates(
     out.push({ ...row.entry, kind: 'drift' });
   }
 
-  return out.slice(0, limit);
+  return withPrimaryFirst(out.slice(0, limit), options.primaryEntryId);
 }

@@ -114,4 +114,18 @@ describe('entryEngagementRepository', () => {
     });
     expect(candidates).toHaveLength(2);
   });
+
+  it('resolveEchoCandidates uses stream fallback when DB read throws', async () => {
+    getAllAsync.mockRejectedValueOnce(new Error('db unavailable'));
+
+    const candidates = await resolveEchoCandidates({
+      preferStreamFallback: true,
+      fallbackEntries: [
+        { id: 'a', text: 'alpha', createdAt: '2025-01-01T00:00:00.000Z' },
+        { id: 'b', text: 'beta', createdAt: '2025-02-01T00:00:00.000Z' },
+        { id: 'c', text: 'gamma', createdAt: '2025-03-01T00:00:00.000Z' },
+      ],
+    });
+    expect(candidates.length).toBeGreaterThanOrEqual(3);
+  });
 });

@@ -1,11 +1,8 @@
 import type { Entry } from '../types/entry';
 import { ECHO_LAYER_MAX_ITEMS, ECHO_LAYER_MIN_CANDIDATES } from '../constants/echoLayer';
-import {
-  selectEchoCandidates,
-  type EchoCandidate,
-  type EchoEngagementRow,
-} from '../utils/selectEchoCandidates';
+import type { EchoCandidate, EchoEngagementRow } from '../utils/selectEchoCandidates';
 import { getDatabase } from './db';
+import { buildEchoCandidates } from './echoResolve';
 import { runSerializedDb } from './runSerializedDb';
 
 export function echoEngagementRowsFromEntries(entries: readonly Entry[]): EchoEngagementRow[] {
@@ -107,7 +104,7 @@ async function loadEngagementRows(): Promise<EchoEngagementRow[]> {
 export async function getEchoCandidates(limit: number = ECHO_LAYER_MAX_ITEMS): Promise<EchoCandidate[]> {
   return runSerializedDb(async () => {
     const rows = await loadEngagementRows();
-    return selectEchoCandidates(rows, limit);
+    return buildEchoCandidates({ rows, limit });
   });
 }
 
@@ -117,7 +114,12 @@ export async function getEchoCandidates(limit: number = ECHO_LAYER_MAX_ITEMS): P
 export async function resolveEchoCandidates(
   options: ResolveEchoCandidatesOptions = {},
 ): Promise<EchoCandidate[]> {
-  const fromDb = await getEchoCandidates();
+  let fromDb: EchoCandidate[] = [];
+  try {
+    fromDb = await getEchoCandidates();
+  } catch {
+    fromDb = [];
+  }
   if (fromDb.length >= ECHO_LAYER_MIN_CANDIDATES || !options.preferStreamFallback) {
     return fromDb;
   }
@@ -125,7 +127,9 @@ export async function resolveEchoCandidates(
   if (fallback.length === 0) {
     return fromDb;
   }
-  const fromStream = selectEchoCandidates(echoEngagementRowsFromEntries(fallback));
+  const fromStream = await buildEchoCandidates({
+    rows: echoEngagementRowsFromEntries(fallback),
+  });
   return fromStream.length > fromDb.length ? fromStream : fromDb;
 }
 
