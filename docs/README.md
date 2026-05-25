@@ -28,3 +28,8 @@ Use this index to find the right doc quickly.
 - `docs/engineering/commit-convention.md` - commit message rules
 - `docs/engineering/logo.svg` - logo source
 - Shortcut folder index: `docs/engineering/README.md`
+
+## Watch
+
+- `docs/watch/watch.md` - watchOS companion: Watch ↔ iPhone WC contract, watch UX, voice engine, receiver
+- Shortcut folder index: `docs/watch/README.md`
