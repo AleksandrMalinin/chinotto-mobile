@@ -2,7 +2,7 @@
 
 Product and implementation plan for **adjacent mental layers** beside the capture stream — without tabs, folders, or PKM chrome.
 
-**Status:** Echo layer shipped behind `ECHO_LAYER_ENABLED` (on). Temporal orientation — see [`temporal-navigation.md`](temporal-navigation.md).  
+**Status:** Echo layer shipped behind `ECHO_LAYER_ENABLED` (on) — **Threshold** UI (one presence + ghosts). Continuity exploration — [`echo-continuity-exploration.md`](echo-continuity-exploration.md). Temporal orientation — see [`temporal-navigation.md`](temporal-navigation.md).  
 **Related:** [`product-spec.md`](product-spec.md), [`../../AGENTS.md`](../../AGENTS.md).
 
 ---
@@ -66,7 +66,7 @@ Not: recommendations, AI feed, favorites, pins, or “related thoughts” UI.
 ### In bounds
 
 - **One** horizontal page (Echo), **conditional** — no page until ≥3 candidates.
-- **≤7 rows** — not scrollable feed; same row typography as stream.
+- **≤7 scored slots** — Threshold UI shows **1 primary + 2 ghosts** (no Echo-page scroll).
 - Tap row → existing `EntryThoughtSheet`.
 - **Fixed composer + search** above pager — capture never pans away.
 - Local-only **engagement signals** (`open_count`, `edit_count`, `last_opened_at`) — not synced to desktop.
@@ -129,7 +129,7 @@ Echo must **not** reuse stream row chrome (hairlines, section labels, clock time
 | Hairline row separators | Rounded fragment panels + kind accent bar |
 | Swipe left on row → delete | No delete — read-only recall |
 
-**Zone header:** kicker `Echo`, title `Still here` / `From earlier`, subtitle clarifies *not the live stream*.
+**Visual silence:** no kicker/caption explaining Echo; relative age + accent dot only ([`EchoThresholdVessel`](../components/echo/EchoThresholdVessel.tsx)).
 
 **Fragments:** `Revisited` (warm accent) vs `Earlier` (cool accent) — hints only, never “recommended”.
 
@@ -247,3 +247,4 @@ Never duplicate timeline as a full horizontal page. Temporal = **when**; Echo = 
 | 2026-05-24 | Echo visual redesign — warm ambience, fragment cards, relative age, zone header (not stream rows). |
 | 2026-05-24 | `ECHO_LAYER_ENABLED` default on; removed dev menu toggle. |
 | 2026-05-24 | Echo polish — opaque shell, theme text colors, capture veil + composer fade on Echo page. |
+| 2026-05-25 | Threshold Echo UI; continuity mechanics (cooldown, stems, interruption); [`echo-continuity-exploration.md`](echo-continuity-exploration.md). |

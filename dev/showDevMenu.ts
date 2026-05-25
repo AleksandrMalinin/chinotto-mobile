@@ -23,6 +23,10 @@ export type DevMenuOptions = {
   onPreviewEchoEdgePeek?: () => void | Promise<void>;
   /** Clear AsyncStorage flag so auto peek can fire again on next eligibility. */
   onResetEchoEdgePeek?: () => void | Promise<void>;
+  /** Cycle Echo UI: threshold → palimpsest → filament (`__DEV__`). */
+  onCycleEchoUiVariant?: () => void;
+  /** Current variant label for dev menu. */
+  echoUiVariantDevLabel?: string;
 };
 
 /**
@@ -87,6 +91,13 @@ export function showDevMenu(options: DevMenuOptions): void {
     buttons.push({
       text: 'Reset Echo edge peek flag',
       onPress: () => void options.onResetEchoEdgePeek?.(),
+    });
+  }
+  if (options.onCycleEchoUiVariant != null) {
+    const label = options.echoUiVariantDevLabel ?? 'threshold';
+    buttons.push({
+      text: `Echo UI (${label})`,
+      onPress: options.onCycleEchoUiVariant,
     });
   }
   buttons.push({ text: 'Cancel', style: 'cancel' });
