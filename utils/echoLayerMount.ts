@@ -8,8 +8,17 @@ export type EchoLayerMountParams = {
   candidateCount: number;
 };
 
-/** Whether the echo surface should mount on capture. */
+/**
+ * Whether the echo surface should mount on capture.
+ * `__DEV__`: mount with ≥1 candidate when recall chrome is clear (pair with `ensureEchoCandidatesForDev`).
+ */
 export function isEchoLayerMountedForCapture(params: EchoLayerMountParams): boolean {
+  if (!params.active || params.searchActive || params.readSheetOpen) {
+    return false;
+  }
+  if (__DEV__ && process.env.NODE_ENV !== 'test') {
+    return params.candidateCount >= 1;
+  }
   return isEchoLayerEligible({
     active: params.active,
     searchActive: params.searchActive,

@@ -15,6 +15,26 @@ describe('isEchoLayerMountedForCapture', () => {
     expect(isEchoLayerMountedForCapture({ ...base, readSheetOpen: true })).toBe(false);
   });
 
+  it('in __DEV__ mounts with one candidate regardless of entry count', () => {
+    const g = global as typeof globalThis & { __DEV__?: boolean };
+    const prevDev = g.__DEV__;
+    const prevEnv = process.env.NODE_ENV;
+    g.__DEV__ = true;
+    process.env.NODE_ENV = 'development';
+    try {
+      expect(
+        isEchoLayerMountedForCapture({
+          ...base,
+          totalEntryCount: 5,
+          candidateCount: 1,
+        }),
+      ).toBe(true);
+    } finally {
+      g.__DEV__ = prevDev;
+      process.env.NODE_ENV = prevEnv;
+    }
+  });
+
   it('requires production entry and candidate thresholds', () => {
     expect(
       isEchoLayerMountedForCapture({

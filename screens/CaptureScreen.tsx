@@ -10,6 +10,7 @@ import {
   AppState,
   DevSettings,
   Easing,
+  InteractionManager,
   Keyboard,
   KeyboardAvoidingView,
   LayoutAnimation,
@@ -34,8 +35,11 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { EchoPageShell } from '../components/echo/EchoPageShell';
 import { EchoSpatialBackground } from '../components/echo/EchoSpatialBackground';
 import { echoChromeFromTheme } from '../components/echo/echoChrome';
-import { EchoStreamShift, type EchoRevealHandle } from '../components/echo/EchoStreamShift';
-import { streamEchoPagerHomeOffset } from '../components/echo/StreamEchoPager';
+import {
+  StreamEchoPager,
+  streamEchoPagerHomeOffset,
+  type StreamEchoPagerHandle,
+} from '../components/echo/StreamEchoPager';
 import { runEchoEdgePeekAnimation } from '../components/echo/runEchoEdgePeekAnimation';
 import { CaptureInput } from '../components/CaptureInput';
 import { ChinottoLogo, chinottoLogoLeadingOutset } from '../components/ChinottoLogo';
@@ -68,6 +72,11 @@ import { mergeDemoStreamWithEntries, isDemoStreamEntryId } from '../dev/demoStre
 import { resetPaywallForPurchaseTesting } from '../dev/resetPaywallForPurchaseTesting';
 import { showDevMenu } from '../dev/showDevMenu';
 import { isDemoStreamMode } from '../src/features/demoStreamMode';
+import { motion } from '../constants/motion';
+import {
+  STREAM_LOAD_MORE_LOOKAHEAD_PX,
+  STREAM_SCROLL_STATE_THROTTLE_MS,
+} from '../constants/streamFocus';
 import { ECHO_UI_VARIANT_SHIPPED } from '../constants/echoUiVariant';
 import {
   ECHO_COMPOSER_DIM_AT_FULL,
@@ -317,6 +326,7 @@ export function CaptureScreen({
   const [streamScrollY, setStreamScrollY] = useState(0);
   const [streamScrollVelocityY, setStreamScrollVelocityY] = useState(0);
   const [streamViewportHeight, setStreamViewportHeight] = useState(0);
+  const [streamLoadingMore, setStreamLoadingMore] = useState(false);
   const [totalEntryCount, setTotalEntryCount] = useState(0);
   const [echoCandidates, setEchoCandidates] = useState<EchoCandidate[]>([]);
   const echoCandidatesRef = useRef<EchoCandidate[]>([]);
@@ -324,7 +334,7 @@ export function CaptureScreen({
   const echoPageIndexRef = useRef<0 | 1>(0);
   const echoPagerPageSettledRef = useRef(false);
   const echoEdgePeekInFlightRef = useRef(false);
-  const echoRevealRef = useRef<EchoRevealHandle>(null);
+  const streamEchoPagerRef = useRef<StreamEchoPagerHandle>(null);
   const echoPagerScrollX = useRef(new Animated.Value(0)).current;
   const [streamActiveEntry, setStreamActiveEntry] = useState<Entry | null>(null);
   const [monthSummaries, setMonthSummaries] = useState<MonthSummary[]>([]);
@@ -337,6 +347,7 @@ export function CaptureScreen({
   const [temporalCommittedMonthKey, setTemporalCommittedMonthKey] = useState<MonthKey | null>(null);
   const streamScrollViewRef = useRef<ComponentRef<typeof ScrollView>>(null);
   const streamScrollYRef = useRef(0);
+  const streamScrollStateCommitAtRef = useRef(0);
   const streamScrollIdleGenRef = useRef(0);
   const temporalRackScrubbingRef = useRef(false);
   temporalRackScrubbingRef.current = temporalRackScrubbing;
@@ -487,7 +498,7 @@ export function CaptureScreen({
     setSearchQuery('');
     setSearchExpanded(false);
     Keyboard.dismiss();
-    echoRevealRef.current?.scrollToStream(false);
+    streamEchoPagerRef.current?.scrollToStream(false);
     setEchoPageIndex(0);
     requestAnimationFrame(() => {
       searchDismissIntentRef.current = false;
@@ -540,8 +551,11 @@ export function CaptureScreen({
     const { contentOffset, layoutMeasurement, contentSize, velocity } = e.nativeEvent;
     const y = contentOffset.y;
     streamScrollYRef.current = y;
-    setStreamScrollY(y);
-    setStreamViewportHeight(layoutMeasurement.height);
+    const now = Date.now();
+    if (now - streamScrollStateCommitAtRef.current >= STREAM_SCROLL_STATE_THROTTLE_MS) {
+      streamScrollStateCommitAtRef.current = now;
+      setStreamScrollY(y);
+    }
     if (y < TEMPORAL_NAV_MIN_SCROLL_Y) {
       setTemporalRackAtCapture(true);
     } else {
@@ -563,6 +577,18 @@ export function CaptureScreen({
       setSyncHighlightTick((n) => n + 1);
     }
 
+    const distanceFromEnd =
+      contentSize.height - (layoutMeasurement.height + contentOffset.y);
+    const nearLoadZone =
+      distanceFromEnd <= STREAM_LOAD_MORE_LOOKAHEAD_PX &&
+      hasMoreRef.current &&
+      !searchActiveRef.current;
+    if (nearLoadZone) {
+      setStreamLoadingMore(true);
+    } else if (!loadingMoreRef.current) {
+      setStreamLoadingMore(false);
+    }
+
     if (searchActiveRef.current) {
       return;
     }
@@ -579,18 +605,21 @@ export function CaptureScreen({
     }
 
     loadingMoreRef.current = true;
+    setStreamLoadingMore(true);
     const last = list[list.length - 1];
     void (async () => {
       try {
         const batch = await getEntriesOlderThan(last, PAGE_SIZE + 1);
         const more = batch.length > PAGE_SIZE;
         const page = batch.slice(0, PAGE_SIZE);
-        setEntries((prev) => {
-          const ids = new Set(prev.map((x) => x.id));
-          const merged = page.filter((row) => !ids.has(row.id));
-          return [...prev, ...merged];
+        InteractionManager.runAfterInteractions(() => {
+          setEntries((prev) => {
+            const ids = new Set(prev.map((x) => x.id));
+            const merged = page.filter((row) => !ids.has(row.id));
+            return [...prev, ...merged];
+          });
+          setHasMore(more);
         });
-        setHasMore(more);
       } catch (err) {
         if (__DEV__) {
           console.warn('getEntriesOlderThan failed', err);
@@ -704,14 +733,14 @@ export function CaptureScreen({
 
   useEffect(() => {
     if (searchTrimmed.length > 0) {
-      echoRevealRef.current?.scrollToStream(false);
+      streamEchoPagerRef.current?.scrollToStream(false);
       setEchoPageIndex(0);
     }
   }, [searchTrimmed]);
 
   useEffect(() => {
     if (readEntry != null) {
-      echoRevealRef.current?.scrollToStream(false);
+      streamEchoPagerRef.current?.scrollToStream(false);
       setEchoPageIndex(0);
     }
   }, [readEntry?.id]);
@@ -1440,7 +1469,7 @@ export function CaptureScreen({
   useEffect(() => {
     Animated.timing(composerSearchDim, {
       toValue: composerDimFromSearch,
-      duration: 220,
+      duration: motion.capture.relaxed,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
@@ -1489,7 +1518,7 @@ export function CaptureScreen({
     echoEdgePeekInFlightRef.current = true;
     try {
       const result = await runEchoEdgePeekAnimation({
-        pager: echoRevealRef.current,
+        pager: streamEchoPagerRef.current,
         respectReduceMotion: true,
       });
       if (result === 'played') {
@@ -1740,12 +1769,12 @@ export function CaptureScreen({
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           enabled={readEntry == null}
         >
-          <EchoStreamShift
-            ref={echoRevealRef}
+          <StreamEchoPager
+            ref={streamEchoPagerRef}
             pageWidth={echoPageWidth}
-            scrollX={echoPagerScrollX}
             echoMounted={echoLayerEligible}
-            interactive={echoPagerInteractive}
+            pagerInteractive={echoPagerInteractive}
+            scrollX={echoLayerEligible ? echoPagerScrollX : undefined}
             onPageIndexChange={onEchoPagerPageChange}
             echo={
               <EchoPageShell
@@ -1928,6 +1957,8 @@ export function CaptureScreen({
                     streamScrollYRef={streamScrollYRef}
                     onScrollToEntryOffset={onScrollToEntryOffset}
                     onScrollToEntryComplete={onScrollToEntryComplete}
+                    streamLoadingMore={streamLoadingMore}
+                    streamScrollVelocityY={streamScrollVelocityY}
                   />
                   <Pressable
                     style={[styles.bottomFill, { flexGrow: 1, minHeight: 1 }]}
@@ -1951,7 +1982,7 @@ export function CaptureScreen({
                 ) : null}
               </View>
             </View>
-          </EchoStreamShift>
+          </StreamEchoPager>
         </KeyboardAvoidingView>
       </SafeAreaView>
       {settingsRoute === 'settings' ? (

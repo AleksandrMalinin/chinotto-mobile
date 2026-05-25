@@ -134,6 +134,7 @@ export const EchoStreamShift = forwardRef<EchoRevealHandle, EchoStreamShiftProps
       return PanResponder.create({
         onMoveShouldSetPanResponderCapture: (_, gesture) => isHorizontalReveal(gesture),
         onMoveShouldSetPanResponder: (_, gesture) => isHorizontalReveal(gesture),
+        onPanResponderTerminationRequest: () => false,
         onPanResponderGrant: () => {
           dragOriginX.current = readScrollX(scrollX, homeX);
         },
