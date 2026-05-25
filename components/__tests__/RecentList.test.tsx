@@ -1,4 +1,5 @@
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Alert } from 'react-native';
 
 jest.mock('../StreamFlowPanel', () => ({
   __esModule: true,
@@ -143,5 +144,32 @@ describe('RecentList', () => {
 
     expect(getByText('Rest')).toBeTruthy();
     expect(getByText(' is not expecting anything')).toBeTruthy();
+  });
+
+  it('confirms before onEntryDelete from the accessibility delete action', () => {
+    const e = entryToday('remove me');
+    const onEntryDelete = jest.fn();
+    let alertButtons: { text: string; onPress?: () => void }[] = [];
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
+      alertButtons = buttons as { text: string; onPress?: () => void }[];
+    });
+
+    try {
+      const { getByTestId } = render(
+        <RecentList entries={[e]} visible onEntryDelete={onEntryDelete} />
+      );
+
+      fireEvent(getByTestId(`recent-entry-${e.id}`), 'accessibilityAction', {
+        nativeEvent: { actionName: 'delete' },
+      });
+
+      expect(alertSpy).toHaveBeenCalled();
+      expect(onEntryDelete).not.toHaveBeenCalled();
+
+      alertButtons.find((b) => b.text === 'Delete')?.onPress?.();
+      expect(onEntryDelete).toHaveBeenCalledWith(e);
+    } finally {
+      alertSpy.mockRestore();
+    }
   });
 });

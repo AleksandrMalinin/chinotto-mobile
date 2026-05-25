@@ -23,7 +23,7 @@ import {
 } from 'react-native';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
-import Swipeable from 'react-native-gesture-handler/Swipeable';
+import Swipeable, { type Swipeable as SwipeableRef } from 'react-native-gesture-handler/Swipeable';
 
 import type { Entry } from '../types/entry';
 import {
@@ -43,6 +43,7 @@ import {
   streamFocusTimeOpacityBelowActive,
   type StreamFocusWindowBox,
 } from '../utils/streamFocusTier';
+import { confirmDeleteThought } from '../utils/confirmDeleteThought';
 import { streamScrollContentYForRow } from '../utils/streamScrollToEntry';
 import { StreamFlowPanel } from './StreamFlowPanel';
 import type { ThoughtSheetOpenAnchor } from './thoughtSheet/detents';
@@ -53,7 +54,7 @@ import { measureThoughtSheetOpenAnchor } from './thoughtSheet/measureOpenAnchor'
  * hairline separators like desktop `.entry-row` / `var(--border)`, plus inline time.
  * Each row shows **two lines** of body text (ellipsis); full text opens via `onEntryPress`.
  *
- * Delete: **swipe left** past threshold (reveals delete track, commits on open) — intentional gesture only;
+ * Delete: **swipe left** to reveal delete, then tap Delete (capture screen confirms) — intentional gesture only;
  * local-first + tombstone queue (see `deleteEntry`).
  */
 export type RecentListProps = {
@@ -300,6 +301,17 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
   }, [targetBodyOpacity, targetTimeOpacity, streamFocusReduceMotion]);
 
   const rowRef = useRef<View>(null);
+  const swipeableRef = useRef<SwipeableRef | null>(null);
+
+  const requestEntryDelete = useCallback(() => {
+    if (onEntryDelete == null) {
+      return;
+    }
+    confirmDeleteThought(
+      () => onEntryDelete(item),
+      () => swipeableRef.current?.close(),
+    );
+  }, [item, onEntryDelete]);
 
   const onPressIn = useCallback(() => {
     setPressed(true);
@@ -345,7 +357,7 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
         accessibilityHint={
           [
             onEntryPress != null ? 'Double tap to open thought' : null,
-            onEntryDelete != null ? 'Swipe left to delete' : null,
+            onEntryDelete != null ? 'Swipe left, then tap Delete' : null,
           ]
             .filter(Boolean)
             .join('. ') || undefined
@@ -355,7 +367,7 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
           onEntryDelete != null
             ? ({ nativeEvent }) => {
                 if (nativeEvent.actionName === 'delete') {
-                  onEntryDelete(item);
+                  requestEntryDelete();
                 }
               }
             : undefined
@@ -423,23 +435,27 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
 
   return (
     <Swipeable
+      ref={swipeableRef}
       friction={2}
       overshootRight={false}
       /** Full-width reveal before commit — reduces accidental delete vs horizontal chrome. */
       rightThreshold={DELETE_ACTION_WIDTH}
       renderRightActions={() => (
-        <View
-          style={[
+        <Pressable
+          testID={`recent-entry-delete-${item.id}`}
+          accessibilityRole="button"
+          accessibilityLabel="Delete thought"
+          onPress={requestEntryDelete}
+          style={({ pressed }) => [
             styles.deleteTrack,
             {
               width: DELETE_ACTION_WIDTH,
               backgroundColor: colors.swipeDeleteBg,
               borderLeftWidth: StyleSheet.hairlineWidth,
               borderLeftColor: colors.borderFocus,
+              opacity: pressed ? 0.88 : 1,
             },
           ]}
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
         >
           <Text
             style={[
@@ -449,9 +465,9 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
           >
             Delete
           </Text>
-        </View>
+        </Pressable>
       )}
-      onSwipeableOpen={() => onEntryDelete(item)}
+      onSwipeableOpen={requestEntryDelete}
     >
       {rowContent}
     </Swipeable>
