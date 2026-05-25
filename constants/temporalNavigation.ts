@@ -1,4 +1,4 @@
-/** Feature gate — dev menu can still override in __DEV__; Remote Config later. */
+/** Feature gate — Remote Config kill switch later. */
 export const TEMPORAL_NAV_ENABLED = true;
 
 /** Show temporal chrome only after this many local thoughts (avoids noise for new users). */

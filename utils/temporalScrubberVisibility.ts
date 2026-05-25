@@ -4,11 +4,6 @@ import {
   TEMPORAL_NAV_SCROLL_VELOCITY_PEEK,
 } from '../constants/temporalNavigation';
 
-/** Global flag and/or dev override (caller should pass dev only when `__DEV__`). */
-export function isTemporalNavigationActive(globalEnabled: boolean, devEnabled: boolean): boolean {
-  return globalEnabled || devEnabled;
-}
-
 export function isTemporalScrubberEligible(params: {
   active: boolean;
   searchActive: boolean;
@@ -16,14 +11,9 @@ export function isTemporalScrubberEligible(params: {
   readSheetOpen?: boolean;
   totalEntryCount: number;
   hasStreamRows: boolean;
-  /** Dev QA: show scrubber before `TEMPORAL_NAV_MIN_ENTRY_COUNT`. */
-  bypassMinEntryCount?: boolean;
 }): boolean {
   if (!params.active || params.searchActive || params.readSheetOpen || !params.hasStreamRows) {
     return false;
-  }
-  if (params.bypassMinEntryCount) {
-    return true;
   }
   return params.totalEntryCount >= TEMPORAL_NAV_MIN_ENTRY_COUNT;
 }
