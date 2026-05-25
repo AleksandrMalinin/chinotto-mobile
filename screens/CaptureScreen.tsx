@@ -346,6 +346,7 @@ export function CaptureScreen({
   const loadingMoreRef = useRef(false);
   const searchQueryRef = useRef('');
   const searchActiveRef = useRef(false);
+  const recallSearchActiveRef = useRef(false);
   /** Composer snapshot when mic starts; partials/final merge with this so live text does not stack. */
   const voiceCaptureBaseRef = useRef('');
   /** `null` until AsyncStorage resolves; drives one-time empty-stream reveal + keyboard policy. */
@@ -374,6 +375,9 @@ export function CaptureScreen({
   searchQueryRef.current = searchQuery;
   const searchTrimmed = searchQuery.trim();
   searchActiveRef.current = searchTrimmed.length > 0;
+  recallSearchActiveRef.current =
+    searchExpanded || searchFocused || searchTrimmed.length > 0;
+  const recallSearchActive = recallSearchActiveRef.current;
   const searchModeActive = searchExpanded || searchTrimmed.length > 0;
 
   const searchResultLabel = useMemo(
@@ -403,9 +407,21 @@ export function CaptureScreen({
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   }, [hapticsEnabled]);
 
+  const focusCaptureComposer = useCallback(() => {
+    if (recallSearchActiveRef.current || readEntry != null) {
+      return;
+    }
+    inputRef.current?.focus();
+  }, [readEntry]);
+
   const expandSearch = useCallback(() => {
     playSearchChromeHaptic();
     inputRef.current?.blur();
+    if (searchBlurTimerRef.current) {
+      clearTimeout(searchBlurTimerRef.current);
+      searchBlurTimerRef.current = null;
+    }
+    setSearchFocused(true);
     animateSearchLayout();
     setSearchExpanded(true);
     requestAnimationFrame(() => {
@@ -457,6 +473,7 @@ export function CaptureScreen({
   }, [playSearchChromeHaptic, releaseComposerFocus]);
 
   const onSearchFocus = useCallback(() => {
+    inputRef.current?.blur();
     setSearchFocused(true);
     if (searchBlurTimerRef.current) {
       clearTimeout(searchBlurTimerRef.current);
@@ -464,22 +481,28 @@ export function CaptureScreen({
     }
   }, []);
 
+  /** Blur does not collapse search — iOS ghost field + layout were stealing focus to capture. */
   const onSearchBlur = useCallback(() => {
     if (searchDismissIntentRef.current) {
       return;
     }
-    setSearchFocused(false);
+  }, []);
+
+  const onSearchChangeText = useCallback((text: string) => {
+    setSearchQuery(text);
+    if (!searchExpanded) {
+      return;
+    }
+    inputRef.current?.blur();
     if (searchBlurTimerRef.current) {
       clearTimeout(searchBlurTimerRef.current);
-    }
-    searchBlurTimerRef.current = setTimeout(() => {
       searchBlurTimerRef.current = null;
-      if (searchDismissIntentRef.current || searchQueryRef.current.trim()) {
-        return;
-      }
-      setSearchExpanded(false);
-    }, 220);
-  }, []);
+    }
+    setSearchFocused(true);
+    requestAnimationFrame(() => {
+      searchInputRef.current?.focus();
+    });
+  }, [searchExpanded]);
 
   const refreshTotalEntryCount = useCallback(() => {
     void getEntryCount()
@@ -716,10 +739,10 @@ export function CaptureScreen({
     setFirstLaunchRevealDone(true);
     setComposerHasFocusedOnce(true);
     const id = requestAnimationFrame(() => {
-      inputRef.current?.focus();
+      focusCaptureComposer();
     });
     return () => cancelAnimationFrame(id);
-  }, [captureFocusNonce, allowCaptureFocus, readEntry]);
+  }, [allowCaptureFocus, captureFocusNonce, focusCaptureComposer, readEntry]);
 
   useEffect(() => {
     return () => {
@@ -791,7 +814,7 @@ export function CaptureScreen({
     const finishSplashFocus = () => {
       splashFocusPendingRef.current = false;
       requestAnimationFrame(() => {
-        inputRef.current?.focus();
+        focusCaptureComposer();
       });
     };
 
@@ -1226,7 +1249,7 @@ export function CaptureScreen({
     }
     lastVoiceRequestNonceRef.current = voiceCaptureRequestNonce;
     requestAnimationFrame(() => {
-      inputRef.current?.focus();
+      focusCaptureComposer();
     });
     if (showVoiceCapture && voicePhase !== 'listening') {
       voiceCaptureBaseRef.current = text;
@@ -1235,6 +1258,7 @@ export function CaptureScreen({
   }, [
     showVoiceCapture,
     startVoiceCaptureSession,
+    focusCaptureComposer,
     text,
     voiceCaptureRequestNonce,
     voicePhase,
@@ -1270,7 +1294,7 @@ export function CaptureScreen({
       .then(async (entry) => {
         setText('');
         requestAnimationFrame(() => {
-          inputRef.current?.focus();
+          focusCaptureComposer();
         });
         setEntries((prev) => [entry, ...prev.filter((e) => e.id !== entry.id)]);
         onScheduleStreamHighlight?.(entry.id);
@@ -1291,6 +1315,7 @@ export function CaptureScreen({
     runSearch,
     onScheduleStreamHighlight,
     refreshUploadPending,
+    focusCaptureComposer,
     playThoughtSavedHaptic,
   ]);
 
@@ -1708,7 +1733,13 @@ export function CaptureScreen({
               </View>
               <View style={styles.captureStreamStack}>
                 <View style={{ paddingHorizontal: gutter }}>
-                  <Animated.View style={[styles.composerBlock, { opacity: composerSearchDim }]}>
+                  <Animated.View
+                    style={[
+                      styles.composerBlock,
+                      { opacity: composerSearchDim },
+                      recallSearchActive && styles.composerBlockedWhileSearch,
+                    ]}
+                  >
                     <View style={styles.composerInputRow}>
                       <View style={styles.composerInputWrap}>
                         <CaptureInput
@@ -1725,10 +1756,13 @@ export function CaptureScreen({
                             allowCaptureFocus &&
                             !deferKeyboardForFirstLaunchReveal &&
                             readEntry == null &&
-                            !echoOnEchoPage
+                            !echoOnEchoPage &&
+                            !recallSearchActive
                           }
-                          editable={readEntry == null && !echoOnEchoPage}
-                          showSoftInputOnFocus={readEntry == null && !echoOnEchoPage}
+                          editable={readEntry == null && !echoOnEchoPage && !recallSearchActive}
+                          showSoftInputOnFocus={
+                            readEntry == null && !echoOnEchoPage && !recallSearchActive
+                          }
                         />
                       </View>
                       {showVoiceCapture ? (
@@ -1759,7 +1793,7 @@ export function CaptureScreen({
                       expanded={searchExpanded}
                       focused={searchFocused}
                       value={searchQuery}
-                      onChangeText={setSearchQuery}
+                      onChangeText={onSearchChangeText}
                       onFocus={onSearchFocus}
                       onBlur={onSearchBlur}
                       onPressExpand={expandSearch}
@@ -2024,6 +2058,9 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     /** Tighter than top — pulls search closer without compressing capture. */
     paddingBottom: 6,
+  },
+  composerBlockedWhileSearch: {
+    pointerEvents: 'none',
   },
   composerInputRow: {
     flexDirection: 'row',

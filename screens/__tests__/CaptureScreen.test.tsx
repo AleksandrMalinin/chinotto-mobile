@@ -469,7 +469,42 @@ describe('CaptureScreen', () => {
 
     fireEvent.press(getByTestId('stream-search-toggle'));
     expect(getByTestId('stream-search-input')).toBeTruthy();
+    expect(getByTestId('capture-input').props.autoFocus).toBe(false);
     expect(jest.mocked(Haptics.impactAsync)).toHaveBeenCalledWith(Haptics.ImpactFeedbackStyle.Light);
+  });
+
+  it('keeps focus on search input after a transient blur while typing', async () => {
+    jest.useFakeTimers();
+    try {
+      jest
+        .mocked(entryRepository.getRecentEntries)
+        .mockImplementation(() => Promise.resolve([STREAM_SEARCH_SEED_ENTRY]));
+      const { getByTestId, findByTestId } = render(
+        <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+          <CaptureScreen />
+        </SafeAreaProvider>
+      );
+
+      await findByTestId('capture-input');
+      await waitFor(() => {
+        expect(getByTestId('stream-search-toggle')).toBeTruthy();
+      });
+      fireEvent.press(getByTestId('stream-search-toggle'));
+      fireEvent(getByTestId('stream-search-input'), 'focus');
+      fireEvent(getByTestId('stream-search-input'), 'blur');
+      fireEvent.changeText(getByTestId('stream-search-input'), 'needle');
+
+      expect(getByTestId('stream-search-input')).toBeTruthy();
+      expect(getByTestId('capture-input').props.autoFocus).toBe(false);
+
+      await act(async () => {
+        jest.advanceTimersByTime(250);
+      });
+
+      expect(getByTestId('stream-search-input')).toBeTruthy();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('debounces searchEntriesForRecall when search is expanded', async () => {
