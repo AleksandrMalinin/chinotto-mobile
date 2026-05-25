@@ -133,7 +133,6 @@ export const StreamEchoPager = forwardRef<StreamEchoPagerHandle, StreamEchoPager
     }
 
     const pageSpan = PixelRatio.roundToNearestPixel(pageWidth);
-    const homeX = streamEchoPagerHomeOffset(pageSpan);
     const onScroll =
       scrollX != null
         ? Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], {
@@ -155,7 +154,6 @@ export const StreamEchoPager = forwardRef<StreamEchoPagerHandle, StreamEchoPager
         directionalLockEnabled
         nestedScrollEnabled
         scrollEventThrottle={16}
-        contentOffset={{ x: homeX, y: 0 }}
         onScroll={onScroll}
         onMomentumScrollEnd={onScrollEnd}
         onScrollEndDrag={onScrollEnd}

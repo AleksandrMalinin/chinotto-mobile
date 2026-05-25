@@ -1,6 +1,6 @@
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import * as Haptics from 'expo-haptics';
-import { TextInput } from 'react-native';
+import { Alert, TextInput } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import * as entryRepository from '../../storage/entryRepository';
@@ -12,6 +12,10 @@ import * as firebaseConfig from '../../sync/firebaseConfig';
 import * as syncQueueModule from '../../sync/syncQueue';
 import * as firestoreMirror from '../../sync/firestoreSyncAccessMirror';
 import * as devMenuModule from '../../dev/showDevMenu';
+import {
+  DELETE_THOUGHT_ALERT_MESSAGE,
+  DELETE_THOUGHT_ALERT_TITLE,
+} from '../../utils/confirmDeleteThought';
 
 const mockOnAuthStateChanged = jest.fn();
 
@@ -448,6 +452,46 @@ describe('CaptureScreen', () => {
 
     await findByTestId('capture-input');
     expect(getByTestId('capture-stream-scroll').props.showsVerticalScrollIndicator).toBe(false);
+  });
+
+  it('confirms before deleting a stream entry', async () => {
+    jest
+      .mocked(entryRepository.getRecentEntries)
+      .mockImplementation(() => Promise.resolve([STREAM_SEARCH_SEED_ENTRY]));
+    let alertButtons: { text: string; onPress?: () => void }[] = [];
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
+      alertButtons = buttons as { text: string; onPress?: () => void }[];
+    });
+
+    try {
+      const { findByTestId, getByTestId } = render(
+        <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+          <CaptureScreen />
+        </SafeAreaProvider>
+      );
+
+      await findByTestId(`recent-entry-${STREAM_SEARCH_SEED_ENTRY.id}`);
+      fireEvent(getByTestId(`recent-entry-${STREAM_SEARCH_SEED_ENTRY.id}`), 'accessibilityAction', {
+        nativeEvent: { actionName: 'delete' },
+      });
+
+      await waitFor(() => {
+        expect(alertSpy).toHaveBeenCalledWith(
+          DELETE_THOUGHT_ALERT_TITLE,
+          DELETE_THOUGHT_ALERT_MESSAGE,
+          expect.any(Array),
+        );
+      });
+      expect(jest.mocked(entryRepository.deleteEntry)).not.toHaveBeenCalled();
+
+      alertButtons.find((b) => b.text === 'Delete')?.onPress?.();
+
+      await waitFor(() => {
+        expect(jest.mocked(entryRepository.deleteEntry)).toHaveBeenCalledWith('search-seed');
+      });
+    } finally {
+      alertSpy.mockRestore();
+    }
   });
 
   it('shows search only after tapping the search toggle', async () => {

@@ -7,6 +7,7 @@ import * as Haptics from 'expo-haptics';
 import {
   Alert,
   Animated,
+  AppState,
   DevSettings,
   Easing,
   Keyboard,
@@ -33,12 +34,8 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { EchoPageShell } from '../components/echo/EchoPageShell';
 import { EchoSpatialBackground } from '../components/echo/EchoSpatialBackground';
 import { echoChromeFromTheme } from '../components/echo/echoChrome';
-import {
-  StreamEchoPager,
-  streamEchoPagerHomeOffset,
-  streamEchoPagerRevealProgress,
-  type StreamEchoPagerHandle,
-} from '../components/echo/StreamEchoPager';
+import { EchoStreamShift, type EchoRevealHandle } from '../components/echo/EchoStreamShift';
+import { streamEchoPagerHomeOffset } from '../components/echo/StreamEchoPager';
 import { runEchoEdgePeekAnimation } from '../components/echo/runEchoEdgePeekAnimation';
 import { CaptureInput } from '../components/CaptureInput';
 import { ChinottoLogo, chinottoLogoLeadingOutset } from '../components/ChinottoLogo';
@@ -49,6 +46,7 @@ import { StreamSearchField } from '../components/StreamSearchField';
 import { TemporalMapSheet } from '../components/temporal/TemporalMapSheet';
 import { TemporalMonthRack } from '../components/temporal/TemporalMonthRack';
 import type { ThoughtSheetOpenAnchor } from '../components/thoughtSheet/detents';
+import type { SheetEnterProfile } from '../components/thoughtSheet/useSheetEnterAnimation';
 import { openAfterKeyboardHidden } from '../components/thoughtSheet/openAfterKeyboardHidden';
 import { SyncHeaderStatus, type SyncHeaderAuthPhase } from '../components/SyncHeaderStatus';
 import { VoiceMicButton } from '../components/VoiceCaptureControl';
@@ -73,6 +71,9 @@ import { isDemoStreamMode } from '../src/features/demoStreamMode';
 import {
   ECHO_COMPOSER_DIM_AT_FULL,
   ECHO_LAYER_ENABLED,
+  ECHO_RECALL_DIM_IN_MS,
+  ECHO_RECALL_DIM_OUT_MS,
+  ECHO_RECALL_SHEET_DIM,
 } from '../constants/echoLayer';
 import {
   TEMPORAL_NAV_ENABLED,
@@ -88,7 +89,14 @@ import {
   setFirstLaunchComposerHasFocused,
   setFirstLaunchEmptyCaptureRevealDone,
 } from '../storage/firstLaunchCapturePrefs';
-import { getEchoEdgePeekDone, setEchoEdgePeekDone, clearEchoEdgePeekDone } from '../storage/echoLayerPrefs';
+import {
+  clearEchoEdgePeekDone,
+  getEchoEdgePeekDone,
+  recordEchoCandidatesDisplayed,
+  setEchoEdgePeekDone,
+  setEchoLastBackgroundAt,
+  setEchoSessionThread,
+} from '../storage/echoLayerPrefs';
 import {
   getEchoCandidates,
   recordEntryOpened,
@@ -141,10 +149,10 @@ import type { EchoCandidate } from '../utils/selectEchoCandidates';
 import { monthKeyFromIso } from '../utils/streamMonthIndex';
 import { streamSearchResultLabel } from '../utils/streamSearchResultLabel';
 import { loadStreamUntilEntryIncluded, resolveMonthJumpAnchor } from '../utils/temporalJump';
-import {
-  isEchoLayerEligible,
-  isEchoPagerInteractive,
-} from '../utils/echoLayerVisibility';
+import { ensureEchoCandidatesForDev } from '../utils/ensureEchoCandidatesForDev';
+import { isEchoLayerMountedForCapture } from '../utils/echoLayerMount';
+import { isEchoPagerInteractive } from '../utils/echoLayerVisibility';
+import { echoEmotionalIntensityFromEntries } from '../utils/echoEmotionalAtmosphere';
 import {
   isTemporalNavigationActive,
   isTemporalScrubberEligible,
@@ -272,6 +280,15 @@ export function CaptureScreen({
   const [readEntry, setReadEntry] = useState<Entry | null>(null);
   const [readEntryAnchor, setReadEntryAnchor] = useState<ThoughtSheetOpenAnchor | null>(null);
   const [readEntryHapticOnPresent, setReadEntryHapticOnPresent] = useState(false);
+  const [readEntryEnterProfile, setReadEntryEnterProfile] = useState<SheetEnterProfile>('stream');
+  const echoRecallDim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (readEntry == null) {
+      echoRecallDim.stopAnimation();
+      echoRecallDim.setValue(1);
+    }
+  }, [echoRecallDim, readEntry]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Entry[]>([]);
   const [searchTruncated, setSearchTruncated] = useState(false);
@@ -297,12 +314,16 @@ export function CaptureScreen({
   const [streamViewportHeight, setStreamViewportHeight] = useState(0);
   const [totalEntryCount, setTotalEntryCount] = useState(0);
   const [devTemporalNavEnabled, setDevTemporalNavEnabled] = useState(false);
+  const [devEchoUiVariant, setDevEchoUiVariant] = useState<
+    'threshold' | 'palimpsest' | 'filament' | 'field'
+  >(__DEV__ ? 'palimpsest' : 'threshold');
   const [echoCandidates, setEchoCandidates] = useState<EchoCandidate[]>([]);
+  const echoCandidatesRef = useRef<EchoCandidate[]>([]);
   const [echoPageIndex, setEchoPageIndex] = useState<0 | 1>(0);
   const echoPageIndexRef = useRef<0 | 1>(0);
   const echoPagerPageSettledRef = useRef(false);
   const echoEdgePeekStartedRef = useRef(false);
-  const streamEchoPagerRef = useRef<StreamEchoPagerHandle>(null);
+  const echoRevealRef = useRef<EchoRevealHandle>(null);
   const echoPagerScrollX = useRef(new Animated.Value(0)).current;
   const [streamActiveEntry, setStreamActiveEntry] = useState<Entry | null>(null);
   const [monthSummaries, setMonthSummaries] = useState<MonthSummary[]>([]);
@@ -465,7 +486,7 @@ export function CaptureScreen({
     setSearchQuery('');
     setSearchExpanded(false);
     Keyboard.dismiss();
-    streamEchoPagerRef.current?.scrollToStream(false);
+    echoRevealRef.current?.scrollToStream(false);
     setEchoPageIndex(0);
     requestAnimationFrame(() => {
       searchDismissIntentRef.current = false;
@@ -668,15 +689,28 @@ export function CaptureScreen({
   }, [demoStreamMode, entries.length, totalEntryCount, streamDisplayEntries]);
 
   useEffect(() => {
+    echoCandidatesRef.current = echoCandidatesForUi;
+  }, [echoCandidatesForUi]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'background' || state === 'inactive') {
+        void setEchoLastBackgroundAt().catch(() => {});
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
+  useEffect(() => {
     if (searchTrimmed.length > 0) {
-      streamEchoPagerRef.current?.scrollToStream(false);
+      echoRevealRef.current?.scrollToStream(false);
       setEchoPageIndex(0);
     }
   }, [searchTrimmed]);
 
   useEffect(() => {
     if (readEntry != null) {
-      streamEchoPagerRef.current?.scrollToStream(false);
+      echoRevealRef.current?.scrollToStream(false);
       setEchoPageIndex(0);
     }
   }, [readEntry?.id]);
@@ -763,23 +797,34 @@ export function CaptureScreen({
   const openReadEntrySheet = useCallback((
     entry: Entry,
     anchor?: ThoughtSheetOpenAnchor | null,
-    options?: { hapticOnPresent?: boolean },
+    options?: { hapticOnPresent?: boolean; enterProfile?: SheetEnterProfile },
   ) => {
     readEntryOpenCleanupRef.current?.();
     readEntryOpenCleanupRef.current = null;
     Keyboard.dismiss();
     inputRef.current?.blur();
     searchInputRef.current?.blur();
+    const fromEcho = options?.enterProfile === 'echo';
     if (!isDemoStreamEntryId(entry.id)) {
       void recordEntryOpened(entry.id).catch(() => {});
+      void setEchoSessionThread(entry.id).catch(() => {});
     }
     readEntryOpenCleanupRef.current = openAfterKeyboardHidden(() => {
       readEntryOpenCleanupRef.current = null;
       setReadEntryAnchor(anchor ?? null);
       setReadEntryHapticOnPresent(options?.hapticOnPresent ?? false);
+      setReadEntryEnterProfile(fromEcho ? 'echo' : 'stream');
+      if (fromEcho) {
+        echoRecallDim.stopAnimation();
+        Animated.timing(echoRecallDim, {
+          toValue: ECHO_RECALL_SHEET_DIM,
+          duration: ECHO_RECALL_DIM_IN_MS,
+          useNativeDriver: true,
+        }).start();
+      }
       setReadEntry(entry);
     });
-  }, []);
+  }, [echoRecallDim]);
 
   useEffect(() => {
     if (!thoughtEntryRequestId || thoughtEntryRequestId === lastThoughtRequestIdRef.current) {
@@ -1006,25 +1051,35 @@ export function CaptureScreen({
   }, [authRestorePhase]);
 
   /** Optimistic UI: row disappears immediately; SQLite + tombstone outbox stay non-blocking. */
-  const handleEntryDelete = useCallback((entry: Entry) => {
-    if (isDemoStreamEntryId(entry.id)) {
-      return;
-    }
-    setReadEntry((current) => (current?.id === entry.id ? null : current));
-    setEntries((prev) => prev.filter((e) => e.id !== entry.id));
-    setSearchResults((prev) => prev.filter((e) => e.id !== entry.id));
-    void deleteEntry(entry.id)
-      .then(() => {
-        void flushSyncTombstoneOutbox();
-        void refreshUploadPending();
-      })
-      .catch((err) => {
-        if (__DEV__) {
-          console.warn('deleteEntry failed', err);
-        }
-        void refreshEntries();
-      });
-  }, [refreshEntries, refreshUploadPending]);
+  const performEntryDelete = useCallback(
+    (entry: Entry) => {
+      setReadEntry((current) => (current?.id === entry.id ? null : current));
+      setEntries((prev) => prev.filter((e) => e.id !== entry.id));
+      setSearchResults((prev) => prev.filter((e) => e.id !== entry.id));
+      void deleteEntry(entry.id)
+        .then(() => {
+          void flushSyncTombstoneOutbox();
+          void refreshUploadPending();
+        })
+        .catch((err) => {
+          if (__DEV__) {
+            console.warn('deleteEntry failed', err);
+          }
+          void refreshEntries();
+        });
+    },
+    [refreshEntries, refreshUploadPending],
+  );
+
+  const handleEntryDelete = useCallback(
+    (entry: Entry) => {
+      if (isDemoStreamEntryId(entry.id)) {
+        return;
+      }
+      performEntryDelete(entry);
+    },
+    [performEntryDelete],
+  );
 
   const runEnableSyncShimmerProbe = useCallback(() => {
     void (async () => {
@@ -1181,7 +1236,7 @@ export function CaptureScreen({
     void recordOpenedExistingThoughtForSyncHighlight().then(() => {
       setSyncHighlightTick((n) => n + 1);
     });
-    openReadEntrySheet(entry, anchor ?? null, { hapticOnPresent: true });
+    openReadEntrySheet(entry, anchor ?? null, { enterProfile: 'echo' });
   }, [analyticsEnabled, openReadEntrySheet]);
 
   const onReadEntryUpdated = useCallback((updated: Entry) => {
@@ -1258,8 +1313,8 @@ export function CaptureScreen({
   }, [
     showVoiceCapture,
     startVoiceCaptureSession,
-    focusCaptureComposer,
     text,
+    focusCaptureComposer,
     voiceCaptureRequestNonce,
     voicePhase,
   ]);
@@ -1329,12 +1384,16 @@ export function CaptureScreen({
   const headerLogoAlignStyle = { marginLeft: -chinottoLogoLeadingOutset(headerLogoSize) };
 
   const searchActive = searchTrimmed.length > 0;
-  const echoLayerEligible = isEchoLayerEligible({
+  const echoCandidatesForUi = useMemo(
+    () => ensureEchoCandidatesForDev(echoCandidates, streamDisplayEntries),
+    [echoCandidates, streamDisplayEntries],
+  );
+  const echoLayerEligible = isEchoLayerMountedForCapture({
     active: ECHO_LAYER_ENABLED,
     searchActive,
     readSheetOpen: readEntry != null,
     totalEntryCount: Math.max(totalEntryCount, streamDisplayEntries.length),
-    candidateCount: echoCandidates.length,
+    candidateCount: echoCandidatesForUi.length,
   });
   const echoPagerInteractive = isEchoPagerInteractive({
     eligible: echoLayerEligible,
@@ -1344,6 +1403,10 @@ export function CaptureScreen({
   });
   const echoOnEchoPage = echoPageIndex === 1 && echoLayerEligible;
   const echoChrome = useMemo(() => echoChromeFromTheme(t), [t]);
+  const echoEmotionalIntensity = useMemo(
+    () => echoEmotionalIntensityFromEntries(echoCandidatesForUi),
+    [echoCandidatesForUi],
+  );
 
   useLayoutEffect(() => {
     if (echoLayerEligible && echoPageWidth > 0) {
@@ -1358,50 +1421,39 @@ export function CaptureScreen({
   }, [echoOnEchoPage, stashSearchForEchoNavigation]);
 
   const composerDimFromSearch = searchModeActive ? ECHO_COMPOSER_DIM_AT_FULL : 1;
-  const composerDimEchoDepth = 1 - ECHO_COMPOSER_DIM_AT_FULL;
+
+  const composerOpacity = useMemo(() => {
+    if (!echoLayerEligible || echoPageWidth <= 0) {
+      return composerSearchDim;
+    }
+    const echoFactor = echoPagerScrollX.interpolate({
+      inputRange: [0, echoPageWidth],
+      outputRange: [ECHO_COMPOSER_DIM_AT_FULL, 1],
+      extrapolate: 'clamp',
+    });
+    return Animated.multiply(composerSearchDim, echoFactor);
+  }, [composerSearchDim, echoLayerEligible, echoPageWidth, echoPagerScrollX]);
 
   useEffect(() => {
-    if (!echoLayerEligible || echoPageWidth <= 0) {
-      Animated.timing(composerSearchDim, {
-        toValue: composerDimFromSearch,
-        duration: 220,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
-      return;
-    }
-
-    const syncComposerDim = (echoReveal: number) => {
-      const echoFactor = 1 - echoReveal * composerDimEchoDepth;
-      composerSearchDim.setValue(Math.min(composerDimFromSearch, echoFactor));
-    };
-
-    syncComposerDim(
-      streamEchoPagerRevealProgress(streamEchoPagerHomeOffset(echoPageWidth), echoPageWidth),
-    );
-
-    const listenerId = echoPagerScrollX.addListener(({ value }) => {
-      syncComposerDim(streamEchoPagerRevealProgress(value, echoPageWidth));
-    });
-
-    return () => {
-      echoPagerScrollX.removeListener(listenerId);
-    };
-  }, [
-    composerDimEchoDepth,
-    composerDimFromSearch,
-    composerSearchDim,
-    echoLayerEligible,
-    echoPageWidth,
-    echoPagerScrollX,
-  ]);
+    Animated.timing(composerSearchDim, {
+      toValue: composerDimFromSearch,
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [composerDimFromSearch, composerSearchDim]);
 
   const onEchoPagerPageChange = useCallback(
     (index: 0 | 1) => {
       if (echoPagerPageSettledRef.current && echoPageIndexRef.current !== index) {
         playSearchChromeHaptic();
-        if (index === 1 && analyticsEnabled) {
-          track({ event: 'echo_layer_revealed' });
+        if (index === 1) {
+          if (analyticsEnabled) {
+            track({ event: 'echo_layer_revealed' });
+          }
+          void recordEchoCandidatesDisplayed(echoCandidatesRef.current.map((c) => c.id)).catch(
+            () => {},
+          );
         }
       }
       echoPagerPageSettledRef.current = true;
@@ -1448,7 +1500,7 @@ export function CaptureScreen({
       }
 
       await runEchoEdgePeekAnimation({
-        pager: streamEchoPagerRef.current,
+        pager: echoRevealRef.current,
         respectReduceMotion: true,
       });
     })();
@@ -1519,8 +1571,20 @@ export function CaptureScreen({
       onPreviewAppUpdateModal: onDevPreviewAppUpdate,
       onPreviewEchoEdgePeek: playEchoEdgePeekPreview,
       onResetEchoEdgePeek: resetEchoEdgePeekForDev,
+      onCycleEchoUiVariant: () =>
+        setDevEchoUiVariant((v) =>
+          v === 'threshold'
+            ? 'palimpsest'
+            : v === 'palimpsest'
+              ? 'filament'
+              : v === 'filament'
+                ? 'field'
+                : 'threshold',
+        ),
+      echoUiVariantDevLabel: devEchoUiVariant,
     });
   }, [
+    devEchoUiVariant,
     devTemporalNavEnabled,
     onDevPreviewAppUpdate,
     onResetAnalyticsPrompt,
@@ -1667,6 +1731,7 @@ export function CaptureScreen({
         pageWidth={echoPageWidth}
         echoMounted={echoLayerEligible}
         chrome={echoChrome}
+        emotionalIntensity={echoEmotionalIntensity}
       />
       <SafeAreaView style={styles.safe} edges={['top', 'right', 'left']}>
         <KeyboardAvoidingView
@@ -1674,17 +1739,21 @@ export function CaptureScreen({
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           enabled={readEntry == null}
         >
-          <StreamEchoPager
-            ref={streamEchoPagerRef}
+          <EchoStreamShift
+            ref={echoRevealRef}
             pageWidth={echoPageWidth}
+            scrollX={echoPagerScrollX}
             echoMounted={echoLayerEligible}
-            pagerInteractive={echoPagerInteractive}
-            scrollX={echoLayerEligible ? echoPagerScrollX : undefined}
+            interactive={echoPagerInteractive}
             onPageIndexChange={onEchoPagerPageChange}
             echo={
               <EchoPageShell
-                candidates={echoCandidates}
+                candidates={echoCandidatesForUi}
                 onEntryPress={onEchoEntryPress}
+                scrollX={echoLayerEligible ? echoPagerScrollX : undefined}
+                pageWidth={echoPageWidth}
+                uiVariant={__DEV__ ? devEchoUiVariant : 'threshold'}
+                recallDim={echoRecallDim}
               />
             }
           >
@@ -1736,7 +1805,7 @@ export function CaptureScreen({
                   <Animated.View
                     style={[
                       styles.composerBlock,
-                      { opacity: composerSearchDim },
+                      { opacity: composerOpacity },
                       recallSearchActive && styles.composerBlockedWhileSearch,
                     ]}
                   >
@@ -1879,7 +1948,7 @@ export function CaptureScreen({
                 ) : null}
               </View>
             </View>
-          </StreamEchoPager>
+          </EchoStreamShift>
         </KeyboardAvoidingView>
       </SafeAreaView>
       {settingsRoute === 'settings' ? (
@@ -1991,10 +2060,20 @@ export function CaptureScreen({
         entry={readEntry}
         openAnchor={readEntryAnchor}
         onClose={() => {
+          if (readEntryEnterProfile === 'echo') {
+            echoRecallDim.stopAnimation();
+            Animated.timing(echoRecallDim, {
+              toValue: 1,
+              duration: ECHO_RECALL_DIM_OUT_MS,
+              useNativeDriver: true,
+            }).start();
+          }
           setReadEntry(null);
           setReadEntryAnchor(null);
           setReadEntryHapticOnPresent(false);
+          setReadEntryEnterProfile('stream');
         }}
+        enterProfile={readEntryEnterProfile}
         onEntryUpdated={onReadEntryUpdated}
         hapticsEnabled={hapticsEnabled}
         hapticOnPresent={readEntryHapticOnPresent}
