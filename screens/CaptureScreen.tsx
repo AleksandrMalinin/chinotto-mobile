@@ -413,6 +413,31 @@ export function CaptureScreen({
     });
   }, [playSearchChromeHaptic]);
 
+  const releaseComposerFocus = useCallback(() => {
+    Keyboard.dismiss();
+    inputRef.current?.blur();
+    searchInputRef.current?.blur();
+  }, []);
+
+  /** Close search UI without leaving Echo — avoids search unmount stealing focus to capture. */
+  const stashSearchForEchoNavigation = useCallback(() => {
+    if (!searchExpanded) {
+      releaseComposerFocus();
+      return;
+    }
+    searchDismissIntentRef.current = true;
+    if (searchBlurTimerRef.current) {
+      clearTimeout(searchBlurTimerRef.current);
+      searchBlurTimerRef.current = null;
+    }
+    setSearchFocused(false);
+    setSearchExpanded(false);
+    releaseComposerFocus();
+    requestAnimationFrame(() => {
+      searchDismissIntentRef.current = false;
+    });
+  }, [releaseComposerFocus, searchExpanded]);
+
   const collapseSearch = useCallback(() => {
     playSearchChromeHaptic();
     searchDismissIntentRef.current = true;
@@ -429,7 +454,7 @@ export function CaptureScreen({
     requestAnimationFrame(() => {
       searchDismissIntentRef.current = false;
     });
-  }, [playSearchChromeHaptic]);
+  }, [playSearchChromeHaptic, releaseComposerFocus]);
 
   const onSearchFocus = useCallback(() => {
     setSearchFocused(true);
@@ -1301,11 +1326,11 @@ export function CaptureScreen({
     }
   }, [echoLayerEligible, echoPagerScrollX, echoPageWidth]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (echoOnEchoPage) {
-      Keyboard.dismiss();
+      stashSearchForEchoNavigation();
     }
-  }, [echoOnEchoPage]);
+  }, [echoOnEchoPage, stashSearchForEchoNavigation]);
 
   const composerDimFromSearch = searchModeActive ? ECHO_COMPOSER_DIM_AT_FULL : 1;
   const composerDimEchoDepth = 1 - ECHO_COMPOSER_DIM_AT_FULL;
@@ -1356,9 +1381,12 @@ export function CaptureScreen({
       }
       echoPagerPageSettledRef.current = true;
       echoPageIndexRef.current = index;
+      if (index === 1) {
+        stashSearchForEchoNavigation();
+      }
       setEchoPageIndex(index);
     },
-    [analyticsEnabled, playSearchChromeHaptic],
+    [analyticsEnabled, playSearchChromeHaptic, stashSearchForEchoNavigation],
   );
 
   useEffect(() => {
@@ -1693,9 +1721,14 @@ export function CaptureScreen({
                           maxHeight={composerMaxHeight}
                           placeholder="Jot a thought…"
                           placeholderTextColor={capturePlaceholderColor}
-                          autoFocus={allowCaptureFocus && !deferKeyboardForFirstLaunchReveal && readEntry == null}
-                          editable={readEntry == null}
-                          showSoftInputOnFocus={readEntry == null}
+                          autoFocus={
+                            allowCaptureFocus &&
+                            !deferKeyboardForFirstLaunchReveal &&
+                            readEntry == null &&
+                            !echoOnEchoPage
+                          }
+                          editable={readEntry == null && !echoOnEchoPage}
+                          showSoftInputOnFocus={readEntry == null && !echoOnEchoPage}
                         />
                       </View>
                       {showVoiceCapture ? (
