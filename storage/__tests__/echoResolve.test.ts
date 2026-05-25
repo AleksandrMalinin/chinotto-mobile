@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { recordEchoCandidatesDisplayed } from '../echoLayerPrefs';
 import { buildEchoCandidates } from '../echoResolve';
 import type { EchoEngagementRow } from '../../utils/selectEchoCandidates';
 
@@ -34,5 +35,18 @@ describe('buildEchoCandidates', () => {
     const picked = await buildEchoCandidates({ rows, limit: 5, now });
     expect(picked.length).toBeGreaterThan(0);
     expect(picked.some((c) => c.kind === 'gravity' || c.kind === 'drift')).toBe(true);
+  });
+
+  it('excludes displayed entries longer when opened without edit', async () => {
+    const shown = new Date('2026-05-01T10:00:00.000Z');
+    const now = new Date('2026-05-16T12:00:00.000Z');
+    await recordEchoCandidatesDisplayed(['stale'], shown);
+    const rows = [
+      row('stale', '2025-01-10T10:00:00.000Z', { openCount: 3, editCount: 0 }),
+      row('fresh', '2025-02-10T10:00:00.000Z'),
+    ];
+    const picked = await buildEchoCandidates({ rows, limit: 5, now });
+    expect(picked.every((c) => c.id !== 'stale')).toBe(true);
+    expect(picked.some((c) => c.id === 'fresh')).toBe(true);
   });
 });

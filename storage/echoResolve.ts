@@ -23,8 +23,11 @@ export async function buildEchoCandidates(
   options: BuildEchoCandidatesOptions,
 ): Promise<EchoCandidate[]> {
   const { rows, limit = ECHO_LAYER_MAX_ITEMS, now = new Date() } = options;
+  const engagementByEntryId = new Map(
+    rows.map((r) => [r.entry.id, { openCount: r.openCount, editCount: r.editCount }]),
+  );
   const [excluded, sessionThread, lastBackgroundAt] = await Promise.all([
-    getEchoDisplayCooldownExcludedIds(now),
+    getEchoDisplayCooldownExcludedIds(now, engagementByEntryId),
     getEchoSessionThread(),
     getEchoLastBackgroundAt(),
   ]);

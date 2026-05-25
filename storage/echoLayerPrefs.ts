@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { ECHO_DISPLAY_COOLDOWN_DAYS, ECHO_EDGE_PEEK_REPEAT_DAYS } from '../constants/echoLayer';
+import { ECHO_EDGE_PEEK_REPEAT_DAYS } from '../constants/echoLayer';
+import { echoDisplayCooldownDays } from '../utils/echoDisplayCooldown';
 import type { EchoSessionThread } from '../utils/echoContinuitySignals';
 
 const KEY_EDGE_PEEK = '@chinotto/echo_layer_edge_peek_done_v1';
@@ -12,6 +13,11 @@ const KEY_LAST_BACKGROUND = '@chinotto/echo_last_background_v1';
 const MS_PER_DAY = 86_400_000;
 
 type DisplayCooldownMap = Record<string, string>;
+
+export type EchoDisplayCooldownEngagement = {
+  openCount: number;
+  editCount: number;
+};
 
 async function readJson<T>(key: string, fallback: T): Promise<T> {
   try {
@@ -91,6 +97,7 @@ export async function clearEchoEdgePeekDone(): Promise<void> {
 
 export async function getEchoDisplayCooldownExcludedIds(
   now: Date = new Date(),
+  engagementByEntryId?: ReadonlyMap<string, EchoDisplayCooldownEngagement>,
 ): Promise<Set<string>> {
   const map = await readJson<DisplayCooldownMap>(KEY_DISPLAY_COOLDOWN, {});
   const nowMs = now.getTime();
@@ -103,7 +110,12 @@ export async function getEchoDisplayCooldownExcludedIds(
       continue;
     }
     const days = (nowMs - shownMs) / MS_PER_DAY;
-    if (days < ECHO_DISPLAY_COOLDOWN_DAYS) {
+    const engagement = engagementByEntryId?.get(entryId);
+    const cooldownDays =
+      engagement != null
+        ? echoDisplayCooldownDays(engagement.openCount, engagement.editCount)
+        : echoDisplayCooldownDays(0, 0);
+    if (days < cooldownDays) {
       excluded.add(entryId);
       pruned[entryId] = shownAt;
     }

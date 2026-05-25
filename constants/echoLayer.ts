@@ -34,6 +34,9 @@ export const ECHO_THRESHOLD_GHOST_COUNT = 2;
 /** Entry cannot reappear in Echo within this many days after display. */
 export const ECHO_DISPLAY_COOLDOWN_DAYS = 14;
 
+/** Longer hide when opened ≥2× without edit — avoids nagging unfinished reads. */
+export const ECHO_DISPLAY_COOLDOWN_OPENED_DAYS = 21;
+
 /** Stem recurrence — minimum days between matching entries. */
 export const ECHO_STEM_MIN_GAP_DAYS = 7;
 
@@ -51,6 +54,9 @@ export const ECHO_INTERRUPTION_AWAY_MINUTES = 20;
 
 /** Phase B invisible re-rank — off until on-device model ships. */
 export const ECHO_AI_RERANK_ENABLED = false;
+
+/** Phase B dwell-based pacing — off until Echo dwell telemetry ships. */
+export const ECHO_DWELL_RERANK_ENABLED = false;
 
 /** Content fade-in duration after atmosphere crossfade (ms). */
 export const ECHO_CONTENT_FADE_MS = 420;

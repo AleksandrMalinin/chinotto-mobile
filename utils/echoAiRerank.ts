@@ -1,4 +1,4 @@
-import { ECHO_AI_RERANK_ENABLED } from '../constants/echoLayer';
+import { ECHO_AI_RERANK_ENABLED, ECHO_DWELL_RERANK_ENABLED } from '../constants/echoLayer';
 import type { EchoCandidate } from './selectEchoCandidates';
 
 export type EchoAiRerankContext = {
@@ -16,7 +16,7 @@ export function rerankEchoCandidates(
   candidates: readonly EchoCandidate[],
   _context: EchoAiRerankContext = {},
 ): EchoCandidate[] {
-  if (!ECHO_AI_RERANK_ENABLED || candidates.length <= 1) {
+  if (!ECHO_AI_RERANK_ENABLED || !ECHO_DWELL_RERANK_ENABLED || candidates.length <= 1) {
     return [...candidates];
   }
   return [...candidates];
