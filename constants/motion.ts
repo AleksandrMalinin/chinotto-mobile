@@ -1,5 +1,5 @@
 /**
- * Shared motion scale — emotionally restrained pacing (HWF-inspired), per surface.
+ * Shared motion scale — calm pacing per surface (capture / stream / echo).
  * Prefer these tiers over one-off millisecond literals in UI code.
  */
 export const motion = {
