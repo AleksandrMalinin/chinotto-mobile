@@ -45,7 +45,7 @@ describe('RecentList', () => {
 
     fireEvent.press(getByTestId(`recent-entry-${e.id}`));
     await waitFor(() => {
-      expect(onEntryPress).toHaveBeenCalledWith(e, undefined);
+      expect(onEntryPress).toHaveBeenCalledWith(e, null);
     });
   });
 

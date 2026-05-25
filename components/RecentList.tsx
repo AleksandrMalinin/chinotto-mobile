@@ -47,7 +47,6 @@ import { confirmDeleteThought } from '../utils/confirmDeleteThought';
 import { streamScrollContentYForRow } from '../utils/streamScrollToEntry';
 import { StreamFlowPanel } from './StreamFlowPanel';
 import type { ThoughtSheetOpenAnchor } from './thoughtSheet/detents';
-import { measureThoughtSheetOpenAnchor } from './thoughtSheet/measureOpenAnchor';
 
 /**
  * Time-grouped stream — section labels (`.stream-section-title`), entry rows with
@@ -321,12 +320,7 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
   }, []);
 
   const handlePress = useCallback(() => {
-    if (onEntryPress == null) {
-      return;
-    }
-    measureThoughtSheetOpenAnchor(rowRef.current, (anchor) => {
-      onEntryPress(item, anchor);
-    });
+    onEntryPress?.(item, null);
   }, [item, onEntryPress]);
 
   const rowContent = (
