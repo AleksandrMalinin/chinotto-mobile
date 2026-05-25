@@ -37,17 +37,6 @@ import { replaceHttpUrlsWithCompactDisplay } from '../utils/extractHttpUrlsFromT
 import { formatEntryTime, groupEntriesByDate } from '../utils/groupEntriesByDate';
 import { splitTextBySearchQuery } from '../utils/splitTextBySearchQuery';
 import {
-  STREAM_MONTH_JUMP_PULSE_MS,
-  STREAM_TIDE_BODY_OPACITY,
-  STREAM_TIDE_ENTRANCE_MS,
-  STREAM_VIEWPORT_WINDOW_MEASURE_IDLE_MS,
-} from '../constants/streamBoundedContinuity';
-import { monthKeyFromIso } from '../utils/streamMonthIndex';
-import {
-  resolveSettledActiveFlatIndex,
-  STREAM_FOCUS_SETTLE_MS,
-} from '../utils/streamFocusSettle';
-import {
   findActiveFlatIndex,
   findActiveFlatIndexFromWindowMeasurements,
   streamFocusBodyOpacityBelowActive,
@@ -58,6 +47,7 @@ import { confirmDeleteThought } from '../utils/confirmDeleteThought';
 import { streamScrollContentYForRow } from '../utils/streamScrollToEntry';
 import { StreamFlowPanel } from './StreamFlowPanel';
 import type { ThoughtSheetOpenAnchor } from './thoughtSheet/detents';
+import { measureThoughtSheetOpenAnchor } from './thoughtSheet/measureOpenAnchor';
 
 /**
  * Time-grouped stream — section labels (`.stream-section-title`), entry rows with
@@ -113,15 +103,6 @@ export type RecentListProps = {
   streamScrollYRef?: RefObject<number>;
   onScrollToEntryOffset?: (contentOffsetY: number) => void;
   onScrollToEntryComplete?: () => void;
-  /** B4: freeze viewport highlight while flick-scrolling; commit after idle. */
-  streamFocusSettleEnabled?: boolean;
-  streamScrollVelocityY?: number;
-  /** B3: ids floated under Today — quieter opacity + short entrance. */
-  streamTideEntryIds?: ReadonlySet<string>;
-  /** B5: brief emphasis on the matching month section label (`YYYY-MM`). */
-  monthHeaderPulseKey?: string | null;
-  /** Skip expensive per-row window measures while a sheet is open (faster re-open). */
-  suspendViewportMeasurement?: boolean;
 };
 
 const DELETE_ACTION_WIDTH = 76;
@@ -200,7 +181,6 @@ type StreamRowProps = {
   /** Viewport highlight: flatIndex - activeIndex (opacity); typography stays `isNewest`-driven. */
   streamFocusDelta?: number;
   streamFocusReduceMotion?: boolean;
-  streamTideRow?: boolean;
   searchHighlightQuery?: string;
   /** Matches `CaptureScreen` scroll `paddingHorizontal` so rows can full-bleed under press/trace. */
   streamGutter: number;
@@ -260,14 +240,12 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
   isNewest,
   streamFocusDelta,
   streamFocusReduceMotion = false,
-  streamTideRow = false,
   searchHighlightQuery,
   streamGutter,
   onEntryPress,
   onEntryDelete,
 }: StreamRowProps) {
   const [pressed, setPressed] = useState(false);
-  const tideEntrance = useRef(new Animated.Value(streamTideRow ? 0 : 1)).current;
   const t = useAppTheme();
   const { colors, typography, isDark } = t;
   const { body } = typography;
@@ -276,32 +254,17 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
   /** List order only: first / newest stays the large type; scroll only changes opacity (highlight). */
   const showNewest = isNewest;
 
-  const targetBodyOpacity = useMemo(() => {
-    const base = streamFocusBodyTargetOpacity(
-      viewportFocus,
-      streamFocusDelta,
-      showNewest,
-      t.sunlightMode,
-      streamFocusReduceMotion,
-    );
-    return streamTideRow ? base * STREAM_TIDE_BODY_OPACITY : base;
-  }, [viewportFocus, streamFocusDelta, showNewest, t.sunlightMode, streamFocusReduceMotion, streamTideRow]);
-
-  useEffect(() => {
-    if (!streamTideRow || streamFocusReduceMotion) {
-      tideEntrance.setValue(1);
-      return;
-    }
-    tideEntrance.setValue(0);
-    const anim = Animated.timing(tideEntrance, {
-      toValue: 1,
-      duration: STREAM_TIDE_ENTRANCE_MS,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    });
-    anim.start();
-    return () => anim.stop();
-  }, [streamTideRow, streamFocusReduceMotion, tideEntrance, item.id]);
+  const targetBodyOpacity = useMemo(
+    () =>
+      streamFocusBodyTargetOpacity(
+        viewportFocus,
+        streamFocusDelta,
+        showNewest,
+        t.sunlightMode,
+        streamFocusReduceMotion,
+      ),
+    [viewportFocus, streamFocusDelta, showNewest, t.sunlightMode, streamFocusReduceMotion],
+  );
   const targetTimeOpacity = useMemo(
     () => streamFocusTimeTargetOpacity(viewportFocus, streamFocusDelta, streamFocusReduceMotion),
     [viewportFocus, streamFocusDelta, streamFocusReduceMotion],
@@ -358,7 +321,12 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
   }, []);
 
   const handlePress = useCallback(() => {
-    onEntryPress?.(item, undefined);
+    if (onEntryPress == null) {
+      return;
+    }
+    measureThoughtSheetOpenAnchor(rowRef.current, (anchor) => {
+      onEntryPress(item, anchor);
+    });
   }, [item, onEntryPress]);
 
   const rowContent = (
@@ -461,14 +429,8 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
     </View>
   );
 
-  const wrapped = streamTideRow ? (
-    <Animated.View style={{ opacity: tideEntrance }}>{rowContent}</Animated.View>
-  ) : (
-    rowContent
-  );
-
   if (onEntryDelete == null) {
-    return wrapped;
+    return rowContent;
   }
 
   return (
@@ -507,7 +469,7 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
       )}
       onSwipeableOpen={requestEntryDelete}
     >
-      {wrapped}
+      {rowContent}
     </Swipeable>
   );
 });
@@ -750,11 +712,6 @@ function RecentListInner({
   streamScrollYRef,
   onScrollToEntryOffset,
   onScrollToEntryComplete,
-  streamFocusSettleEnabled = false,
-  streamScrollVelocityY = 0,
-  streamTideEntryIds,
-  monthHeaderPulseKey = null,
-  suspendViewportMeasurement = false,
 }: RecentListProps) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const streamGutter = screenContentGutter(windowWidth);
@@ -765,9 +722,7 @@ function RecentListInner({
   const [listOffsetY, setListOffsetY] = useState(0);
   const [layoutVersion, setLayoutVersion] = useState(0);
   const [windowActiveIndex, setWindowActiveIndex] = useState(-1);
-  const [settledActiveIndex, setSettledActiveIndex] = useState(-1);
   const [reduceMotion, setReduceMotion] = useState(false);
-  const monthHeaderPulse = useRef(new Animated.Value(1)).current;
   const framesRef = useRef<Map<string, { top: number; height: number }>>(new Map());
   const rowRefs = useRef<Map<string, View | null>>(new Map());
   const setRowRef = useCallback((id: string) => {
@@ -819,19 +774,16 @@ function RecentListInner({
   const orderedIds = useMemo(() => groups.flatMap((g) => g.items.map((e) => e.id)), [groups]);
   const flatItems = useMemo(() => {
     const out: Array<
-      | { kind: 'header'; label: string; sectionIndex: number; monthKey: string; key: string }
+      | { kind: 'header'; label: string; sectionIndex: number; key: string }
       | { kind: 'entry'; entry: Entry; flatIndex: number; key: string }
     > = [];
     let globalFlatIndex = 0;
     for (let s = 0; s < groups.length; s++) {
       const section = groups[s];
-      const sectionMonthKey =
-        section.items[0] != null ? monthKeyFromIso(section.items[0].createdAt) : '';
       out.push({
         kind: 'header',
         label: section.label,
         sectionIndex: s,
-        monthKey: sectionMonthKey,
         key: `h-${section.label}-${s}`,
       });
       for (const row of section.items) {
@@ -878,20 +830,11 @@ function RecentListInner({
         }
         const { y, height } = e.nativeEvent.layout;
         framesRef.current.set(id, { top: y, height });
+        setLayoutVersion((v) => v + 1);
       };
     },
     [streamViewportFocusEnabled],
   );
-
-  useEffect(() => {
-    if (!streamViewportFocusEnabled) {
-      return;
-    }
-    const task = InteractionManager.runAfterInteractions(() => {
-      setLayoutVersion((v) => v + 1);
-    });
-    return () => task.cancel();
-  }, [orderedIds, streamViewportFocusEnabled]);
 
   const geometryActiveIndex = useMemo(() => {
     if (!streamViewportFocusEnabled) {
@@ -918,113 +861,50 @@ function RecentListInner({
     windowHeight,
   ]);
 
-  useEffect(() => {
-    if (suspendViewportMeasurement) {
-      setWindowActiveIndex(-1);
-    }
-  }, [suspendViewportMeasurement]);
-
-  const useWindowViewportMeasure =
-    streamViewportFocusEnabled &&
-    !streamFocusSettleEnabled &&
-    streamScrollViewRef != null &&
-    !suspendViewportMeasurement;
-
   useLayoutEffect(() => {
-    if (!useWindowViewportMeasure) {
+    if (!streamViewportFocusEnabled || streamScrollViewRef == null) {
       return;
     }
     if (streamScrollViewRef.current == null) {
       setWindowActiveIndex(-1);
       return;
     }
-    if (Math.abs(streamScrollVelocityY) > 0) {
-      return;
-    }
     let cancelled = false;
-    const timer = setTimeout(() => {
+    void (async () => {
+      const sv = streamScrollViewRef.current;
+      if (!sv) {
+        return;
+      }
+      const scrollBox = await measureInWindowPromise(sv);
+      if (!scrollBox || cancelled) {
+        return;
+      }
+      const measurements = await Promise.all(
+        orderedIds.map(async (id, i) => ({
+          flatIndex: i,
+          box: await measureInWindowPromise(rowRefs.current.get(id) ?? null),
+        })),
+      );
       if (cancelled) {
         return;
       }
-      void (async () => {
-        const sv = streamScrollViewRef.current;
-        if (!sv) {
-          return;
-        }
-        const scrollBox = await measureInWindowPromise(sv);
-        if (!scrollBox || cancelled) {
-          return;
-        }
-        const measurements = await Promise.all(
-          orderedIds.map(async (id, i) => ({
-            flatIndex: i,
-            box: await measureInWindowPromise(rowRefs.current.get(id) ?? null),
-          })),
-        );
-        if (cancelled) {
-          return;
-        }
-        const idx = findActiveFlatIndexFromWindowMeasurements(scrollBox, measurements);
-        setWindowActiveIndex(idx);
-      })();
-    }, STREAM_VIEWPORT_WINDOW_MEASURE_IDLE_MS);
+      const idx = findActiveFlatIndexFromWindowMeasurements(scrollBox, measurements);
+      setWindowActiveIndex(idx);
+    })();
     return () => {
       cancelled = true;
-      clearTimeout(timer);
     };
   }, [
-    useWindowViewportMeasure,
+    streamViewportFocusEnabled,
     streamScrollViewRef,
     streamScrollY,
-    streamScrollVelocityY,
     streamViewportHeight,
     layoutVersion,
     orderedIds,
   ]);
 
-  const rawActiveFlatIndex = useWindowViewportMeasure
-    ? streamScrollViewRef != null && windowActiveIndex >= 0
-      ? windowActiveIndex
-      : geometryActiveIndex
-    : geometryActiveIndex;
-
-  useEffect(() => {
-    if (!streamFocusSettleEnabled) {
-      return;
-    }
-    if (streamScrollVelocityY === 0) {
-      const t = setTimeout(() => {
-        setSettledActiveIndex(rawActiveFlatIndex);
-      }, STREAM_FOCUS_SETTLE_MS);
-      return () => clearTimeout(t);
-    }
-  }, [streamFocusSettleEnabled, streamScrollVelocityY, rawActiveFlatIndex]);
-
-  const activeFlatIndex = streamFocusSettleEnabled
-    ? resolveSettledActiveFlatIndex(rawActiveFlatIndex, settledActiveIndex, streamScrollVelocityY)
-    : rawActiveFlatIndex;
-
-  useEffect(() => {
-    if (monthHeaderPulseKey == null || monthHeaderPulseKey === '') {
-      monthHeaderPulse.setValue(1);
-      return;
-    }
-    if (reduceMotion) {
-      monthHeaderPulse.setValue(1);
-      return;
-    }
-    monthHeaderPulse.setValue(0.72);
-    const anim = Animated.sequence([
-      Animated.timing(monthHeaderPulse, {
-        toValue: 1,
-        duration: STREAM_MONTH_JUMP_PULSE_MS,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]);
-    anim.start();
-    return () => anim.stop();
-  }, [monthHeaderPulseKey, reduceMotion, monthHeaderPulse]);
+  const activeFlatIndex =
+    streamScrollViewRef != null && windowActiveIndex >= 0 ? windowActiveIndex : geometryActiveIndex;
 
   useEffect(() => {
     if (onActiveStreamEntryChange == null) {
@@ -1208,16 +1088,12 @@ function RecentListInner({
     >
       {flatItems.map((item, index) => {
         if (item.kind === 'header') {
-          const pulseHeader =
-            monthHeaderPulseKey != null &&
-            monthHeaderPulseKey !== '' &&
-            item.monthKey === monthHeaderPulseKey;
           return (
             <View
               key={item.key}
               style={item.sectionIndex > 0 ? { marginTop: t.spacing.sm } : undefined}
             >
-              <Animated.Text
+              <Text
                 accessibilityRole="header"
                 style={[
                   styles.sectionLabel,
@@ -1229,12 +1105,11 @@ function RecentListInner({
                     lineHeight: 18,
                     letterSpacing: 0.22,
                     marginBottom: 6,
-                    opacity: pulseHeader ? monthHeaderPulse : 1,
                   },
                 ]}
               >
                 {item.label}
-              </Animated.Text>
+              </Text>
             </View>
           );
         }
@@ -1258,7 +1133,6 @@ function RecentListInner({
               isNewest={item.entry.id === newestShownId}
               streamFocusDelta={streamFocusDelta}
               streamFocusReduceMotion={reduceMotion}
-              streamTideRow={streamTideEntryIds?.has(item.entry.id) ?? false}
               searchHighlightQuery={searchHighlightQuery}
               streamGutter={streamGutter}
               onEntryPress={onEntryPress}
