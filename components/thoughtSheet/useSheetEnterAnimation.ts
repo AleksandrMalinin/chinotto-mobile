@@ -53,8 +53,8 @@ export function useSheetEnterAnimation(
   const contentOpacity = useMemo(
     () =>
       enterProgress.interpolate({
-        inputRange: profile === 'echo' ? [0, 0.42, 1] : [0, 1],
-        outputRange: profile === 'echo' ? [0, 0, 1] : [0, 1],
+        inputRange: profile === 'echo' ? [0, 0.42, 1] : [0, 0.32, 1],
+        outputRange: profile === 'echo' ? [0, 0, 1] : [0, 0, 1],
         extrapolate: 'clamp',
       }),
     [enterProgress, profile],

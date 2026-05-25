@@ -43,6 +43,11 @@ import {
   streamFocusTimeOpacityBelowActive,
   type StreamFocusWindowBox,
 } from '../utils/streamFocusTier';
+import {
+  STREAM_FOCUS_OPACITY_DURATION_MS,
+  STREAM_ROW_PRESS_IN_MS,
+  STREAM_ROW_PRESS_OUT_MS,
+} from '../constants/streamFocus';
 import { confirmDeleteThought } from '../utils/confirmDeleteThought';
 import { streamScrollContentYForRow } from '../utils/streamScrollToEntry';
 import { StreamFlowPanel } from './StreamFlowPanel';
@@ -131,9 +136,6 @@ const EMPTY_AMBIENT_SUPPRESS_FADE_MS = 340;
 const EMPTY_STREAM_HEADLINE_FONT_SIZE = 19;
 const EMPTY_STREAM_HEADLINE_LINE_HEIGHT = 27;
 const EMPTY_STREAM_HEADLINE_LETTER_SPACING = -0.38;
-
-/** Cross-fade when viewport highlight moves (ms); 0 when reduce-motion. */
-const STREAM_FOCUS_OPACITY_DURATION_MS = 200;
 
 /** Pressed stream row — full-bleed tint, softer than a card fill. */
 function entryPressedBackground(isDark: boolean): string {
@@ -244,7 +246,7 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
   onEntryPress,
   onEntryDelete,
 }: StreamRowProps) {
-  const [pressed, setPressed] = useState(false);
+  const pressShade = useRef(new Animated.Value(0)).current;
   const t = useAppTheme();
   const { colors, typography, isDark } = t;
   const { body } = typography;
@@ -313,11 +315,19 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
   }, [item, onEntryDelete]);
 
   const onPressIn = useCallback(() => {
-    setPressed(true);
-  }, []);
+    Animated.timing(pressShade, {
+      toValue: 1,
+      duration: STREAM_ROW_PRESS_IN_MS,
+      useNativeDriver: true,
+    }).start();
+  }, [pressShade]);
   const onPressOut = useCallback(() => {
-    setPressed(false);
-  }, []);
+    Animated.timing(pressShade, {
+      toValue: 0,
+      duration: STREAM_ROW_PRESS_OUT_MS,
+      useNativeDriver: true,
+    }).start();
+  }, [pressShade]);
 
   const handlePress = useCallback(() => {
     onEntryPress?.(item, null);
@@ -335,16 +345,17 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
         },
       ]}
     >
-      {pressed ? (
-        <View
-          pointerEvents="none"
-          importantForAccessibility="no"
-          style={[
-            styles.streamRowPressShade,
-            { backgroundColor: entryPressedBackground(isDark) },
-          ]}
-        />
-      ) : null}
+      <Animated.View
+        pointerEvents="none"
+        importantForAccessibility="no"
+        style={[
+          styles.streamRowPressShade,
+          {
+            backgroundColor: entryPressedBackground(isDark),
+            opacity: pressShade,
+          },
+        ]}
+      />
       <Pressable
         accessible={true}
         accessibilityLabel={`${item.text}, ${formatEntryTime(item.createdAt)}`}
@@ -1085,7 +1096,7 @@ function RecentListInner({
           return (
             <View
               key={item.key}
-              style={item.sectionIndex > 0 ? { marginTop: t.spacing.sm } : undefined}
+              style={item.sectionIndex > 0 ? { marginTop: t.spacing.md } : undefined}
             >
               <Text
                 accessibilityRole="header"
@@ -1098,7 +1109,7 @@ function RecentListInner({
                     fontSize: meta.fontSize,
                     lineHeight: 18,
                     letterSpacing: 0.22,
-                    marginBottom: 6,
+                    marginBottom: 10,
                   },
                 ]}
               >
@@ -1219,7 +1230,7 @@ const styles = StyleSheet.create({
    */
   entryBlock: {
     width: '100%',
-    paddingVertical: 13,
+    paddingVertical: 15,
   },
   entryRow: {
     width: '100%',

@@ -147,4 +147,6 @@ Flip `ECHO_UI_VARIANT_SHIPPED` / `ECHO_PALIMPSEST_ENABLED` only after the above 
 | 2026-05-25 | Palimpsest refinement P0–P2: rim excerpts, temporal whisper, soft card, peel motion + haptics |
 | 2026-05-25 | HWF-inspired P0 pacing: `echoWashPresence` leads content; composer dim holds to 65% swipe; asymmetric pager reveal; recall dim out delay; peel resist 30px + Soft haptic; echo sheet scrim leads content |
 | 2026-05-25 | P1–P2: presence settle on Echo land; ghost trace excerpts; optical lift; edge peek repeat every 7d (skip while typing) |
+| 2026-05-25 | P3: 21d Echo display cooldown when opened ≥2× without edit; dwell rerank flag stub |
+| 2026-05-25 | Main stream: slower focus cross-fade (280ms), section/row breathing room, soft row press, stream sheet content lag |
 | 2026-05-25 | Behavior pass B1–B5: trace rims, peel resistance, press settle, echo sheet enter + recall dim |
