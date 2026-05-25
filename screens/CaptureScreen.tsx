@@ -73,6 +73,7 @@ import {
   ECHO_COMPOSER_DIM_AT_FULL,
   ECHO_LAYER_ENABLED,
   ECHO_COMPOSER_DIM_RELEASE_AT,
+  ECHO_EDGE_PEEK_INITIAL_DELAY_MS,
   ECHO_RECALL_DIM_IN_MS,
   ECHO_RECALL_DIM_OUT_DELAY_MS,
   ECHO_RECALL_DIM_OUT_MS,
@@ -94,9 +95,9 @@ import {
 } from '../storage/firstLaunchCapturePrefs';
 import {
   clearEchoEdgePeekDone,
-  getEchoEdgePeekDone,
   recordEchoCandidatesDisplayed,
-  setEchoEdgePeekDone,
+  setEchoEdgePeekLastAt,
+  shouldOfferEchoEdgePeek,
   setEchoLastBackgroundAt,
   setEchoSessionThread,
 } from '../storage/echoLayerPrefs';
@@ -322,7 +323,7 @@ export function CaptureScreen({
   const [echoPageIndex, setEchoPageIndex] = useState<0 | 1>(0);
   const echoPageIndexRef = useRef<0 | 1>(0);
   const echoPagerPageSettledRef = useRef(false);
-  const echoEdgePeekStartedRef = useRef(false);
+  const echoEdgePeekInFlightRef = useRef(false);
   const echoRevealRef = useRef<EchoRevealHandle>(null);
   const echoPagerScrollX = useRef(new Animated.Value(0)).current;
   const [streamActiveEntry, setStreamActiveEntry] = useState<Entry | null>(null);
@@ -1468,49 +1469,68 @@ export function CaptureScreen({
     [analyticsEnabled, playSearchChromeHaptic, stashSearchForEchoNavigation],
   );
 
-  useEffect(() => {
+  const tryEchoEdgePeek = useCallback(async () => {
     if (
       !echoLayerEligible ||
       echoPageWidth <= 0 ||
       readEntry != null ||
       searchActive ||
-      !allowCaptureFocus
+      !allowCaptureFocus ||
+      text.trim().length > 0
     ) {
       return;
     }
-    if (echoEdgePeekStartedRef.current) {
+    if (echoEdgePeekInFlightRef.current) {
       return;
     }
-    echoEdgePeekStartedRef.current = true;
-
-    let cancelled = false;
-
-    void (async () => {
-      if (await getEchoEdgePeekDone()) {
-        return;
-      }
-      await setEchoEdgePeekDone();
-      if (cancelled) {
-        return;
-      }
-
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 900);
-      });
-      if (cancelled) {
-        return;
-      }
-
-      await runEchoEdgePeekAnimation({
+    if (!(await shouldOfferEchoEdgePeek())) {
+      return;
+    }
+    echoEdgePeekInFlightRef.current = true;
+    try {
+      const result = await runEchoEdgePeekAnimation({
         pager: echoRevealRef.current,
         respectReduceMotion: true,
       });
-    })();
+      if (result === 'played') {
+        await setEchoEdgePeekLastAt();
+      }
+    } finally {
+      echoEdgePeekInFlightRef.current = false;
+    }
+  }, [
+    allowCaptureFocus,
+    echoLayerEligible,
+    echoPageWidth,
+    readEntry,
+    searchActive,
+    text,
+  ]);
 
+  useEffect(() => {
+    if (!echoLayerEligible || echoPageWidth <= 0) {
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      if (!cancelled) {
+        void tryEchoEdgePeek();
+      }
+    }, ECHO_EDGE_PEEK_INITIAL_DELAY_MS);
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
-  }, [allowCaptureFocus, echoLayerEligible, echoPageWidth, readEntry, searchActive]);
+  }, [echoLayerEligible, echoPageWidth, tryEchoEdgePeek]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active') {
+        void tryEchoEdgePeek();
+      }
+    });
+    return () => sub.remove();
+  }, [tryEchoEdgePeek]);
 
   const playEchoEdgePeekPreview = useCallback(async () => {
     setSettingsRoute(null);
@@ -1532,10 +1552,9 @@ export function CaptureScreen({
 
   const resetEchoEdgePeekForDev = useCallback(() => {
     void clearEchoEdgePeekDone().then(() => {
-      echoEdgePeekStartedRef.current = false;
       Alert.alert(
         'Echo edge peek',
-        'One-time flag cleared. Auto peek will run again the next time Echo becomes eligible.',
+        'Peek schedule cleared. Auto peek will run again when Echo is eligible.',
       );
     });
   }, []);
@@ -1736,6 +1755,7 @@ export function CaptureScreen({
                 pageWidth={echoPageWidth}
                 uiVariant={ECHO_UI_VARIANT_SHIPPED}
                 recallDim={echoRecallDim}
+                onEchoPage={echoOnEchoPage}
               />
             }
           >

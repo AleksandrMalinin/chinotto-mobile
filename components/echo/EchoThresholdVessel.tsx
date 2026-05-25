@@ -3,7 +3,9 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ECHO_THRESHOLD_GHOST_COUNT } from '../../constants/echoLayer';
 import { fonts, screenContentInnerPad, useAppTheme } from '../../theme';
+import { ECHO_VESSEL_OPTICAL_LIFT_PT } from '../../constants/echoLayer';
 import { echoEmotionalIntensityFromText } from '../../utils/echoEmotionalAtmosphere';
+import { echoGhostTraceExcerpt } from '../../utils/echoGhostTraceExcerpt';
 import type { EchoCandidate } from '../../utils/selectEchoCandidates';
 import { formatEchoRelativeAge } from '../../utils/formatEchoRelativeAge';
 import type { EchoChromeColors } from './echoChrome';
@@ -53,10 +55,10 @@ export function EchoThresholdVessel({
               key={entry.id}
               testID={`echo-threshold-ghost-${entry.id}`}
               style={[styles.ghostLine, { color: chrome.subtitle }]}
-              numberOfLines={2}
+              numberOfLines={1}
               ellipsizeMode="tail"
             >
-              {entry.text}
+              {echoGhostTraceExcerpt(entry.text)}
             </Text>
           ))}
         </View>
@@ -131,7 +133,8 @@ const styles = StyleSheet.create({
     width: '100%',
     flexGrow: 1,
     justifyContent: 'center',
-    paddingVertical: 8,
+    paddingTop: 8,
+    paddingBottom: 8 + ECHO_VESSEL_OPTICAL_LIFT_PT,
   },
   primary: {
     flexDirection: 'row',
@@ -167,14 +170,14 @@ const styles = StyleSheet.create({
     letterSpacing: 0.14,
   },
   ghostBlock: {
-    marginTop: 28,
+    marginTop: 36,
     paddingHorizontal: screenContentInnerPad + 10,
-    gap: 14,
+    gap: 18,
   },
   ghostLine: {
     fontFamily: fonts.regular,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 18,
     letterSpacing: 0.1,
     fontStyle: 'italic',
   },

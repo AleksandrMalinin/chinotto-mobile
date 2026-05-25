@@ -16,8 +16,14 @@ export const ECHO_GRAVITY_RECENT_DAYS = 14;
 /** Drift scoring — thoughts older than this may resurface. */
 export const ECHO_DRIFT_MIN_AGE_DAYS = 30;
 
-/** Pixels of Echo page revealed during the one-time edge peek. */
+/** Pixels of Echo page revealed during edge peek hint. */
 export const ECHO_EDGE_PEEK_OFFSET_PX = 14;
+
+/** Minimum days between edge peek hints (after the first). */
+export const ECHO_EDGE_PEEK_REPEAT_DAYS = 7;
+
+/** Delay before first edge peek after Echo mounts (ms). */
+export const ECHO_EDGE_PEEK_INITIAL_DELAY_MS = 900;
 
 /** Composer/search opacity at full Echo reveal (matches search-mode dim). */
 export const ECHO_COMPOSER_DIM_AT_FULL = 0.58;
@@ -105,3 +111,12 @@ export const ECHO_COMPOSER_DIM_RELEASE_AT = 0.65;
 
 /** Emotional veil cap multiplier (text proxy only). */
 export const ECHO_EMOTIONAL_VEIL_CAP = 0.1;
+
+/** Lift Echo presence slightly above geometric center (pt). */
+export const ECHO_VESSEL_OPTICAL_LIFT_PT = 6;
+
+/** Soft land after Echo page settles (ms). */
+export const ECHO_PRESENCE_SETTLE_MS = 420;
+
+/** Palimpsest peel via long press when reduce motion (ms). */
+export const ECHO_PALIMPSEST_PEEL_LONG_PRESS_MS = 550;

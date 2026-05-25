@@ -18,9 +18,11 @@ import {
   ECHO_PALIMPSEST_PEEL_DRAG_MAX,
   ECHO_PALIMPSEST_PEEL_FADE_MS,
   ECHO_PALIMPSEST_PEEL_SNAP_DY,
+  ECHO_PALIMPSEST_PEEL_LONG_PRESS_MS,
   ECHO_PALIMPSEST_PRESS_IN_MS,
   ECHO_PALIMPSEST_PRESS_OUT_MS,
   ECHO_PALIMPSEST_RIM_COUNT,
+  ECHO_VESSEL_OPTICAL_LIFT_PT,
   ECHO_PALIMPSEST_VISIBLE,
 } from '../../constants/echoLayer';
 import { fonts, screenContentInnerPad, useAppTheme } from '../../theme';
@@ -294,7 +296,7 @@ export function EchoPalimpsestVessel({
           }
           onPress={onEntryPress != null ? () => onEntryPress(topEntry) : undefined}
           onLongPress={reduceMotion && deck.length > 1 ? commitPeel : undefined}
-          delayLongPress={500}
+          delayLongPress={ECHO_PALIMPSEST_PEEL_LONG_PRESS_MS}
           onPressIn={onPressIn}
           onPressOut={onPressOut}
           style={styles.topPressable}
@@ -361,7 +363,8 @@ const styles = StyleSheet.create({
     width: '100%',
     flexGrow: 1,
     justifyContent: 'center',
-    paddingVertical: 8,
+    paddingTop: 8,
+    paddingBottom: 8 + ECHO_VESSEL_OPTICAL_LIFT_PT,
   },
   stack: {
     width: '100%',

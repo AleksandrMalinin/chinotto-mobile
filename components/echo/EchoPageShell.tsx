@@ -12,6 +12,7 @@ export type EchoPageShellProps = {
   pageWidth?: number;
   uiVariant?: EchoUiVariant;
   recallDim?: Animated.Value;
+  onEchoPage?: boolean;
 };
 
 /** Echo content page — shell background crossfades at CaptureScreen level. */
@@ -22,6 +23,7 @@ export function EchoPageShell({
   pageWidth,
   uiVariant,
   recallDim,
+  onEchoPage,
 }: EchoPageShellProps) {
   return (
     <View style={styles.shell} testID="echo-page-shell">
@@ -32,6 +34,7 @@ export function EchoPageShell({
         pageWidth={pageWidth}
         uiVariant={uiVariant}
         recallDim={recallDim}
+        onEchoPage={onEchoPage}
       />
     </View>
   );
