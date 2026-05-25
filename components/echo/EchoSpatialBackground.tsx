@@ -1,6 +1,8 @@
 import { Animated, StyleSheet } from 'react-native';
 
+import { ECHO_EMOTIONAL_VEIL_CAP } from '../../constants/echoLayer';
 import { AmbientBackground } from '../AmbientBackground';
+import { echoWashPresence } from '../../utils/echoPagerMotion';
 import { EchoGradientWash } from './EchoGradientWash';
 import type { EchoChromeColors } from './echoChrome';
 
@@ -29,11 +31,7 @@ export function EchoSpatialBackground({
     return <AmbientBackground />;
   }
 
-  const echoPresence = scrollX.interpolate({
-    inputRange: [0, pageWidth],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
+  const echoPresence = echoWashPresence(scrollX, pageWidth);
   const streamPresence = scrollX.interpolate({
     inputRange: [0, pageWidth],
     outputRange: [0.62, 1],
@@ -69,7 +67,10 @@ export function EchoSpatialBackground({
           style={[
             StyleSheet.absoluteFill,
             {
-              opacity: Animated.multiply(echoPresence, emotionalIntensity * 0.14),
+              opacity: Animated.multiply(
+                echoPresence,
+                Math.min(ECHO_EMOTIONAL_VEIL_CAP, emotionalIntensity * ECHO_EMOTIONAL_VEIL_CAP),
+              ),
               backgroundColor: chrome.echoDepth,
             },
           ]}

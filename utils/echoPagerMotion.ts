@@ -1,13 +1,28 @@
 import type { Animated } from 'react-native';
 
-/** Opacity follows reveal — visible once Echo is meaningfully on screen. */
+/**
+ * Plum wash leads content — register shifts before thoughts appear.
+ * scrollX: 0 = Echo, pageWidth = stream home.
+ */
+export function echoWashPresence(
+  scrollX: Animated.Value,
+  pageWidth: number,
+): Animated.AnimatedInterpolation<number> {
+  return scrollX.interpolate({
+    inputRange: [0, pageWidth * 0.35, pageWidth * 0.65, pageWidth],
+    outputRange: [1, 0.88, 0.42, 0],
+    extrapolate: 'clamp',
+  });
+}
+
+/** Content lags wash — visible once Echo is meaningfully on screen. */
 export function echoContentOpacity(
   scrollX: Animated.Value,
   pageWidth: number,
 ): Animated.AnimatedInterpolation<number> {
   return scrollX.interpolate({
-    inputRange: [0, pageWidth * 0.25, pageWidth * 0.55, pageWidth],
-    outputRange: [1, 0.35, 0, 0],
+    inputRange: [0, pageWidth * 0.45, pageWidth * 0.72, pageWidth],
+    outputRange: [1, 0.22, 0, 0],
     extrapolate: 'clamp',
   });
 }

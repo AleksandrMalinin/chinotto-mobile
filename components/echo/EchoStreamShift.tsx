@@ -10,6 +10,10 @@ import {
 import { Animated, Easing, PanResponder, StyleSheet, View } from 'react-native';
 
 import {
+  ECHO_PAGER_REVEAL_IN_MS,
+  ECHO_PAGER_REVEAL_OUT_MS,
+} from '../../constants/echoLayer';
+import {
   streamEchoPagerHomeOffset,
   streamEchoPagerIndexFromOffset,
 } from './StreamEchoPager';
@@ -74,9 +78,10 @@ export const EchoStreamShift = forwardRef<EchoRevealHandle, EchoStreamShiftProps
       (x: number, animated: boolean) => {
         const target = Math.max(0, Math.min(homeX, x));
         if (animated) {
+          const duration = target < homeX * 0.5 ? ECHO_PAGER_REVEAL_IN_MS : ECHO_PAGER_REVEAL_OUT_MS;
           Animated.timing(scrollX, {
             toValue: target,
-            duration: 280,
+            duration,
             easing: Easing.out(Easing.cubic),
             useNativeDriver: true,
           }).start(({ finished }) => {

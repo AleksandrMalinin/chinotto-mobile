@@ -73,8 +73,8 @@ export const ECHO_PALIMPSEST_PEEL_SNAP_DY = 40;
 /** Max drag on peel (px). */
 export const ECHO_PALIMPSEST_PEEL_DRAG_MAX = 56;
 
-/** Drag (px) before resistance curve applies. */
-export const ECHO_PALIMPSEST_PEEL_RESIST_FROM_DY = 24;
+/** Drag (px) before resistance curve applies — heavy first segment. */
+export const ECHO_PALIMPSEST_PEEL_RESIST_FROM_DY = 30;
 
 /** Fraction of drag beyond resist threshold. */
 export const ECHO_PALIMPSEST_PEEL_RESIST_FACTOR = 0.6;
@@ -88,3 +88,20 @@ export const ECHO_RECALL_SHEET_DIM = 0.42;
 /** Echo presence dim in/out (ms). */
 export const ECHO_RECALL_DIM_IN_MS = 220;
 export const ECHO_RECALL_DIM_OUT_MS = 280;
+
+/** Pause before Echo brightens after sheet dismiss (ms). */
+export const ECHO_RECALL_DIM_OUT_DELAY_MS = 50;
+
+/** Palimpsest primary press settle (ms). */
+export const ECHO_PALIMPSEST_PRESS_IN_MS = 120;
+export const ECHO_PALIMPSEST_PRESS_OUT_MS = 220;
+
+/** Horizontal reveal — enter Echo slower than return to stream (ms). */
+export const ECHO_PAGER_REVEAL_IN_MS = 320;
+export const ECHO_PAGER_REVEAL_OUT_MS = 280;
+
+/** Composer stays full-dim until this fraction of swipe toward stream. */
+export const ECHO_COMPOSER_DIM_RELEASE_AT = 0.65;
+
+/** Emotional veil cap multiplier (text proxy only). */
+export const ECHO_EMOTIONAL_VEIL_CAP = 0.1;

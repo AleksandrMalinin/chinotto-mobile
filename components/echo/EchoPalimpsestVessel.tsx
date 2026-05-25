@@ -18,6 +18,8 @@ import {
   ECHO_PALIMPSEST_PEEL_DRAG_MAX,
   ECHO_PALIMPSEST_PEEL_FADE_MS,
   ECHO_PALIMPSEST_PEEL_SNAP_DY,
+  ECHO_PALIMPSEST_PRESS_IN_MS,
+  ECHO_PALIMPSEST_PRESS_OUT_MS,
   ECHO_PALIMPSEST_RIM_COUNT,
   ECHO_PALIMPSEST_VISIBLE,
 } from '../../constants/echoLayer';
@@ -57,7 +59,7 @@ function rimTierForLayer(layerIndex: number, layerCount: number): RimTier {
     return {
       opacity: 0.5,
       scale: 0.97,
-      translateY: -3,
+      translateY: -4,
       marginLeft: -1,
       showExcerpt: true,
       peelLift: 0.1,
@@ -65,8 +67,8 @@ function rimTierForLayer(layerIndex: number, layerCount: number): RimTier {
   }
   return {
     opacity: 0.28,
-    scale: 0.96,
-    translateY: -6,
+    scale: 0.95,
+    translateY: -11,
     marginLeft: 2,
     showExcerpt: false,
     peelLift: 0.06,
@@ -130,7 +132,7 @@ export function EchoPalimpsestVessel({
     advanceDeck();
     peelY.setValue(0);
     if (hapticsEnabled) {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft).catch(() => {});
     }
   }, [advanceDeck, hapticsEnabled, peelY, primaryFade]);
 
@@ -196,12 +198,12 @@ export function EchoPalimpsestVessel({
     Animated.parallel([
       Animated.timing(pressDim, {
         toValue: 0.9,
-        duration: 120,
+        duration: ECHO_PALIMPSEST_PRESS_IN_MS,
         useNativeDriver: true,
       }),
       Animated.timing(pressSettleY, {
         toValue: 3,
-        duration: 120,
+        duration: ECHO_PALIMPSEST_PRESS_IN_MS,
         useNativeDriver: true,
       }),
     ]).start();
@@ -211,12 +213,12 @@ export function EchoPalimpsestVessel({
     Animated.parallel([
       Animated.timing(pressDim, {
         toValue: 1,
-        duration: 160,
+        duration: ECHO_PALIMPSEST_PRESS_OUT_MS,
         useNativeDriver: true,
       }),
       Animated.timing(pressSettleY, {
         toValue: 0,
-        duration: 160,
+        duration: ECHO_PALIMPSEST_PRESS_OUT_MS,
         useNativeDriver: true,
       }),
     ]).start();

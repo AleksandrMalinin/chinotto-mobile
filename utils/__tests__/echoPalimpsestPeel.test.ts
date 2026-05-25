@@ -8,6 +8,6 @@ describe('palimpsestPeelDragOffset', () => {
 
   it('applies resistance after threshold', () => {
     expect(palimpsestPeelDragOffset(20)).toBe(20);
-    expect(palimpsestPeelDragOffset(32)).toBe(28.8);
+    expect(palimpsestPeelDragOffset(32)).toBe(31.2);
   });
 });

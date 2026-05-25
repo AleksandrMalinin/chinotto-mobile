@@ -72,7 +72,9 @@ import { ECHO_UI_VARIANT_SHIPPED } from '../constants/echoUiVariant';
 import {
   ECHO_COMPOSER_DIM_AT_FULL,
   ECHO_LAYER_ENABLED,
+  ECHO_COMPOSER_DIM_RELEASE_AT,
   ECHO_RECALL_DIM_IN_MS,
+  ECHO_RECALL_DIM_OUT_DELAY_MS,
   ECHO_RECALL_DIM_OUT_MS,
   ECHO_RECALL_SHEET_DIM,
 } from '../constants/echoLayer';
@@ -1425,9 +1427,10 @@ export function CaptureScreen({
     if (!echoLayerEligible || echoPageWidth <= 0) {
       return composerSearchDim;
     }
+    const releaseAt = echoPageWidth * ECHO_COMPOSER_DIM_RELEASE_AT;
     const echoFactor = echoPagerScrollX.interpolate({
-      inputRange: [0, echoPageWidth],
-      outputRange: [ECHO_COMPOSER_DIM_AT_FULL, 1],
+      inputRange: [0, releaseAt, echoPageWidth],
+      outputRange: [ECHO_COMPOSER_DIM_AT_FULL, ECHO_COMPOSER_DIM_AT_FULL, 1],
       extrapolate: 'clamp',
     });
     return Animated.multiply(composerSearchDim, echoFactor);
@@ -2042,11 +2045,15 @@ export function CaptureScreen({
         onClose={() => {
           if (readEntryEnterProfile === 'echo') {
             echoRecallDim.stopAnimation();
-            Animated.timing(echoRecallDim, {
-              toValue: 1,
-              duration: ECHO_RECALL_DIM_OUT_MS,
-              useNativeDriver: true,
-            }).start();
+            Animated.sequence([
+              Animated.delay(ECHO_RECALL_DIM_OUT_DELAY_MS),
+              Animated.timing(echoRecallDim, {
+                toValue: 1,
+                duration: ECHO_RECALL_DIM_OUT_MS,
+                easing: Easing.out(Easing.cubic),
+                useNativeDriver: true,
+              }),
+            ]).start();
           }
           setReadEntry(null);
           setReadEntryAnchor(null);

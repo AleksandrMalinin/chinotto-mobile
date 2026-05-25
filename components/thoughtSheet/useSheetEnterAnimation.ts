@@ -43,21 +43,21 @@ export function useSheetEnterAnimation(
   const scrimOpacity = useMemo(
     () =>
       enterProgress.interpolate({
-        inputRange: [0, 1],
-        outputRange: [0, 1],
+        inputRange: profile === 'echo' ? [0, 0.58, 1] : [0, 1],
+        outputRange: profile === 'echo' ? [0, 0.92, 1] : [0, 1],
         extrapolate: 'clamp',
       }),
-    [enterProgress],
+    [enterProgress, profile],
   );
 
   const contentOpacity = useMemo(
     () =>
       enterProgress.interpolate({
-        inputRange: [0, 1],
-        outputRange: [0, 1],
+        inputRange: profile === 'echo' ? [0, 0.42, 1] : [0, 1],
+        outputRange: profile === 'echo' ? [0, 0, 1] : [0, 1],
         extrapolate: 'clamp',
       }),
-    [enterProgress],
+    [enterProgress, profile],
   );
 
   const contentTranslateY = useMemo(

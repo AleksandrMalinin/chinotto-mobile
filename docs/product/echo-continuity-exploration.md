@@ -145,4 +145,5 @@ Flip `ECHO_UI_VARIANT_SHIPPED` / `ECHO_PALIMPSEST_ENABLED` only after the above 
 | 2026-05-25 | Product: **Palimpsest** recorded as lead dogfood direction (Threshold remains shipped) |
 | 2026-05-25 | **1F orbit** tried in Palimpsest, removed (no clear meaning); peel reset on pool change; ship criteria table |
 | 2026-05-25 | Palimpsest refinement P0–P2: rim excerpts, temporal whisper, soft card, peel motion + haptics |
+| 2026-05-25 | HWF-inspired P0 pacing: `echoWashPresence` leads content; composer dim holds to 65% swipe; asymmetric pager reveal; recall dim out delay; peel resist 30px + Soft haptic; echo sheet scrim leads content |
 | 2026-05-25 | Behavior pass B1–B5: trace rims, peel resistance, press settle, echo sheet enter + recall dim |
