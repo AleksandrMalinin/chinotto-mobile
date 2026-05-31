@@ -39,7 +39,6 @@ import { splitTextBySearchQuery } from '../utils/splitTextBySearchQuery';
 import {
   findActiveFlatIndex,
   streamFocusBodyOpacityBelowActive,
-  streamFocusTimeOpacityBelowActive,
   type StreamFocusWindowBox,
 } from '../utils/streamFocusTier';
 import { motion } from '../constants/motion';
@@ -169,17 +168,6 @@ function streamFocusBodyTargetOpacity(
   return streamFocusBodyOpacityBelowActive(streamFocusDelta, sunlightMode, reduceMotion);
 }
 
-function streamFocusTimeTargetOpacity(
-  viewportFocus: boolean,
-  streamFocusDelta: number | undefined,
-  reduceMotion: boolean,
-): number {
-  if (!viewportFocus || streamFocusDelta == null || streamFocusDelta < 1) {
-    return 1;
-  }
-  return streamFocusTimeOpacityBelowActive(streamFocusDelta, reduceMotion);
-}
-
 type StreamRowProps = {
   item: Entry;
   isNewest: boolean;
@@ -271,18 +259,10 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
       ),
     [viewportFocus, streamFocusDelta, showNewest, t.sunlightMode, streamFocusReduceMotion],
   );
-  const targetTimeOpacity = useMemo(
-    () => streamFocusTimeTargetOpacity(viewportFocus, streamFocusDelta, streamFocusReduceMotion),
-    [viewportFocus, streamFocusDelta, streamFocusReduceMotion],
-  );
 
   const bodyOpacityAnim = useRef<Animated.Value | null>(null);
-  const timeOpacityAnim = useRef<Animated.Value | null>(null);
   if (bodyOpacityAnim.current == null) {
     bodyOpacityAnim.current = new Animated.Value(targetBodyOpacity);
-  }
-  if (timeOpacityAnim.current == null) {
-    timeOpacityAnim.current = new Animated.Value(targetTimeOpacity);
   }
 
   useEffect(() => {
@@ -291,30 +271,15 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
       streamFocusOpacitySnap,
     );
     const easing = Easing.out(Easing.cubic);
-    const anim = Animated.parallel([
-      Animated.timing(bodyOpacityAnim.current!, {
-        toValue: targetBodyOpacity,
-        duration,
-        easing,
-        useNativeDriver: true,
-      }),
-      Animated.timing(timeOpacityAnim.current!, {
-        toValue: targetTimeOpacity,
-        duration,
-        easing,
-        useNativeDriver: true,
-      }),
-    ]);
+    const anim = Animated.timing(bodyOpacityAnim.current!, {
+      toValue: targetBodyOpacity,
+      duration,
+      easing,
+      useNativeDriver: true,
+    });
     anim.start();
     return () => anim.stop();
-  }, [targetBodyOpacity, targetTimeOpacity, streamFocusReduceMotion, streamFocusOpacitySnap]);
-
-  /** Timestamps recede so the thought leads; sunlight mode keeps them legible. */
-  const restTimeOpacityFactor = t.sunlightMode ? 1 : 0.55;
-  const composedTimeOpacity = useMemo(
-    () => Animated.multiply(timeOpacityAnim.current!, restTimeOpacityFactor),
-    [restTimeOpacityFactor],
-  );
+  }, [targetBodyOpacity, streamFocusReduceMotion, streamFocusOpacitySnap]);
 
   const rowRef = useRef<View>(null);
   const swipeableRef = useRef<SwipeableRef | null>(null);
@@ -420,24 +385,9 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
                   fontSize: showNewest ? 18 : body.fontSize,
                   lineHeight: showNewest ? 26 : body.lineHeight,
                   letterSpacing: showNewest ? 0.17 : 0.16,
-                  marginRight: t.spacing.sm,
                 },
               ]}
             />
-            <Animated.Text
-              style={[
-                styles.time,
-                {
-                  color: colors.muted,
-                  fontFamily: t.sunlightMode ? fonts.medium : fonts.regular,
-                  fontSize: 11,
-                  lineHeight: 15,
-                  opacity: composedTimeOpacity,
-                },
-              ]}
-            >
-              {formatEntryTime(item.createdAt)}
-            </Animated.Text>
           </View>
         </View>
       </Pressable>
@@ -1249,12 +1199,8 @@ const styles = StyleSheet.create({
     width: '100%',
     flexDirection: 'row',
     alignItems: 'baseline',
-    justifyContent: 'space-between',
   },
   line: {},
-  time: {
-    marginTop: -2,
-  },
   deleteTrack: {
     justifyContent: 'center',
     alignItems: 'center',

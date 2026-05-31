@@ -18,7 +18,7 @@ function parseDate(iso: string): Date {
   return new Date(iso);
 }
 
-/** Short time for a row (e.g. 14:32). */
+/** Short time for a row (e.g. 14:32). Used for the detail sheet + accessibility (precise). */
 export function formatEntryTime(iso: string, locale?: string): string {
   return parseDate(iso).toLocaleTimeString(locale, {
     hour: '2-digit',

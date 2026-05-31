@@ -46,7 +46,7 @@ import { ChinottoLogo, chinottoLogoLeadingOutset } from '../components/ChinottoL
 import { EnableSyncModal } from '../components/EnableSyncModal';
 import { EntryThoughtSheet } from '../components/EntryThoughtSheet';
 import { RecentList } from '../components/RecentList';
-import { StreamSearchField } from '../components/StreamSearchField';
+import { StreamSearchField, StreamSearchToggle } from '../components/StreamSearchField';
 import { TemporalMapSheet } from '../components/temporal/TemporalMapSheet';
 import { TemporalMonthRack } from '../components/temporal/TemporalMonthRack';
 import type { ThoughtSheetOpenAnchor } from '../components/thoughtSheet/detents';
@@ -150,6 +150,7 @@ import {
 } from '../sync/syncHighlightConstants';
 import { getSyncHighlightEligibility } from '../sync/syncHighlightEligibility';
 import {
+  captureInputPaddingTop,
   fonts,
   radius,
   screenContentGutter,
@@ -1409,6 +1410,14 @@ export function CaptureScreen({
   const composerMinHeight = 76;
   const composerMaxHeight = 120;
   const capturePlaceholderColor = t.colors.capturePlaceholder;
+  /** Centers the search toggle on the first capture line so it clusters with the mic. */
+  const searchToggleAlignTop =
+    captureInputPaddingTop +
+    t.typography.capture.lineHeight / 2 -
+    16 +
+    Platform.select({ ios: -2, default: -3 });
+  /** Collapsed search lives beside the mic only when there is a stream to search. */
+  const showSearchToggle = streamDisplayEntries.length > 0 && !searchExpanded;
   const headerLogoColor = t.colors.logoMark;
   const headerLogoSize = 42;
   /** Ring geometry: align **outer ring** with search field (gutter only); composer is inset +`screenContentInnerPad`. */
@@ -1881,10 +1890,16 @@ export function CaptureScreen({
                           }}
                         />
                       ) : null}
+                      {showSearchToggle ? (
+                        <StreamSearchToggle
+                          onPress={expandSearch}
+                          style={{ marginTop: searchToggleAlignTop }}
+                        />
+                      ) : null}
                     </View>
                   </Animated.View>
                 </View>
-                {streamDisplayEntries.length > 0 ? (
+                {streamDisplayEntries.length > 0 && searchExpanded ? (
                   <View
                     testID="stream-search-sticky"
                     style={[styles.searchStickyHeader, { paddingHorizontal: gutter }]}

@@ -6,7 +6,9 @@ import {
   Text,
   TextInput,
   View,
+  type StyleProp,
   type TextInput as TextInputType,
+  type ViewStyle,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -39,6 +41,35 @@ const SHELL_RADIUS = 20;
 const BORDER_RING = 1;
 const CAPSULE_ROW_HEIGHT = 44;
 const SEARCH_PLACEHOLDER = 'Type a word or phrase…';
+const TOGGLE_TAP = 32;
+
+/**
+ * Quiet, on-demand search affordance. Lives beside the mic as a secondary-action cluster so search
+ * reads as a supporting tool, not a standalone element floating in the layout. Expands the full
+ * field via {@link onPress}.
+ */
+export function StreamSearchToggle({
+  onPress,
+  style,
+}: {
+  onPress: () => void;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const t = useAppTheme();
+  return (
+    <Pressable
+      testID="stream-search-toggle"
+      accessibilityLabel="Search thoughts"
+      accessibilityRole="button"
+      hitSlop={14}
+      onPress={onPress}
+      style={({ pressed }) => [styles.clusterToggle, style, pressed && styles.clusterTogglePressed]}
+    >
+      {/* Auxiliary to the mic: small, faint loupe so voice clearly leads the action cluster. */}
+      <StreamSearchGlyph color={t.colors.muted} size={11} />
+    </Pressable>
+  );
+}
 
 type GlassCapsuleProps = {
   active: boolean;
@@ -250,21 +281,9 @@ export const StreamSearchField = forwardRef<TextInputType, StreamSearchFieldProp
             </GlassCapsule>
           </View>
         ) : (
-          // Calm, on-demand: at rest search is just a quiet glyph, not a full search bar.
+          // Calm, on-demand: at rest search is just a quiet glyph (shared with the composer cluster).
           <View style={styles.collapsedRow}>
-            <Pressable
-              testID="stream-search-toggle"
-              accessibilityLabel="Search thoughts"
-              accessibilityRole="button"
-              hitSlop={12}
-              onPress={onPressExpand}
-              style={({ pressed }) => [
-                styles.collapsedToggle,
-                pressed && styles.collapsedTogglePressed,
-              ]}
-            >
-              <StreamSearchGlyph color={colors.muted} size={15} />
-            </Pressable>
+            <StreamSearchToggle onPress={onPressExpand} />
           </View>
         )}
         {expanded && resultLabel != null && resultLabel !== '' ? (
@@ -339,13 +358,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
   },
-  collapsedToggle: {
-    padding: 6,
-    borderRadius: 16,
-    opacity: 0.5,
+  /** Quiet tap target; sits in the composer's trailing cluster beside the mic (auxiliary to it). */
+  clusterToggle: {
+    width: TOGGLE_TAP,
+    height: TOGGLE_TAP,
+    alignItems: 'center',
+    justifyContent: 'center',
+    opacity: 0.32,
   },
-  collapsedTogglePressed: {
-    opacity: 0.8,
+  clusterTogglePressed: {
+    opacity: 0.6,
   },
   inputWrap: {
     flex: 1,

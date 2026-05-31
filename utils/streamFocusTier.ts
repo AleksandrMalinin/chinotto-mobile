@@ -34,12 +34,14 @@ export function streamFocusBodyOpacityBelowActive(
   if (delta <= 2) {
     return sunlightMode ? 1 : 0.84;
   }
-  // delta >= 3: ramp (use delta-2 so the first dim step at delta=3 is visibly below normal)
-  const t = smoothstep01((delta - 2) / 6);
+  // delta >= 3: ramp (use delta-2 so the first dim step at delta=3 is visibly below normal).
+  // Deeper, slightly faster falloff so older thoughts visibly recede into the pocket
+  // (memory-fade) while the active row a user scrolls to still reads at full presence.
+  const t = smoothstep01((delta - 2) / 5);
   const startDark = 0.84;
-  const endDark = reduceMotion ? 0.52 : 0.38;
+  const endDark = reduceMotion ? 0.44 : 0.26;
   const startSun = 1;
-  const endSun = reduceMotion ? 0.72 : 0.58;
+  const endSun = reduceMotion ? 0.66 : 0.5;
   if (sunlightMode) {
     return startSun + (endSun - startSun) * t;
   }
@@ -54,8 +56,8 @@ export function streamFocusTimeOpacityBelowActive(delta: number, reduceMotion: b
   if (delta <= 2) {
     return 1;
   }
-  const t = smoothstep01((delta - 2) / 6);
-  const end = reduceMotion ? 0.62 : 0.48;
+  const t = smoothstep01((delta - 2) / 5);
+  const end = reduceMotion ? 0.5 : 0.34;
   return 1 + (end - 1) * t;
 }
 
