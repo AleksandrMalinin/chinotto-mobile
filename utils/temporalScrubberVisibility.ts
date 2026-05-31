@@ -11,9 +11,14 @@ export function isTemporalScrubberEligible(params: {
   readSheetOpen?: boolean;
   totalEntryCount: number;
   hasStreamRows: boolean;
+  /** Dev QA: surface the scrubber before `TEMPORAL_NAV_MIN_ENTRY_COUNT`. */
+  bypassMinEntryCount?: boolean;
 }): boolean {
   if (!params.active || params.searchActive || params.readSheetOpen || !params.hasStreamRows) {
     return false;
+  }
+  if (params.bypassMinEntryCount) {
+    return true;
   }
   return params.totalEntryCount >= TEMPORAL_NAV_MIN_ENTRY_COUNT;
 }

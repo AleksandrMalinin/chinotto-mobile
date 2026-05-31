@@ -21,20 +21,19 @@ import {
 } from '../monthRack';
 
 describe('monthRack', () => {
-  it('monthRackVisibleRowSlots caps at max visible rows', () => {
+  it('monthRackVisibleRowSlots reserves a static row window', () => {
     expect(monthRackVisibleRowSlots(0)).toBe(0);
-    expect(monthRackVisibleRowSlots(2)).toBe(2);
+    expect(monthRackVisibleRowSlots(2)).toBe(TEMPORAL_MONTH_RACK_MAX_VISIBLE_ROWS);
     expect(monthRackVisibleRowSlots(TEMPORAL_MONTH_RACK_MAX_VISIBLE_ROWS)).toBe(
       TEMPORAL_MONTH_RACK_MAX_VISIBLE_ROWS,
     );
     expect(monthRackVisibleRowSlots(12)).toBe(TEMPORAL_MONTH_RACK_MAX_VISIBLE_ROWS);
   });
 
-  it('monthRackScrollViewportHeight follows visible row slots', () => {
-    expect(monthRackScrollViewportHeight(2)).toBe(2 * TEMPORAL_MONTH_RACK_ROW_HEIGHT);
-    expect(monthRackScrollViewportHeight(12)).toBe(
-      TEMPORAL_MONTH_RACK_MAX_VISIBLE_ROWS * TEMPORAL_MONTH_RACK_ROW_HEIGHT,
-    );
+  it('monthRackScrollViewportHeight stays fixed regardless of history depth', () => {
+    const fixed = TEMPORAL_MONTH_RACK_MAX_VISIBLE_ROWS * TEMPORAL_MONTH_RACK_ROW_HEIGHT;
+    expect(monthRackScrollViewportHeight(2)).toBe(fixed);
+    expect(monthRackScrollViewportHeight(12)).toBe(fixed);
   });
 
   it('monthRackNeedsScrollFade only when history overflows viewport', () => {
@@ -82,9 +81,10 @@ describe('monthRack', () => {
     );
   });
 
-  it('monthRackExpandedHeight includes year header', () => {
+  it('monthRackExpandedHeight includes year header and the static row window', () => {
     expect(monthRackExpandedHeight(2)).toBe(
-      TEMPORAL_MONTH_RACK_YEAR_HEIGHT + 2 * TEMPORAL_MONTH_RACK_ROW_HEIGHT,
+      TEMPORAL_MONTH_RACK_YEAR_HEIGHT +
+        TEMPORAL_MONTH_RACK_MAX_VISIBLE_ROWS * TEMPORAL_MONTH_RACK_ROW_HEIGHT,
     );
   });
 

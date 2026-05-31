@@ -251,7 +251,8 @@ export function TemporalMonthRack({
     playToggleHaptic();
   }, [playToggleHaptic]);
 
-  if (monthKeys.length === 0) {
+  // Nothing to scrub with a single month — hide the rack entirely.
+  if (monthKeys.length <= 1) {
     return null;
   }
 

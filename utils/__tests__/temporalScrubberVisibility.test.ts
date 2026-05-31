@@ -53,6 +53,36 @@ describe('temporalScrubberVisibility', () => {
     ).toBe(false);
   });
 
+  it('bypassMinEntryCount surfaces the scrubber below the entry threshold (dev QA)', () => {
+    expect(
+      isTemporalScrubberEligible({
+        active: true,
+        searchActive: false,
+        totalEntryCount: 1,
+        hasStreamRows: true,
+        bypassMinEntryCount: true,
+      }),
+    ).toBe(true);
+    expect(
+      isTemporalScrubberEligible({
+        active: true,
+        searchActive: true,
+        totalEntryCount: 1,
+        hasStreamRows: true,
+        bypassMinEntryCount: true,
+      }),
+    ).toBe(false);
+    expect(
+      isTemporalScrubberEligible({
+        active: true,
+        searchActive: false,
+        totalEntryCount: 1,
+        hasStreamRows: false,
+        bypassMinEntryCount: true,
+      }),
+    ).toBe(false);
+  });
+
   it('shouldPeekTemporalScrubber hides at capture and when returning to top', () => {
     expect(shouldPeekTemporalScrubber(0, 0)).toBe(false);
     expect(shouldPeekTemporalScrubber(0, TEMPORAL_NAV_SCROLL_VELOCITY_PEEK)).toBe(false);

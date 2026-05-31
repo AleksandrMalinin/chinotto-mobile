@@ -31,7 +31,7 @@ export const TEMPORAL_RACK_BOTTOM_INSET = 12;
 /** Long-press on expanded rack year header to collapse (ms). */
 export const TEMPORAL_MONTH_RACK_COMPACT_LONG_PRESS_MS = 450;
 
-/** Max month rows visible in expanded rack before internal scroll. */
+/** Max month rows visible in expanded rack before internal scroll (static plaque, center + 2/2). */
 export const TEMPORAL_MONTH_RACK_MAX_VISIBLE_ROWS = 5;
 
 /** Year header above the month carousel. */

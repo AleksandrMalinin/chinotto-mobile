@@ -2,6 +2,10 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import { TemporalMonthRack, type TemporalMonthRackProps } from '../TemporalMonthRack';
 import {
+  TEMPORAL_MONTH_RACK_MAX_VISIBLE_ROWS,
+  TEMPORAL_MONTH_RACK_ROW_HEIGHT,
+} from '../../../constants/temporalNavigation';
+import {
   getTemporalRackCompact,
   setTemporalRackCompact,
 } from '../../../storage/temporalRackPrefs';
@@ -47,6 +51,11 @@ describe('TemporalMonthRack', () => {
     jest.mocked(setTemporalRackCompact).mockClear();
   });
 
+  it('renders nothing when only a single month is available', () => {
+    const { queryByTestId } = renderRack({ months: [months[0]] });
+    expect(queryByTestId('temporal-month-rack-host')).toBeNull();
+  });
+
   it('docks expanded rack on the trailing edge, vertically centered', () => {
     const { getByTestId } = renderRack();
 
@@ -88,7 +97,7 @@ describe('TemporalMonthRack', () => {
     expect(scrollArea.props.style).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          height: 2 * 32,
+          height: TEMPORAL_MONTH_RACK_MAX_VISIBLE_ROWS * TEMPORAL_MONTH_RACK_ROW_HEIGHT,
         }),
       ]),
     );

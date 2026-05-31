@@ -1634,12 +1634,15 @@ export function CaptureScreen({
     readSheetOpen: readEntry != null,
     totalEntryCount,
     hasStreamRows: streamDisplayEntries.length > 0,
+    bypassMinEntryCount: __DEV__,
   });
   const showTemporalScrubber =
     echoPageIndex === 0 &&
     temporalScrubberEligible &&
-    !temporalRackAtCapture &&
-    shouldPeekTemporalScrubber(streamScrollY, streamScrollVelocityY);
+    // Dev builds keep the scrubber visible regardless of scroll depth for QA.
+    (__DEV__ ||
+      (!temporalRackAtCapture &&
+        shouldPeekTemporalScrubber(streamScrollY, streamScrollVelocityY)));
   const referenceMonthKey = monthKeyFromIso(new Date().toISOString());
   const visibleMonthKey =
     streamActiveEntry != null

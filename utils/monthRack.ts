@@ -12,12 +12,16 @@ export type MonthRackRowVisual = {
   scale: number;
 };
 
-/** How many month rows the expanded rack shows at once (caps with history depth). */
+/**
+ * How many month rows the expanded rack reserves at once.
+ * Static size: the rack always reserves the full row window so the plaque
+ * height does not change with history depth (empty slots stay blank).
+ */
 export function monthRackVisibleRowSlots(monthCount: number): number {
   if (monthCount <= 0) {
     return 0;
   }
-  return Math.min(monthCount, TEMPORAL_MONTH_RACK_MAX_VISIBLE_ROWS);
+  return TEMPORAL_MONTH_RACK_MAX_VISIBLE_ROWS;
 }
 
 /** Scroll viewport height for the current month history depth. */
