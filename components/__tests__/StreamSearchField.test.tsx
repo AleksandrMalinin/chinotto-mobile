@@ -11,8 +11,8 @@ const safeAreaMetrics = {
 };
 
 describe('StreamSearchField', () => {
-  it('shows a search pill when collapsed', () => {
-    const { getByTestId, getByText, queryByTestId } = render(
+  it('shows a calm, on-demand glyph when collapsed (no resting search bar)', () => {
+    const { getByTestId, queryByText } = render(
       <SafeAreaProvider initialMetrics={safeAreaMetrics}>
         <StreamSearchField
           expanded={false}
@@ -28,11 +28,12 @@ describe('StreamSearchField', () => {
     );
 
     expect(getByTestId('stream-search-toggle')).toBeTruthy();
-    expect(getByText('Find a word in your stream')).toBeTruthy();
+    // Calm: the collapsed state no longer renders a full search-bar prompt.
+    expect(queryByText('Find a word in your stream')).toBeNull();
   });
 
-  it('enables glass shell when glassSticky', () => {
-    const { getByTestId, getByText } = render(
+  it('keeps the collapsed glyph minimal when glassSticky', () => {
+    const { getByTestId, queryByText } = render(
       <SafeAreaProvider initialMetrics={safeAreaMetrics}>
         <StreamSearchField
           glassSticky
@@ -49,7 +50,7 @@ describe('StreamSearchField', () => {
     );
 
     expect(getByTestId('stream-search-toggle')).toBeTruthy();
-    expect(getByText('Find a word in your stream')).toBeTruthy();
+    expect(queryByText('Find a word in your stream')).toBeNull();
   });
 
   it('renders search miss copy in the result meta line', () => {

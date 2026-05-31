@@ -182,7 +182,6 @@ function streamFocusTimeTargetOpacity(
 
 type StreamRowProps = {
   item: Entry;
-  isLastInSection: boolean;
   isNewest: boolean;
   /** Viewport highlight: flatIndex - activeIndex (opacity); typography stays `isNewest`-driven. */
   streamFocusDelta?: number;
@@ -243,7 +242,6 @@ function EntryBodyPreview({
 
 const RecentStreamRow = memo(function RecentStreamRowInner({
   item,
-  isLastInSection,
   isNewest,
   streamFocusDelta,
   streamFocusReduceMotion = false,
@@ -311,6 +309,13 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
     return () => anim.stop();
   }, [targetBodyOpacity, targetTimeOpacity, streamFocusReduceMotion, streamFocusOpacitySnap]);
 
+  /** Timestamps recede so the thought leads; sunlight mode keeps them legible. */
+  const restTimeOpacityFactor = t.sunlightMode ? 1 : 0.55;
+  const composedTimeOpacity = useMemo(
+    () => Animated.multiply(timeOpacityAnim.current!, restTimeOpacityFactor),
+    [restTimeOpacityFactor],
+  );
+
   const rowRef = useRef<View>(null);
   const swipeableRef = useRef<SwipeableRef | null>(null);
 
@@ -346,14 +351,7 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
   const rowContent = (
     <View
       ref={rowRef}
-      style={[
-        styles.rowOuter,
-        styles.rowOuterRelative,
-        !isLastInSection && {
-          borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: colors.streamDivider,
-        },
-      ]}
+      style={[styles.rowOuter, styles.rowOuterRelative]}
     >
       <Animated.View
         pointerEvents="none"
@@ -417,7 +415,9 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
                       : colors.fgDim
                     : colors.entryBody,
                   fontFamily: showNewest ? fonts.medium : body.fontFamily,
-                  fontSize: showNewest ? 17 : body.fontSize,
+                  // Newest thought echoes the composer (18px) — the thought you just wrote
+                  // visually rhymes with the input it came from.
+                  fontSize: showNewest ? 18 : body.fontSize,
                   lineHeight: showNewest ? 26 : body.lineHeight,
                   letterSpacing: showNewest ? 0.17 : 0.16,
                   marginRight: t.spacing.sm,
@@ -432,7 +432,7 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
                   fontFamily: t.sunlightMode ? fonts.medium : fonts.regular,
                   fontSize: 11,
                   lineHeight: 15,
-                  opacity: timeOpacityAnim.current!,
+                  opacity: composedTimeOpacity,
                 },
               ]}
             >
@@ -1103,12 +1103,12 @@ function RecentListInner({
       style={[styles.list, { paddingTop: listPaddingTop }]}
       onLayout={streamViewportFocusEnabled ? onListLayout : undefined}
     >
-      {flatItems.map((item, index) => {
+      {flatItems.map((item) => {
         if (item.kind === 'header') {
           return (
             <View
               key={item.key}
-              style={item.sectionIndex > 0 ? { marginTop: t.spacing.md } : undefined}
+              style={item.sectionIndex > 0 ? { marginTop: t.spacing.lg } : undefined}
             >
               <Text
                 accessibilityRole="header"
@@ -1118,10 +1118,13 @@ function RecentListInner({
                     paddingHorizontal: streamGutter,
                     color: colors.sectionFg,
                     fontFamily: meta.fontFamily,
-                    fontSize: meta.fontSize,
-                    lineHeight: 18,
-                    letterSpacing: 0.22,
-                    marginBottom: 10,
+                    // Quiet time-marker, not a section header: smaller, less tracking, and it hugs
+                    // its group (more air above the day, less below the label).
+                    fontSize: 12,
+                    lineHeight: 16,
+                    letterSpacing: 0.08,
+                    marginBottom: 6,
+                    opacity: t.sunlightMode ? 1 : 0.7,
                   },
                 ]}
               >
@@ -1130,8 +1133,6 @@ function RecentListInner({
             </View>
           );
         }
-        const isLastInSection =
-          flatItems[index + 1]?.kind === 'header' || flatItems[index + 1] == null;
         const streamFocusDelta =
           streamViewportFocusEnabled && activeFlatIndex >= 0
             ? item.flatIndex - activeFlatIndex
@@ -1146,7 +1147,6 @@ function RecentListInner({
           >
             <RecentStreamRow
               item={item.entry}
-              isLastInSection={isLastInSection}
               isNewest={item.entry.id === newestShownId}
               streamFocusDelta={streamFocusDelta}
               streamFocusReduceMotion={reduceMotion}
@@ -1243,7 +1243,7 @@ const styles = StyleSheet.create({
    */
   entryBlock: {
     width: '100%',
-    paddingVertical: 15,
+    paddingVertical: 18,
   },
   entryRow: {
     width: '100%',

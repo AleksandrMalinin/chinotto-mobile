@@ -1639,10 +1639,8 @@ export function CaptureScreen({
   const showTemporalScrubber =
     echoPageIndex === 0 &&
     temporalScrubberEligible &&
-    // Dev builds keep the scrubber visible regardless of scroll depth for QA.
-    (__DEV__ ||
-      (!temporalRackAtCapture &&
-        shouldPeekTemporalScrubber(streamScrollY, streamScrollVelocityY)));
+    !temporalRackAtCapture &&
+    shouldPeekTemporalScrubber(streamScrollY, streamScrollVelocityY);
   const referenceMonthKey = monthKeyFromIso(new Date().toISOString());
   const visibleMonthKey =
     streamActiveEntry != null

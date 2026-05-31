@@ -38,7 +38,6 @@ export type StreamSearchFieldProps = {
 const SHELL_RADIUS = 20;
 const BORDER_RING = 1;
 const CAPSULE_ROW_HEIGHT = 44;
-const FIELD_LINE_HEIGHT = 20;
 const SEARCH_PLACEHOLDER = 'Type a word or phrase…';
 
 type GlassCapsuleProps = {
@@ -241,24 +240,6 @@ export const StreamSearchField = forwardRef<TextInputType, StreamSearchFieldProp
       </>
     );
 
-    const collapsedField = (
-      <Text
-        style={[
-          styles.collapsedHint,
-          {
-            color: colors.searchPlaceholder,
-            fontFamily: fonts.regular,
-            fontSize: meta.fontSize,
-            lineHeight: 20,
-            letterSpacing: 0.2,
-          },
-        ]}
-        numberOfLines={1}
-      >
-        Find a word in your stream
-      </Text>
-    );
-
     return (
       <View style={styles.wrap}>
         {expanded ? (
@@ -269,18 +250,22 @@ export const StreamSearchField = forwardRef<TextInputType, StreamSearchFieldProp
             </GlassCapsule>
           </View>
         ) : (
-          <Pressable
-            testID="stream-search-toggle"
-            accessibilityLabel="Search thoughts"
-            accessibilityRole="button"
-            onPress={onPressExpand}
-            style={({ pressed }) => [styles.host, pressed && styles.hostPressed]}
-          >
-            <GlassCapsule active={shellActive} glassSticky={glassSticky}>
-              <StreamSearchGlyph color={glyphColor} active={shellActive} />
-              {collapsedField}
-            </GlassCapsule>
-          </Pressable>
+          // Calm, on-demand: at rest search is just a quiet glyph, not a full search bar.
+          <View style={styles.collapsedRow}>
+            <Pressable
+              testID="stream-search-toggle"
+              accessibilityLabel="Search thoughts"
+              accessibilityRole="button"
+              hitSlop={12}
+              onPress={onPressExpand}
+              style={({ pressed }) => [
+                styles.collapsedToggle,
+                pressed && styles.collapsedTogglePressed,
+              ]}
+            >
+              <StreamSearchGlyph color={colors.muted} size={15} />
+            </Pressable>
+          </View>
         )}
         {expanded && resultLabel != null && resultLabel !== '' ? (
           <Text
@@ -348,12 +333,19 @@ const styles = StyleSheet.create({
     minHeight: CAPSULE_ROW_HEIGHT,
     gap: 10,
   },
-  collapsedHint: {
-    flex: 1,
-    paddingRight: 4,
-    lineHeight: FIELD_LINE_HEIGHT,
-    textAlignVertical: 'center',
-    includeFontPadding: false,
+  /** At rest, search recedes to a quiet right-aligned glyph (revealed on demand). */
+  collapsedRow: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  collapsedToggle: {
+    padding: 6,
+    borderRadius: 16,
+    opacity: 0.5,
+  },
+  collapsedTogglePressed: {
+    opacity: 0.8,
   },
   inputWrap: {
     flex: 1,
