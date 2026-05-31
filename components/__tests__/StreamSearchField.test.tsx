@@ -91,8 +91,8 @@ describe('StreamSearchField', () => {
     );
 
     expect(getByTestId('stream-search-input')).toBeTruthy();
-    expect(queryByTestId('stream-search-placeholder')).toBeNull();
     expect(getByText('rest')).toBeTruthy();
+    expect(queryByTestId('stream-search-placeholder')).toBeNull();
     expect(getByText('2 thoughts')).toBeTruthy();
     expect(getByTestId('stream-search-result-label')).toBeTruthy();
   });

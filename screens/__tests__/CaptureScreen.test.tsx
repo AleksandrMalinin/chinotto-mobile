@@ -1,6 +1,6 @@
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import * as Haptics from 'expo-haptics';
-import { TextInput } from 'react-native';
+import { Alert, TextInput } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import * as entryRepository from '../../storage/entryRepository';
@@ -12,6 +12,10 @@ import * as firebaseConfig from '../../sync/firebaseConfig';
 import * as syncQueueModule from '../../sync/syncQueue';
 import * as firestoreMirror from '../../sync/firestoreSyncAccessMirror';
 import * as devMenuModule from '../../dev/showDevMenu';
+import {
+  DELETE_THOUGHT_ALERT_MESSAGE,
+  DELETE_THOUGHT_ALERT_TITLE,
+} from '../../utils/confirmDeleteThought';
 
 const mockOnAuthStateChanged = jest.fn();
 
@@ -395,6 +399,42 @@ describe('CaptureScreen', () => {
     });
   });
 
+  it('does not re-enable composer autoFocus after closing the read sheet', async () => {
+    const remoteEntry = {
+      id: 'row-1',
+      text: 'Recall me',
+      createdAt: '2025-03-10T16:00:00.000Z',
+    };
+    jest.mocked(entryRepository.getRecentEntries).mockResolvedValueOnce([remoteEntry]);
+
+    const { findByTestId, getByTestId, queryByTestId, getByLabelText } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <CaptureScreen />
+      </SafeAreaProvider>
+    );
+
+    fireEvent.press(await findByTestId('recent-entry-row-1'));
+
+    await waitFor(() => {
+      expect(getByTestId('entry-read-sheet')).toBeTruthy();
+    });
+    expect(getByTestId('capture-input').props.autoFocus).toBe(false);
+
+    await act(async () => {
+      fireEvent.press(getByLabelText('Dismiss'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await waitFor(
+      () => {
+        expect(queryByTestId('entry-read-sheet')).toBeNull();
+      },
+      { timeout: 3000 },
+    );
+    expect(getByTestId('capture-input').props.autoFocus).toBe(false);
+  });
+
   it('keeps input text when saveEntry fails', async () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     jest.mocked(entryRepository.saveEntry).mockRejectedValueOnce(new Error('disk full'));
@@ -436,46 +476,29 @@ describe('CaptureScreen', () => {
     expect(queryByTestId('stream-search-toggle')).toBeNull();
   });
 
-  it('shows Write peek after the stream scrolls past the capture area', async () => {
+  it('hides the system scroll indicator on the stream list', async () => {
     jest
       .mocked(entryRepository.getRecentEntries)
       .mockImplementation(() => Promise.resolve([STREAM_SEARCH_SEED_ENTRY]));
-    const { findByTestId, getByTestId, queryByTestId } = render(
+    const { findByTestId, getByTestId } = render(
       <SafeAreaProvider initialMetrics={safeAreaMetrics}>
         <CaptureScreen />
       </SafeAreaProvider>
     );
 
     await findByTestId('capture-input');
-    await waitFor(() => {
-      expect(getByTestId('capture-stream-scroll')).toBeTruthy();
-    });
-    const scrollView = getByTestId('capture-stream-scroll');
-    fireEvent.scroll(scrollView, {
-      nativeEvent: {
-        contentOffset: { x: 0, y: 0 },
-        layoutMeasurement: { height: 600, width: 390 },
-        contentSize: { height: 2000, width: 390 },
-      },
-    });
-    fireEvent.scroll(scrollView, {
-      nativeEvent: {
-        contentOffset: { x: 0, y: 200 },
-        layoutMeasurement: { height: 600, width: 390 },
-        contentSize: { height: 2000, width: 390 },
-      },
-    });
-
-    await waitFor(() => {
-      expect(queryByTestId('capture-chrome-peek')).toBeTruthy();
-    });
+    expect(getByTestId('capture-stream-scroll').props.showsVerticalScrollIndicator).toBe(false);
   });
 
-  it('Write peek scrolls toward capture and focuses the field', async () => {
+  it('confirms before deleting a stream entry', async () => {
     jest
       .mocked(entryRepository.getRecentEntries)
       .mockImplementation(() => Promise.resolve([STREAM_SEARCH_SEED_ENTRY]));
-    const focusSpy = jest.spyOn(TextInput.prototype, 'focus');
+    let alertButtons: { text: string; onPress?: () => void }[] = [];
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
+      alertButtons = buttons as { text: string; onPress?: () => void }[];
+    });
+
     try {
       const { findByTestId, getByTestId } = render(
         <SafeAreaProvider initialMetrics={safeAreaMetrics}>
@@ -483,32 +506,27 @@ describe('CaptureScreen', () => {
         </SafeAreaProvider>
       );
 
-      await findByTestId('capture-input');
-      const scrollView = getByTestId('capture-stream-scroll');
-      fireEvent.scroll(scrollView, {
-        nativeEvent: {
-          contentOffset: { x: 0, y: 0 },
-          layoutMeasurement: { height: 600, width: 390 },
-          contentSize: { height: 2000, width: 390 },
-        },
+      await findByTestId(`recent-entry-${STREAM_SEARCH_SEED_ENTRY.id}`);
+      fireEvent(getByTestId(`recent-entry-${STREAM_SEARCH_SEED_ENTRY.id}`), 'accessibilityAction', {
+        nativeEvent: { actionName: 'delete' },
       });
-      fireEvent.scroll(scrollView, {
-        nativeEvent: {
-          contentOffset: { x: 0, y: 200 },
-          layoutMeasurement: { height: 600, width: 390 },
-          contentSize: { height: 2000, width: 390 },
-        },
-      });
+
       await waitFor(() => {
-        expect(getByTestId('capture-chrome-peek')).toBeTruthy();
+        expect(alertSpy).toHaveBeenCalledWith(
+          DELETE_THOUGHT_ALERT_TITLE,
+          DELETE_THOUGHT_ALERT_MESSAGE,
+          expect.any(Array),
+        );
       });
-      const callsBefore = focusSpy.mock.calls.length;
-      fireEvent.press(getByTestId('capture-chrome-peek'));
+      expect(jest.mocked(entryRepository.deleteEntry)).not.toHaveBeenCalled();
+
+      alertButtons.find((b) => b.text === 'Delete')?.onPress?.();
+
       await waitFor(() => {
-        expect(focusSpy.mock.calls.length).toBeGreaterThan(callsBefore);
+        expect(jest.mocked(entryRepository.deleteEntry)).toHaveBeenCalledWith('search-seed');
       });
     } finally {
-      focusSpy.mockRestore();
+      alertSpy.mockRestore();
     }
   });
 
@@ -531,7 +549,42 @@ describe('CaptureScreen', () => {
 
     fireEvent.press(getByTestId('stream-search-toggle'));
     expect(getByTestId('stream-search-input')).toBeTruthy();
+    expect(getByTestId('capture-input').props.autoFocus).toBe(false);
     expect(jest.mocked(Haptics.impactAsync)).toHaveBeenCalledWith(Haptics.ImpactFeedbackStyle.Light);
+  });
+
+  it('keeps focus on search input after a transient blur while typing', async () => {
+    jest.useFakeTimers();
+    try {
+      jest
+        .mocked(entryRepository.getRecentEntries)
+        .mockImplementation(() => Promise.resolve([STREAM_SEARCH_SEED_ENTRY]));
+      const { getByTestId, findByTestId } = render(
+        <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+          <CaptureScreen />
+        </SafeAreaProvider>
+      );
+
+      await findByTestId('capture-input');
+      await waitFor(() => {
+        expect(getByTestId('stream-search-toggle')).toBeTruthy();
+      });
+      fireEvent.press(getByTestId('stream-search-toggle'));
+      fireEvent(getByTestId('stream-search-input'), 'focus');
+      fireEvent(getByTestId('stream-search-input'), 'blur');
+      fireEvent.changeText(getByTestId('stream-search-input'), 'needle');
+
+      expect(getByTestId('stream-search-input')).toBeTruthy();
+      expect(getByTestId('capture-input').props.autoFocus).toBe(false);
+
+      await act(async () => {
+        jest.advanceTimersByTime(250);
+      });
+
+      expect(getByTestId('stream-search-input')).toBeTruthy();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('debounces searchEntriesForRecall when search is expanded', async () => {

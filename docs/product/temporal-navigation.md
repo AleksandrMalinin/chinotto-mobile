@@ -3,7 +3,7 @@
 Product and implementation plan for **memory-oriented** time navigation in the capture stream — without folders, calendars, or PKM chrome.
 
 **Status:** In progress (`feat/temporal-navigation`).  
-**Related:** [`product-spec.md`](product-spec.md), [`../../AGENTS.md`](../../AGENTS.md).
+**Related:** [`product-spec.md`](product-spec.md), [`spatial-navigation.md`](spatial-navigation.md), [`../../AGENTS.md`](../../AGENTS.md).
 
 ---
 
@@ -58,8 +58,8 @@ Same month label in both places. Scrubber is **velocity-aware** and **non-blocki
 2. **Stream-first** — uninterrupted list; overlay uses `pointerEvents="box-none"` except on the pill.
 3. **Human labels** — day headers stay as today (`groupEntriesByDate`); scrubber uses **month** (+ year when needed).
 4. **Calm copy** — “12 thoughts” not “12 notes”; no “archive”, “manage”, “organize”.
-5. **Coexist with Write peek** — scrubber upper-trailing; “Write” bottom-trailing (existing).
-6. **Search exclusion** — temporal chrome off when `Find in stream` is active.
+5. **Trailing chrome** — expanded rack mid-trailing for scrub; **minimized** rack bottom-trailing (year + month, thumb zone) so it does not float lost in the viewport.
+6. **Search exclusion** — temporal chrome off when `Find in stream` is active or a thought sheet is open.
 
 ---
 
@@ -67,9 +67,10 @@ Same month label in both places. Scrubber is **velocity-aware** and **non-blocki
 
 ### Month rack (passive → scrub)
 
-- **Passive:** trailing vertical rack (3+ visible months, center = active) fades in when scrolling; follows stream month when not scrubbing.
-- **Scrub:** drag rack → snap by month, light haptic per month boundary; on release → jump stream to newest thought in that month.
-- **Tap** active (center) month → temporal map sheet (phase C).
+- **Passive:** trailing vertical rack fades in mid-trailing; expanded height adapts to month history (≤5 rows).
+- **Scrub:** vertical scroll with snap — natural one-finger scrub along the list.
+- **Tap** active (center) month → temporal map sheet.
+- **Minimized vs expanded (user choice):** long press year → bottom-anchored pill with **year + month** and stronger border/shadow (persisted); tap pill → full rack. Stream date headers remain the primary in-content orientation.
 
 ### Temporal map sheet
 

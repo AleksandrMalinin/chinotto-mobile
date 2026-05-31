@@ -6,6 +6,7 @@ import { isFirebaseSyncConfigured } from '../sync/firebaseConfig';
 import { addFirestoreIngestSuppressionWithDb } from '../sync/ingestSuppression';
 import { insertPendingSyncItem, removePendingSyncItemsForEntry } from '../sync/syncQueue';
 import { enqueueSyncTombstoneWithDb } from '../sync/tombstoneOutbox';
+import { deleteEntryEngagement, recordEntryEdited } from './entryEngagementRepository';
 import { getDatabase } from './db';
 import { runSerializedDb } from './runSerializedDb';
 
@@ -46,9 +47,9 @@ export async function updateEntryText(entryId: string, text: string): Promise<En
     throw new Error('Cannot save empty entry');
   }
 
-  return runSerializedDb(async () => {
+  const updated = await runSerializedDb(async () => {
     const db = await getDatabase();
-    let updated: Entry | null = null;
+    let next: Entry | null = null;
     await db.withTransactionAsync(async () => {
       const row = await db.getFirstAsync<{ id: string; createdAt: string }>(
         `SELECT id, created_at AS createdAt FROM entries WHERE id = ?`,
@@ -61,15 +62,17 @@ export async function updateEntryText(entryId: string, text: string): Promise<En
       if (updateRes.changes === 0) {
         throw new Error('Entry not found');
       }
-      updated = { id: row.id, text: trimmed, createdAt: row.createdAt };
+      next = { id: row.id, text: trimmed, createdAt: row.createdAt };
       await removePendingSyncItemsForEntry(db, entryId);
-      await insertPendingSyncItem(db, updated);
+      await insertPendingSyncItem(db, next);
     });
-    if (updated == null) {
+    if (next == null) {
       throw new Error('Entry not found');
     }
-    return updated;
+    return next;
   });
+  await recordEntryEdited(updated.id);
+  return updated;
 }
 
 /**
@@ -85,6 +88,7 @@ export async function deleteEntry(entryId: string): Promise<void> {
         throw new Error('Entry not found');
       }
       await db.runAsync('DELETE FROM entries WHERE id = ?', entryId);
+      await db.runAsync('DELETE FROM entry_engagement WHERE entry_id = ?', entryId);
       await removePendingSyncItemsForEntry(db, entryId);
       if (configured) {
         await addFirestoreIngestSuppressionWithDb(db, entryId);
@@ -110,6 +114,7 @@ export async function applyRemoteTombstoneDeletes(entryIds: string[]): Promise<n
         if (res.changes > 0) {
           removed += 1;
         }
+        await db.runAsync('DELETE FROM entry_engagement WHERE entry_id = ?', id);
         await db.runAsync('DELETE FROM firestore_ingest_suppressed_ids WHERE id = ?', id);
       }
     });

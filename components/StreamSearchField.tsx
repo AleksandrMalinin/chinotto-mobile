@@ -156,121 +156,133 @@ export const StreamSearchField = forwardRef<TextInputType, StreamSearchFieldProp
         ? 'rgba(255,255,255,0.12)'
         : 'rgba(0,0,0,0.07)';
 
-    if (!expanded) {
-      return (
-        <GlassCapsule
-          active={false}
-          glassSticky={glassSticky}
-          onPress={onPressExpand}
-          testID="stream-search-toggle"
-          accessibilityLabel="Search thoughts"
-        >
-          <StreamSearchGlyph color={glyphColor} active={false} />
-          <Text
+    const expandedField = (
+      <>
+        <View style={styles.inputWrap}>
+          <TextInput
+            ref={ref}
+            testID="stream-search-input"
+            value={value}
+            onChangeText={onChangeText}
+            onFocus={onFocus}
+            onBlur={onBlur}
+            placeholder=""
+            accessibilityLabel="Search thoughts"
+            accessibilityHint={SEARCH_PLACEHOLDER}
+            multiline={false}
             style={[
-              styles.collapsedHint,
+              styles.input,
+              inputStyle,
               {
-                color: colors.searchPlaceholder,
                 fontFamily: fonts.regular,
-                fontSize: meta.fontSize,
-                lineHeight: 20,
-                letterSpacing: 0.2,
+                color: isIosGhostInput ? 'transparent' : colors.fg,
               },
             ]}
-            numberOfLines={1}
-          >
-            Find a word in your stream
-          </Text>
-        </GlassCapsule>
-      );
-    }
+            keyboardAppearance={t.isDark ? 'dark' : 'light'}
+            returnKeyType="search"
+            selectionColor={colors.accent}
+            cursorColor={colors.accent}
+            autoCorrect={false}
+            autoCapitalize="none"
+            showSoftInputOnFocus
+            scrollEnabled={false}
+            underlineColorAndroid="transparent"
+            {...(Platform.OS === 'ios' ? { clearButtonMode: 'while-editing' as const } : {})}
+          />
+          {isIosGhostInput ? (
+            <View pointerEvents="none" style={displayBandStyle}>
+              <Text
+                testID={
+                  value.length === 0 ? 'stream-search-placeholder' : 'stream-search-display'
+                }
+                numberOfLines={1}
+                style={[
+                  displayTextStyle,
+                  {
+                    color: value.length > 0 ? colors.fg : colors.searchPlaceholder,
+                    fontFamily: fonts.regular,
+                  },
+                ]}
+              >
+                {value.length > 0 ? value : SEARCH_PLACEHOLDER}
+              </Text>
+            </View>
+          ) : value.length === 0 ? (
+            <View pointerEvents="none" style={placeholderMaskStyle}>
+              <Text
+                testID="stream-search-placeholder"
+                numberOfLines={1}
+                style={[
+                  displayTextStyle,
+                  {
+                    color: colors.searchPlaceholder,
+                    fontFamily: fonts.regular,
+                  },
+                ]}
+              >
+                {SEARCH_PLACEHOLDER}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+        <Pressable
+          testID="stream-search-collapse"
+          accessibilityLabel="Close search"
+          accessibilityRole="button"
+          hitSlop={8}
+          onPress={onPressClose}
+          style={({ pressed }) => [
+            styles.trailingControl,
+            { backgroundColor: pressed ? closeFill : 'rgba(255,255,255,0.06)' },
+          ]}
+        >
+          <Text style={[styles.closeGlyph, { color: colors.metaFg }]}>×</Text>
+        </Pressable>
+      </>
+    );
+
+    const collapsedField = (
+      <Text
+        style={[
+          styles.collapsedHint,
+          {
+            color: colors.searchPlaceholder,
+            fontFamily: fonts.regular,
+            fontSize: meta.fontSize,
+            lineHeight: 20,
+            letterSpacing: 0.2,
+          },
+        ]}
+        numberOfLines={1}
+      >
+        Find a word in your stream
+      </Text>
+    );
 
     return (
       <View style={styles.wrap}>
-        <GlassCapsule active={shellActive} glassSticky={glassSticky}>
-          <StreamSearchGlyph color={glyphColor} active={shellActive} />
-          <View style={styles.inputWrap}>
-            <TextInput
-              ref={ref}
-              testID="stream-search-input"
-              value={value}
-              onChangeText={onChangeText}
-              onFocus={onFocus}
-              onBlur={onBlur}
-              placeholder=""
-              accessibilityLabel="Search thoughts"
-              accessibilityHint={SEARCH_PLACEHOLDER}
-              multiline={false}
-              style={[
-                styles.input,
-                inputStyle,
-                {
-                  fontFamily: fonts.regular,
-                  color: isIosGhostInput ? 'transparent' : colors.fg,
-                },
-              ]}
-              keyboardAppearance={t.isDark ? 'dark' : 'light'}
-              returnKeyType="search"
-              selectionColor={colors.accent}
-              cursorColor={colors.accent}
-              autoCorrect={false}
-              autoCapitalize="none"
-              showSoftInputOnFocus
-              scrollEnabled={false}
-              underlineColorAndroid="transparent"
-              {...(Platform.OS === 'ios' ? { clearButtonMode: 'while-editing' as const } : {})}
-            />
-            {isIosGhostInput ? (
-              <View pointerEvents="none" style={displayBandStyle}>
-                <Text
-                  testID={
-                    value.length === 0 ? 'stream-search-placeholder' : 'stream-search-display'
-                  }
-                  numberOfLines={1}
-                  style={[
-                    displayTextStyle,
-                    {
-                      color: value.length > 0 ? colors.fg : colors.searchPlaceholder,
-                      fontFamily: fonts.regular,
-                    },
-                  ]}
-                >
-                  {value.length > 0 ? value : SEARCH_PLACEHOLDER}
-                </Text>
-              </View>
-            ) : value.length === 0 ? (
-              <View pointerEvents="none" style={placeholderMaskStyle}>
-                <Text
-                  testID="stream-search-placeholder"
-                  numberOfLines={1}
-                  style={[
-                    displayTextStyle,
-                    {
-                      color: colors.searchPlaceholder,
-                      fontFamily: fonts.regular,
-                    },
-                  ]}
-                >
-                  {SEARCH_PLACEHOLDER}
-                </Text>
-              </View>
-            ) : null}
+        {expanded ? (
+          <View style={styles.host}>
+            <GlassCapsule active={shellActive} glassSticky={glassSticky}>
+              <StreamSearchGlyph color={glyphColor} active={shellActive} />
+              {expandedField}
+            </GlassCapsule>
           </View>
+        ) : (
           <Pressable
-            testID="stream-search-collapse"
-            accessibilityLabel="Close search"
+            testID="stream-search-toggle"
+            accessibilityLabel="Search thoughts"
             accessibilityRole="button"
-            hitSlop={8}
-            onPress={onPressClose}
-            style={({ pressed }) => [
-              styles.trailingControl,
-              { backgroundColor: pressed ? closeFill : 'rgba(255,255,255,0.06)' },
-            ]}
+            onPress={onPressExpand}
+            style={({ pressed }) => [styles.host, pressed && styles.hostPressed]}
           >
-            <Text style={[styles.closeGlyph, { color: colors.metaFg }]}>×</Text>
+            <GlassCapsule active={shellActive} glassSticky={glassSticky}>
+              <StreamSearchGlyph color={glyphColor} active={shellActive} />
+              {collapsedField}
+            </GlassCapsule>
           </Pressable>
-        </GlassCapsule>
-        {resultLabel != null && resultLabel !== '' ? (
+        )}
+        {expanded && resultLabel != null && resultLabel !== '' ? (
           <Text
             testID="stream-search-result-label"
             accessibilityRole="text"

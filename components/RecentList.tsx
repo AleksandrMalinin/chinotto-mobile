@@ -23,7 +23,7 @@ import {
 } from 'react-native';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
-import Swipeable from 'react-native-gesture-handler/Swipeable';
+import Swipeable, { type Swipeable as SwipeableRef } from 'react-native-gesture-handler/Swipeable';
 
 import type { Entry } from '../types/entry';
 import {
@@ -38,22 +38,28 @@ import { formatEntryTime, groupEntriesByDate } from '../utils/groupEntriesByDate
 import { splitTextBySearchQuery } from '../utils/splitTextBySearchQuery';
 import {
   findActiveFlatIndex,
-  findActiveFlatIndexFromWindowMeasurements,
   streamFocusBodyOpacityBelowActive,
   streamFocusTimeOpacityBelowActive,
   type StreamFocusWindowBox,
 } from '../utils/streamFocusTier';
+import { motion } from '../constants/motion';
+import {
+  streamFocusOpacityDurationMs,
+  STREAM_FOCUS_SCROLL_SNAP_VELOCITY,
+  STREAM_ROW_PRESS_IN_MS,
+  STREAM_ROW_PRESS_OUT_MS,
+} from '../constants/streamFocus';
+import { confirmDeleteThought } from '../utils/confirmDeleteThought';
 import { streamScrollContentYForRow } from '../utils/streamScrollToEntry';
 import { StreamFlowPanel } from './StreamFlowPanel';
 import type { ThoughtSheetOpenAnchor } from './thoughtSheet/detents';
-import { measureThoughtSheetOpenAnchor } from './thoughtSheet/measureOpenAnchor';
 
 /**
  * Time-grouped stream — section labels (`.stream-section-title`), entry rows with
  * hairline separators like desktop `.entry-row` / `var(--border)`, plus inline time.
  * Each row shows **two lines** of body text (ellipsis); full text opens via `onEntryPress`.
  *
- * Delete: **swipe left** past threshold (reveals delete track, commits on open) — intentional gesture only;
+ * Delete: **swipe left** to reveal delete, then tap Delete (capture screen confirms) — intentional gesture only;
  * local-first + tombstone queue (see `deleteEntry`).
  */
 export type RecentListProps = {
@@ -102,6 +108,10 @@ export type RecentListProps = {
   streamScrollYRef?: RefObject<number>;
   onScrollToEntryOffset?: (contentOffsetY: number) => void;
   onScrollToEntryComplete?: () => void;
+  /** Skip focus cross-fade while paginating (opacity snaps to targets). */
+  streamLoadingMore?: boolean;
+  /** Scroll velocity — snap focus opacity while the list is moving. */
+  streamScrollVelocityY?: number;
 };
 
 const DELETE_ACTION_WIDTH = 76;
@@ -119,21 +129,18 @@ function measureInWindowPromise(view: View | null): Promise<StreamFocusWindowBox
 export const STREAM_HIGHLIGHT_CLEAR_AFTER_MS = 0;
 
 /** Staged empty-hint entrance — fade + slight lift. */
-const EMPTY_HINT_ENTRANCE_MS = 1100;
-const EMPTY_HINT_STAGGER_MS = 280;
-const EMPTY_HINT_Y_OFFSET = 7;
+const EMPTY_HINT_ENTRANCE_MS = motion.stream.emptyHintEntrance;
+const EMPTY_HINT_STAGGER_MS = motion.stream.emptyHintStagger;
+const EMPTY_HINT_Y_OFFSET = motion.stream.emptyHintYOffset;
 const EMPTY_HINT_EASING = Easing.out(Easing.cubic);
 /** Let stream illustration lead through first beats before copy fades in. */
-const EMPTY_AMBIENT_BEFORE_COPY_MS = 1150;
-const EMPTY_AMBIENT_SUPPRESS_FADE_MS = 340;
+const EMPTY_AMBIENT_BEFORE_COPY_MS = motion.stream.emptyAmbientBeforeCopy;
+const EMPTY_AMBIENT_SUPPRESS_FADE_MS = motion.stream.emptyAmbientSuppressFade;
 
 /** Empty-stream headline — step up from body; pairs with desktop `.stream-empty-title` gradient. */
 const EMPTY_STREAM_HEADLINE_FONT_SIZE = 19;
 const EMPTY_STREAM_HEADLINE_LINE_HEIGHT = 27;
 const EMPTY_STREAM_HEADLINE_LETTER_SPACING = -0.38;
-
-/** Cross-fade when viewport highlight moves (ms); 0 when reduce-motion. */
-const STREAM_FOCUS_OPACITY_DURATION_MS = 200;
 
 /** Pressed stream row — full-bleed tint, softer than a card fill. */
 function entryPressedBackground(isDark: boolean): string {
@@ -180,6 +187,7 @@ type StreamRowProps = {
   /** Viewport highlight: flatIndex - activeIndex (opacity); typography stays `isNewest`-driven. */
   streamFocusDelta?: number;
   streamFocusReduceMotion?: boolean;
+  streamFocusOpacitySnap?: boolean;
   searchHighlightQuery?: string;
   /** Matches `CaptureScreen` scroll `paddingHorizontal` so rows can full-bleed under press/trace. */
   streamGutter: number;
@@ -239,12 +247,13 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
   isNewest,
   streamFocusDelta,
   streamFocusReduceMotion = false,
+  streamFocusOpacitySnap = false,
   searchHighlightQuery,
   streamGutter,
   onEntryPress,
   onEntryDelete,
 }: StreamRowProps) {
-  const [pressed, setPressed] = useState(false);
+  const pressShade = useRef(new Animated.Value(0)).current;
   const t = useAppTheme();
   const { colors, typography, isDark } = t;
   const { body } = typography;
@@ -279,7 +288,10 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
   }
 
   useEffect(() => {
-    const duration = streamFocusReduceMotion ? 0 : STREAM_FOCUS_OPACITY_DURATION_MS;
+    const duration = streamFocusOpacityDurationMs(
+      streamFocusReduceMotion,
+      streamFocusOpacitySnap,
+    );
     const easing = Easing.out(Easing.cubic);
     const anim = Animated.parallel([
       Animated.timing(bodyOpacityAnim.current!, {
@@ -297,24 +309,38 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
     ]);
     anim.start();
     return () => anim.stop();
-  }, [targetBodyOpacity, targetTimeOpacity, streamFocusReduceMotion]);
+  }, [targetBodyOpacity, targetTimeOpacity, streamFocusReduceMotion, streamFocusOpacitySnap]);
 
   const rowRef = useRef<View>(null);
+  const swipeableRef = useRef<SwipeableRef | null>(null);
 
-  const onPressIn = useCallback(() => {
-    setPressed(true);
-  }, []);
-  const onPressOut = useCallback(() => {
-    setPressed(false);
-  }, []);
-
-  const handlePress = useCallback(() => {
-    if (onEntryPress == null) {
+  const requestEntryDelete = useCallback(() => {
+    if (onEntryDelete == null) {
       return;
     }
-    measureThoughtSheetOpenAnchor(rowRef.current, (anchor) => {
-      onEntryPress(item, anchor);
-    });
+    confirmDeleteThought(
+      () => onEntryDelete(item),
+      () => swipeableRef.current?.close(),
+    );
+  }, [item, onEntryDelete]);
+
+  const onPressIn = useCallback(() => {
+    Animated.timing(pressShade, {
+      toValue: 1,
+      duration: STREAM_ROW_PRESS_IN_MS,
+      useNativeDriver: true,
+    }).start();
+  }, [pressShade]);
+  const onPressOut = useCallback(() => {
+    Animated.timing(pressShade, {
+      toValue: 0,
+      duration: STREAM_ROW_PRESS_OUT_MS,
+      useNativeDriver: true,
+    }).start();
+  }, [pressShade]);
+
+  const handlePress = useCallback(() => {
+    onEntryPress?.(item, null);
   }, [item, onEntryPress]);
 
   const rowContent = (
@@ -329,23 +355,24 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
         },
       ]}
     >
-      {pressed ? (
-        <View
-          pointerEvents="none"
-          importantForAccessibility="no"
-          style={[
-            styles.streamRowPressShade,
-            { backgroundColor: entryPressedBackground(isDark) },
-          ]}
-        />
-      ) : null}
+      <Animated.View
+        pointerEvents="none"
+        importantForAccessibility="no"
+        style={[
+          styles.streamRowPressShade,
+          {
+            backgroundColor: entryPressedBackground(isDark),
+            opacity: pressShade,
+          },
+        ]}
+      />
       <Pressable
         accessible={true}
         accessibilityLabel={`${item.text}, ${formatEntryTime(item.createdAt)}`}
         accessibilityHint={
           [
             onEntryPress != null ? 'Double tap to open thought' : null,
-            onEntryDelete != null ? 'Swipe left to delete' : null,
+            onEntryDelete != null ? 'Swipe left, then tap Delete' : null,
           ]
             .filter(Boolean)
             .join('. ') || undefined
@@ -355,7 +382,7 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
           onEntryDelete != null
             ? ({ nativeEvent }) => {
                 if (nativeEvent.actionName === 'delete') {
-                  onEntryDelete(item);
+                  requestEntryDelete();
                 }
               }
             : undefined
@@ -423,23 +450,27 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
 
   return (
     <Swipeable
+      ref={swipeableRef}
       friction={2}
       overshootRight={false}
       /** Full-width reveal before commit — reduces accidental delete vs horizontal chrome. */
       rightThreshold={DELETE_ACTION_WIDTH}
       renderRightActions={() => (
-        <View
-          style={[
+        <Pressable
+          testID={`recent-entry-delete-${item.id}`}
+          accessibilityRole="button"
+          accessibilityLabel="Delete thought"
+          onPress={requestEntryDelete}
+          style={({ pressed }) => [
             styles.deleteTrack,
             {
               width: DELETE_ACTION_WIDTH,
               backgroundColor: colors.swipeDeleteBg,
               borderLeftWidth: StyleSheet.hairlineWidth,
               borderLeftColor: colors.borderFocus,
+              opacity: pressed ? 0.88 : 1,
             },
           ]}
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
         >
           <Text
             style={[
@@ -449,9 +480,9 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
           >
             Delete
           </Text>
-        </View>
+        </Pressable>
       )}
-      onSwipeableOpen={() => onEntryDelete(item)}
+      onSwipeableOpen={requestEntryDelete}
     >
       {rowContent}
     </Swipeable>
@@ -696,6 +727,8 @@ function RecentListInner({
   streamScrollYRef,
   onScrollToEntryOffset,
   onScrollToEntryComplete,
+  streamLoadingMore = false,
+  streamScrollVelocityY = 0,
 }: RecentListProps) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const streamGutter = screenContentGutter(windowWidth);
@@ -705,10 +738,13 @@ function RecentListInner({
   const emptyAmbientOpacity = useRef(new Animated.Value(1)).current;
   const [listOffsetY, setListOffsetY] = useState(0);
   const [layoutVersion, setLayoutVersion] = useState(0);
-  const [windowActiveIndex, setWindowActiveIndex] = useState(-1);
   const [reduceMotion, setReduceMotion] = useState(false);
   const framesRef = useRef<Map<string, { top: number; height: number }>>(new Map());
   const rowRefs = useRef<Map<string, View | null>>(new Map());
+  const layoutVersionRafRef = useRef<number | null>(null);
+  const entriesSnapRafRef = useRef<number | null>(null);
+  const [listMutationSnap, setListMutationSnap] = useState(false);
+  const entriesSnapKeyRef = useRef<string>('');
   const setRowRef = useCallback((id: string) => {
     return (node: View | null) => {
       if (node) {
@@ -724,6 +760,29 @@ function RecentListInner({
   useEffect(() => {
     void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
   }, []);
+
+  useLayoutEffect(() => {
+    const snapKey = `${entries.length}:${entries[0]?.id ?? ''}:${entries[entries.length - 1]?.id ?? ''}`;
+    if (snapKey === entriesSnapKeyRef.current) {
+      return;
+    }
+    entriesSnapKeyRef.current = snapKey;
+    setListMutationSnap(true);
+    if (entriesSnapRafRef.current != null) {
+      cancelAnimationFrame(entriesSnapRafRef.current);
+    }
+    entriesSnapRafRef.current = requestAnimationFrame(() => {
+      entriesSnapRafRef.current = requestAnimationFrame(() => {
+        entriesSnapRafRef.current = null;
+        setListMutationSnap(false);
+      });
+    });
+    return () => {
+      if (entriesSnapRafRef.current != null) {
+        cancelAnimationFrame(entriesSnapRafRef.current);
+      }
+    };
+  }, [entries]);
 
   useEffect(() => {
     if (!streamEmptyAmbient) {
@@ -783,6 +842,16 @@ function RecentListInner({
     return out;
   }, [groups]);
 
+  const scheduleLayoutVersionBump = useCallback(() => {
+    if (layoutVersionRafRef.current != null) {
+      return;
+    }
+    layoutVersionRafRef.current = requestAnimationFrame(() => {
+      layoutVersionRafRef.current = null;
+      setLayoutVersion((v) => v + 1);
+    });
+  }, []);
+
   useLayoutEffect(() => {
     if (!streamViewportFocusEnabled) {
       return;
@@ -793,8 +862,8 @@ function RecentListInner({
         framesRef.current.delete(key);
       }
     }
-    setLayoutVersion((v) => v + 1);
-  }, [orderedIds, streamViewportFocusEnabled]);
+    scheduleLayoutVersionBump();
+  }, [orderedIds, scheduleLayoutVersionBump, streamViewportFocusEnabled]);
 
   const onListLayout = useCallback(
     (e: LayoutChangeEvent) => {
@@ -814,11 +883,17 @@ function RecentListInner({
         }
         const { y, height } = e.nativeEvent.layout;
         framesRef.current.set(id, { top: y, height });
-        setLayoutVersion((v) => v + 1);
+        scheduleLayoutVersionBump();
       };
     },
-    [streamViewportFocusEnabled],
+    [scheduleLayoutVersionBump, streamViewportFocusEnabled],
   );
+
+  const scrollYForFocus = streamScrollYRef?.current ?? streamScrollY;
+  const focusSnapActive =
+    listMutationSnap ||
+    streamLoadingMore ||
+    Math.abs(streamScrollVelocityY) > STREAM_FOCUS_SCROLL_SNAP_VELOCITY;
 
   const geometryActiveIndex = useMemo(() => {
     if (!streamViewportFocusEnabled) {
@@ -829,7 +904,7 @@ function RecentListInner({
     return findActiveFlatIndex(
       orderedIds,
       framesRef.current,
-      streamScrollY,
+      scrollYForFocus,
       viewportH,
       listOffsetY,
       listPaddingTop,
@@ -837,6 +912,7 @@ function RecentListInner({
   }, [
     streamViewportFocusEnabled,
     streamScrollY,
+    scrollYForFocus,
     streamViewportHeight,
     listOffsetY,
     listPaddingTop,
@@ -845,50 +921,7 @@ function RecentListInner({
     windowHeight,
   ]);
 
-  useLayoutEffect(() => {
-    if (!streamViewportFocusEnabled || streamScrollViewRef == null) {
-      return;
-    }
-    if (streamScrollViewRef.current == null) {
-      setWindowActiveIndex(-1);
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      const sv = streamScrollViewRef.current;
-      if (!sv) {
-        return;
-      }
-      const scrollBox = await measureInWindowPromise(sv);
-      if (!scrollBox || cancelled) {
-        return;
-      }
-      const measurements = await Promise.all(
-        orderedIds.map(async (id, i) => ({
-          flatIndex: i,
-          box: await measureInWindowPromise(rowRefs.current.get(id) ?? null),
-        })),
-      );
-      if (cancelled) {
-        return;
-      }
-      const idx = findActiveFlatIndexFromWindowMeasurements(scrollBox, measurements);
-      setWindowActiveIndex(idx);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    streamViewportFocusEnabled,
-    streamScrollViewRef,
-    streamScrollY,
-    streamViewportHeight,
-    layoutVersion,
-    orderedIds,
-  ]);
-
-  const activeFlatIndex =
-    streamScrollViewRef != null && windowActiveIndex >= 0 ? windowActiveIndex : geometryActiveIndex;
+  const activeFlatIndex = geometryActiveIndex;
 
   useEffect(() => {
     if (onActiveStreamEntryChange == null) {
@@ -1075,7 +1108,7 @@ function RecentListInner({
           return (
             <View
               key={item.key}
-              style={item.sectionIndex > 0 ? { marginTop: t.spacing.sm } : undefined}
+              style={item.sectionIndex > 0 ? { marginTop: t.spacing.md } : undefined}
             >
               <Text
                 accessibilityRole="header"
@@ -1088,7 +1121,7 @@ function RecentListInner({
                     fontSize: meta.fontSize,
                     lineHeight: 18,
                     letterSpacing: 0.22,
-                    marginBottom: 6,
+                    marginBottom: 10,
                   },
                 ]}
               >
@@ -1117,6 +1150,7 @@ function RecentListInner({
               isNewest={item.entry.id === newestShownId}
               streamFocusDelta={streamFocusDelta}
               streamFocusReduceMotion={reduceMotion}
+              streamFocusOpacitySnap={focusSnapActive}
               searchHighlightQuery={searchHighlightQuery}
               streamGutter={streamGutter}
               onEntryPress={onEntryPress}
@@ -1209,7 +1243,7 @@ const styles = StyleSheet.create({
    */
   entryBlock: {
     width: '100%',
-    paddingVertical: 13,
+    paddingVertical: 15,
   },
   entryRow: {
     width: '100%',

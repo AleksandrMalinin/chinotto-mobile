@@ -1,6 +1,16 @@
-import { fireEvent, render } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
-import { TemporalMonthRack } from '../TemporalMonthRack';
+import { TemporalMonthRack, type TemporalMonthRackProps } from '../TemporalMonthRack';
+import {
+  getTemporalRackCompact,
+  setTemporalRackCompact,
+} from '../../../storage/temporalRackPrefs';
+
+jest.mock('../../../storage/temporalRackPrefs', () => ({
+  getTemporalRackCompact: jest.fn(() => Promise.resolve(false)),
+  setTemporalRackCompact: jest.fn(() => Promise.resolve()),
+  clearTemporalRackCompact: jest.fn(() => Promise.resolve()),
+}));
 
 const months = [
   {
@@ -17,25 +27,112 @@ const months = [
   },
 ];
 
-describe('TemporalMonthRack', () => {
-  it('renders month rows and active month press', () => {
-    const onActiveMonthPress = jest.fn();
-    const { getByTestId, getByText } = render(
-      <TemporalMonthRack
-        months={months}
-        streamMonthKey="2026-05"
-        visible
-        rightInset={6}
-        topInset={80}
-        bottomInset={40}
-        onMonthCommitted={jest.fn()}
-        onActiveMonthPress={onActiveMonthPress}
-      />,
-    );
+function renderRack(overrides: Partial<TemporalMonthRackProps> = {}) {
+  return render(
+    <TemporalMonthRack
+      months={months}
+      streamMonthKey="2026-05"
+      visible
+      rightInset={0}
+      onMonthCommitted={jest.fn()}
+      onActiveMonthPress={jest.fn()}
+      {...overrides}
+    />,
+  );
+}
 
+describe('TemporalMonthRack', () => {
+  beforeEach(() => {
+    jest.mocked(getTemporalRackCompact).mockResolvedValue(false);
+    jest.mocked(setTemporalRackCompact).mockClear();
+  });
+
+  it('docks expanded rack on the trailing edge, vertically centered', () => {
+    const { getByTestId } = renderRack();
+
+    const host = getByTestId('temporal-month-rack-host');
+    const flatStyle = Array.isArray(host.props.style)
+      ? Object.assign({}, ...host.props.style.filter(Boolean))
+      : host.props.style;
+    expect(flatStyle).toEqual(
+      expect.objectContaining({ right: 0, top: 0, bottom: 0, justifyContent: 'center' }),
+    );
+  });
+
+  it('anchors minimized rack to the bottom trailing corner with year and month', async () => {
+    jest.mocked(getTemporalRackCompact).mockResolvedValue(true);
+    const { getByTestId, getByText } = renderRack({ bottomInset: 24 });
+
+    await waitFor(() => {
+      expect(getByTestId('temporal-month-rack-compact')).toBeTruthy();
+    });
+    const host = getByTestId('temporal-month-rack-host');
+    const flatStyle = Array.isArray(host.props.style)
+      ? Object.assign({}, ...host.props.style.filter(Boolean))
+      : host.props.style;
+    expect(flatStyle).toEqual(
+      expect.objectContaining({ justifyContent: 'flex-end', paddingBottom: 24 }),
+    );
+    expect(getByText('2026')).toBeTruthy();
+    expect(getByText('May')).toBeTruthy();
+  });
+
+  it('renders scroll rack with active month press', async () => {
+    const onActiveMonthPress = jest.fn();
+    const { getByTestId, getByText } = renderRack({ onActiveMonthPress });
+
+    await waitFor(() => {
+      expect(getByTestId('temporal-month-rack-expanded')).toBeTruthy();
+    });
+    const scrollArea = getByTestId('temporal-month-rack-scroll-area');
+    expect(scrollArea.props.style).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          height: 2 * 32,
+        }),
+      ]),
+    );
     expect(getByTestId('temporal-month-rack-year')).toBeTruthy();
     expect(getByText('2026')).toBeTruthy();
     fireEvent.press(getByTestId('temporal-month-rack-active'));
     expect(onActiveMonthPress).toHaveBeenCalledTimes(1);
+  });
+
+  it('restores compact mode from prefs', async () => {
+    jest.mocked(getTemporalRackCompact).mockResolvedValue(true);
+    const { getByTestId } = renderRack();
+
+    await waitFor(() => {
+      expect(getByTestId('temporal-month-rack-compact')).toBeTruthy();
+    });
+  });
+
+  it('long press on year header collapses and persists compact mode', async () => {
+    const { getByTestId, queryByTestId } = renderRack();
+
+    await waitFor(() => {
+      expect(getByTestId('temporal-month-rack-expanded')).toBeTruthy();
+    });
+    fireEvent(getByTestId('temporal-month-rack-year-header'), 'longPress');
+    await waitFor(() => {
+      expect(getByTestId('temporal-month-rack-compact')).toBeTruthy();
+    });
+    expect(queryByTestId('temporal-month-rack-expanded')).toBeNull();
+    expect(setTemporalRackCompact).toHaveBeenCalledWith(true);
+  });
+
+  it('tap on compact pill expands the rack', async () => {
+    jest.mocked(getTemporalRackCompact).mockResolvedValue(true);
+    const { getByTestId, queryByTestId } = renderRack();
+
+    await waitFor(() => {
+      expect(getByTestId('temporal-month-rack-compact')).toBeTruthy();
+    });
+    fireEvent.press(getByTestId('temporal-month-rack-compact'));
+    await waitFor(() => {
+      expect(getByTestId('temporal-month-rack-expanded')).toBeTruthy();
+    });
+    expect(queryByTestId('temporal-month-rack-compact')).toBeNull();
+    expect(setTemporalRackCompact).toHaveBeenCalledWith(false);
   });
 });

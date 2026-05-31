@@ -1,13 +1,102 @@
 import {
+  TEMPORAL_MONTH_RACK_MAX_VISIBLE_ROWS,
+  TEMPORAL_MONTH_RACK_ROW_HEIGHT,
+  TEMPORAL_MONTH_RACK_YEAR_HEIGHT,
+} from '../../constants/temporalNavigation';
+import {
   findMonthIndex,
+  monthRackBorderRadius,
+  monthRackEdgeAttachRadii,
+  monthRackEdgeShellStyle,
+  monthRackExpandedHeight,
   monthRackIndexFromScrollOffset,
   monthRackLabelColor,
+  monthRackNeedsScrollFade,
+  monthRackPlaqueOutline,
   monthRackRowVisual,
   monthRackScrollOffsetForIndex,
+  monthRackScrollViewportHeight,
+  monthRackShellCornerRadius,
+  monthRackVisibleRowSlots,
 } from '../monthRack';
-import { TEMPORAL_MONTH_RACK_ROW_HEIGHT } from '../../constants/temporalNavigation';
 
 describe('monthRack', () => {
+  it('monthRackVisibleRowSlots caps at max visible rows', () => {
+    expect(monthRackVisibleRowSlots(0)).toBe(0);
+    expect(monthRackVisibleRowSlots(2)).toBe(2);
+    expect(monthRackVisibleRowSlots(TEMPORAL_MONTH_RACK_MAX_VISIBLE_ROWS)).toBe(
+      TEMPORAL_MONTH_RACK_MAX_VISIBLE_ROWS,
+    );
+    expect(monthRackVisibleRowSlots(12)).toBe(TEMPORAL_MONTH_RACK_MAX_VISIBLE_ROWS);
+  });
+
+  it('monthRackScrollViewportHeight follows visible row slots', () => {
+    expect(monthRackScrollViewportHeight(2)).toBe(2 * TEMPORAL_MONTH_RACK_ROW_HEIGHT);
+    expect(monthRackScrollViewportHeight(12)).toBe(
+      TEMPORAL_MONTH_RACK_MAX_VISIBLE_ROWS * TEMPORAL_MONTH_RACK_ROW_HEIGHT,
+    );
+  });
+
+  it('monthRackNeedsScrollFade only when history overflows viewport', () => {
+    expect(monthRackNeedsScrollFade(3)).toBe(false);
+    expect(monthRackNeedsScrollFade(TEMPORAL_MONTH_RACK_MAX_VISIBLE_ROWS)).toBe(false);
+    expect(monthRackNeedsScrollFade(TEMPORAL_MONTH_RACK_MAX_VISIBLE_ROWS + 1)).toBe(true);
+  });
+
+  it('monthRackShellCornerRadius never exceeds half the plaque height', () => {
+    expect(monthRackShellCornerRadius(32)).toBe(14);
+    expect(monthRackShellCornerRadius(56)).toBe(14);
+    expect(monthRackShellCornerRadius(184)).toBe(14);
+  });
+
+  it('monthRackBorderRadius caps corner radius for short racks', () => {
+    expect(monthRackBorderRadius(TEMPORAL_MONTH_RACK_ROW_HEIGHT)).toBe(14);
+    expect(monthRackBorderRadius(TEMPORAL_MONTH_RACK_ROW_HEIGHT * 5)).toBe(14);
+  });
+
+  it('monthRackPlaqueOutline rounds leading edge only and omits trailing padding', () => {
+    const outline = monthRackPlaqueOutline(56, '#ccc', 1);
+    expect(outline.outerRadius).toBe(14);
+    expect(outline.innerRadius).toBe(13);
+    expect(outline.outer).toEqual(
+      expect.objectContaining({
+        borderTopLeftRadius: 14,
+        borderBottomLeftRadius: 14,
+        borderTopRightRadius: 0,
+        borderBottomRightRadius: 0,
+        backgroundColor: '#ccc',
+        paddingLeft: 1,
+        paddingTop: 1,
+        paddingBottom: 1,
+        paddingRight: 0,
+      }),
+    );
+    expect(outline.inner).toEqual(
+      expect.objectContaining({
+        borderTopLeftRadius: 13,
+        borderBottomLeftRadius: 13,
+        borderTopRightRadius: 0,
+        borderBottomRightRadius: 0,
+        overflow: 'hidden',
+      }),
+    );
+  });
+
+  it('monthRackExpandedHeight includes year header', () => {
+    expect(monthRackExpandedHeight(2)).toBe(
+      TEMPORAL_MONTH_RACK_YEAR_HEIGHT + 2 * TEMPORAL_MONTH_RACK_ROW_HEIGHT,
+    );
+  });
+
+  it('monthRackEdgeAttachRadii rounds only the leading edge', () => {
+    expect(monthRackEdgeAttachRadii(14)).toEqual({
+      borderTopLeftRadius: 14,
+      borderBottomLeftRadius: 14,
+      borderTopRightRadius: 0,
+      borderBottomRightRadius: 0,
+    });
+  });
+
   it('monthRackScrollOffsetForIndex', () => {
     expect(monthRackScrollOffsetForIndex(2)).toBe(2 * TEMPORAL_MONTH_RACK_ROW_HEIGHT);
   });

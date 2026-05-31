@@ -1,5 +1,4 @@
 import {
-  isTemporalNavigationActive,
   isTemporalScrubberEligible,
   shouldPeekTemporalScrubber,
 } from '../temporalScrubberVisibility';
@@ -10,17 +9,20 @@ import {
 } from '../../constants/temporalNavigation';
 
 describe('temporalScrubberVisibility', () => {
-  it('isTemporalNavigationActive respects global or dev', () => {
-    expect(isTemporalNavigationActive(false, false)).toBe(false);
-    expect(isTemporalNavigationActive(true, false)).toBe(true);
-    expect(isTemporalNavigationActive(false, true)).toBe(true);
-  });
-
-  it('isTemporalScrubberEligible gates search and entry count', () => {
+  it('isTemporalScrubberEligible gates search, read sheet, and entry count', () => {
     expect(
       isTemporalScrubberEligible({
         active: true,
         searchActive: true,
+        totalEntryCount: 100,
+        hasStreamRows: true,
+      }),
+    ).toBe(false);
+    expect(
+      isTemporalScrubberEligible({
+        active: true,
+        searchActive: false,
+        readSheetOpen: true,
         totalEntryCount: 100,
         hasStreamRows: true,
       }),
@@ -43,13 +45,12 @@ describe('temporalScrubberVisibility', () => {
     ).toBe(true);
     expect(
       isTemporalScrubberEligible({
-        active: true,
+        active: false,
         searchActive: false,
-        totalEntryCount: 1,
+        totalEntryCount: TEMPORAL_NAV_MIN_ENTRY_COUNT,
         hasStreamRows: true,
-        bypassMinEntryCount: true,
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('shouldPeekTemporalScrubber hides at capture and when returning to top', () => {

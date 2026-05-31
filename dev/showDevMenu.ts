@@ -15,10 +15,10 @@ export type DevMenuOptions = {
   onResetSyncCaptureQA?: () => void | Promise<void>;
   /** Show the shipped `UpdateScreen` in soft or forced mode (wired from `App`). */
   onPreviewAppUpdateModal?: (mode: 'soft' | 'forced') => void;
-  /** Toggle passive month scrubber QA (`__DEV__`). */
-  onToggleTemporalNavScrubber?: () => void;
-  /** Label suffix for temporal toggle, e.g. `on` / `off`. */
-  temporalNavScrubberDevState?: 'on' | 'off';
+  /** Replay the one-time Echo edge peek animation immediately. */
+  onPreviewEchoEdgePeek?: () => void | Promise<void>;
+  /** Clear AsyncStorage flag so auto peek can fire again on next eligibility. */
+  onResetEchoEdgePeek?: () => void | Promise<void>;
 };
 
 /**
@@ -66,14 +66,18 @@ export function showDevMenu(options: DevMenuOptions): void {
       onPress: () => preview('forced'),
     });
   }
-  if (options.onToggleTemporalNavScrubber != null) {
-    const state = options.temporalNavScrubberDevState ?? 'off';
+  if (options.onPreviewEchoEdgePeek != null) {
     buttons.push({
-      text: `Temporal scrubber (${state})`,
-      onPress: options.onToggleTemporalNavScrubber,
+      text: 'Preview Echo edge peek',
+      onPress: () => void options.onPreviewEchoEdgePeek?.(),
     });
   }
-
+  if (options.onResetEchoEdgePeek != null) {
+    buttons.push({
+      text: 'Reset Echo edge peek flag',
+      onPress: () => void options.onResetEchoEdgePeek?.(),
+    });
+  }
   buttons.push({ text: 'Cancel', style: 'cancel' });
   Alert.alert('Dev menu', undefined, buttons);
 }
