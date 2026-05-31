@@ -1,6 +1,7 @@
 import {
   SHEET_ENTER_OFFSET_DEFAULT,
   shouldCollapseExpandedThoughtSheet,
+  shouldDismissExpandedThoughtSheet,
   shouldDismissThoughtSheet,
   shouldExpandThoughtSheet,
   thoughtSheetCompactScrollMaxHeight,
@@ -25,6 +26,16 @@ describe('thoughtSheet detents', () => {
     expect(shouldDismissThoughtSheet(25, 0)).toBe(true);
     expect(shouldCollapseExpandedThoughtSheet(30, 0)).toBe(true);
     expect(shouldExpandThoughtSheet(-10, 0)).toBe(false);
+  });
+
+  it('expanded dismiss needs a long or fast downward gesture, not a normal swipe', () => {
+    // A normal downward swipe collapses (reachable) — it must NOT dismiss.
+    expect(shouldDismissExpandedThoughtSheet(10, 500)).toBe(false);
+    expect(shouldDismissExpandedThoughtSheet(30, 0)).toBe(false);
+    expect(shouldCollapseExpandedThoughtSheet(10, 500)).toBe(true);
+    // Long drag or fast fling dismisses straight from expanded.
+    expect(shouldDismissExpandedThoughtSheet(160, 0)).toBe(true);
+    expect(shouldDismissExpandedThoughtSheet(10, 1300)).toBe(true);
   });
 
   it('derives enter offset from row anchor or falls back to default', () => {

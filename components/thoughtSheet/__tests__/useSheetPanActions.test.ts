@@ -73,4 +73,31 @@ describe('useSheetPanActions', () => {
 
     expect(onCollapse).toHaveBeenCalledTimes(1);
   });
+
+  it('dismisses from expanded mode only on a long or fast downward gesture', () => {
+    const onCollapse = jest.fn();
+    const onDismiss = jest.fn();
+    const scrollYRef = { current: 0 };
+    const { result } = renderHook(() =>
+      useSheetPanActions({
+        mode: 'expanded',
+        scrollYRef,
+        onExpand: jest.fn(),
+        onCollapse,
+        onDismiss,
+      })
+    );
+
+    act(() => {
+      result.current.onHandlerStateChange(panEnd(160, 0) as never);
+    });
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+    expect(onCollapse).not.toHaveBeenCalled();
+
+    act(() => {
+      result.current.onHandlerStateChange(panEnd(10, 1300) as never);
+    });
+    expect(onDismiss).toHaveBeenCalledTimes(2);
+    expect(onCollapse).not.toHaveBeenCalled();
+  });
 });

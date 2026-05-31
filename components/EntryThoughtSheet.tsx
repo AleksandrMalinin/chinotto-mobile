@@ -34,6 +34,7 @@ import { displayHostForUrl, extractHttpUrlsFromText } from '../utils/extractHttp
 import { formatEntryTime } from '../utils/groupEntriesByDate';
 import {
   shouldCollapseExpandedThoughtSheet,
+  shouldDismissExpandedThoughtSheet,
   shouldDismissThoughtSheet,
   shouldExpandThoughtSheet,
   thoughtSheetCompactScrollMaxHeight,
@@ -255,7 +256,7 @@ export function EntryThoughtSheet({
         return;
       }
 
-      if (shouldDismissThoughtSheet(translationY, velocityY)) {
+      if (shouldDismissExpandedThoughtSheet(translationY, velocityY)) {
         requestDismiss(translationY, velocityY);
         return;
       }

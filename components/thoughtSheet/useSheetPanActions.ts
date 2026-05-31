@@ -4,6 +4,7 @@ import { State, type PanGestureHandlerStateChangeEvent } from 'react-native-gest
 
 import {
   shouldCollapseExpandedThoughtSheet,
+  shouldDismissExpandedThoughtSheet,
   shouldDismissThoughtSheet,
   shouldExpandThoughtSheet,
 } from './detents';
@@ -49,7 +50,7 @@ export function useSheetPanActions({
         return;
       }
 
-      if (shouldDismissThoughtSheet(translationY, velocityY)) {
+      if (shouldDismissExpandedThoughtSheet(translationY, velocityY)) {
         onDismiss();
         return;
       }

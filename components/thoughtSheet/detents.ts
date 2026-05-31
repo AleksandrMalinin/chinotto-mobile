@@ -28,6 +28,16 @@ export function shouldCollapseExpandedThoughtSheet(dy: number, vy: number): bool
   return dy > 28 || vy > 400;
 }
 
+/**
+ * Dismiss straight from the expanded sheet — only on a long or fast downward
+ * gesture. A normal downward swipe collapses to compact first (handled by
+ * {@link shouldCollapseExpandedThoughtSheet}), so collapse stays reachable
+ * instead of being shadowed by the smaller compact-dismiss threshold.
+ */
+export function shouldDismissExpandedThoughtSheet(dy: number, vy: number): boolean {
+  return dy > 140 || vy > 1200;
+}
+
 export type ThoughtSheetOpenAnchor = {
   pageY: number;
   height: number;
