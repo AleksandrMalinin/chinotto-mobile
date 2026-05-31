@@ -46,18 +46,15 @@ import { ChinottoLogo, chinottoLogoLeadingOutset } from '../components/ChinottoL
 import { EnableSyncModal } from '../components/EnableSyncModal';
 import { EntryThoughtSheet } from '../components/EntryThoughtSheet';
 import { RecentList } from '../components/RecentList';
-import {
-  STREAM_SEARCH_TOGGLE_TAP,
-  StreamSearchField,
-  StreamSearchToggle,
-} from '../components/StreamSearchField';
+import { StreamSearchField } from '../components/StreamSearchField';
+import { StreamSearchGlyph } from '../components/stream/StreamSearchGlyph';
 import { TemporalMapSheet } from '../components/temporal/TemporalMapSheet';
 import { TemporalMonthRack } from '../components/temporal/TemporalMonthRack';
 import type { ThoughtSheetOpenAnchor } from '../components/thoughtSheet/detents';
 import type { SheetEnterProfile } from '../components/thoughtSheet/useSheetEnterAnimation';
 import { openAfterKeyboardHidden } from '../components/thoughtSheet/openAfterKeyboardHidden';
 import { SyncHeaderStatus, type SyncHeaderAuthPhase } from '../components/SyncHeaderStatus';
-import { VoiceMicButton } from '../components/VoiceCaptureControl';
+import { VoiceMicButton, VOICE_MIC_CLUSTER_OVERFLOW_PAD_TOP } from '../components/VoiceCaptureControl';
 import { AppIconScreen } from './AppIconScreen';
 import { DeleteAccountScreen } from './DeleteAccountScreen';
 import { ManifestoScreen } from './ManifestoScreen';
@@ -168,6 +165,16 @@ import { monthKeyFromIso } from '../utils/streamMonthIndex';
 import { streamSearchResultLabel } from '../utils/streamSearchResultLabel';
 import { loadStreamUntilEntryIncluded, resolveMonthJumpAnchor } from '../utils/temporalJump';
 import { ensureEchoCandidatesForDev } from '../utils/ensureEchoCandidatesForDev';
+import {
+  COMPOSER_ACTION_CLUSTER_LEADING_GAP,
+  COMPOSER_ACTION_CLUSTER_WIDTH,
+  composerActionClusterExpanded,
+} from '../utils/composerActionCluster';
+import {
+  streamPullSearchDragEligibleAtStart,
+  streamPullSearchProgress,
+  streamPullSearchShouldCommitFromGesture,
+} from '../utils/streamPullToSearch';
 import { isEchoLayerMountedForCapture } from '../utils/echoLayerMount';
 import { isEchoPagerInteractive } from '../utils/echoLayerVisibility';
 import { echoEmotionalIntensityFromEntries } from '../utils/echoEmotionalAtmosphere';
@@ -313,6 +320,8 @@ export function CaptureScreen({
   const [searchTruncated, setSearchTruncated] = useState(false);
   /** Search is secondary: hidden until user opens it — avoids competing with capture. */
   const [searchExpanded, setSearchExpanded] = useState(false);
+  /** 0–1 while pulling down at stream top to reveal search (hidden by default). */
+  const [searchPullProgress, setSearchPullProgress] = useState(0);
   const [searchFocused, setSearchFocused] = useState(false);
   const [settingsRoute, setSettingsRoute] = useState<SettingsRoute | null>(null);
   const [accountDeletionOpen, setAccountDeletionOpen] = useState(false);
@@ -353,6 +362,9 @@ export function CaptureScreen({
   const streamScrollViewRef = useRef<ComponentRef<typeof ScrollView>>(null);
   const streamScrollYRef = useRef(0);
   const streamScrollStateCommitAtRef = useRef(0);
+  const streamPullStateCommitAtRef = useRef(0);
+  const streamPullDragEligibleRef = useRef(false);
+  const streamPullDragMaxPxRef = useRef(0);
   const streamScrollIdleGenRef = useRef(0);
   const temporalRackScrubbingRef = useRef(false);
   temporalRackScrubbingRef.current = temporalRackScrubbing;
@@ -375,6 +387,8 @@ export function CaptureScreen({
   const inputRef = useRef<TextInput>(null);
   const searchInputRef = useRef<TextInput>(null);
   const composerSearchDim = useRef(new Animated.Value(1)).current;
+  /** 1 = empty capture (actions visible); 0 = thought present (actions stepped aside). */
+  const composerActionClusterPresence = useRef(new Animated.Value(1)).current;
   const readEntryOpenCleanupRef = useRef<(() => void) | null>(null);
   const searchBlurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchDismissIntentRef = useRef(false);
@@ -383,6 +397,10 @@ export function CaptureScreen({
   const hasMoreRef = useRef(true);
   const loadingMoreRef = useRef(false);
   const searchQueryRef = useRef('');
+  const searchExpandedRef = useRef(false);
+  const streamHasRowsRef = useRef(false);
+  searchExpandedRef.current = searchExpanded;
+  streamHasRowsRef.current = streamDisplayEntries.length > 0;
   const searchActiveRef = useRef(false);
   const recallSearchActiveRef = useRef(false);
   /** Composer snapshot when mic starts; partials/final merge with this so live text does not stack. */
@@ -416,7 +434,8 @@ export function CaptureScreen({
   recallSearchActiveRef.current =
     searchExpanded || searchFocused || searchTrimmed.length > 0;
   const recallSearchActive = recallSearchActiveRef.current;
-  const searchModeActive = searchExpanded || searchTrimmed.length > 0;
+  /** Recall mode: search replaces the capture row — one focus, not two competing top actions. */
+  const searchRecallMode = streamDisplayEntries.length > 0 && searchExpanded;
 
   const searchResultLabel = useMemo(
     () => streamSearchResultLabel(searchExpanded, searchTrimmed, searchResults.length),
@@ -453,6 +472,15 @@ export function CaptureScreen({
   }, [readEntry]);
 
   const expandSearch = useCallback(() => {
+    const opening = !searchExpandedRef.current;
+    if (opening) {
+      streamScrollYRef.current = 0;
+      setStreamScrollY(0);
+      setStreamScrollVelocityY(0);
+      setTemporalRackAtCapture(true);
+      setSearchPullProgress(0);
+      streamScrollViewRef.current?.scrollTo({ y: 0, animated: false });
+    }
     playSearchChromeHaptic();
     inputRef.current?.blur();
     if (searchBlurTimerRef.current) {
@@ -461,6 +489,9 @@ export function CaptureScreen({
     }
     setSearchFocused(true);
     animateSearchLayout();
+    searchExpandedRef.current = true;
+    streamPullDragEligibleRef.current = false;
+    streamPullDragMaxPxRef.current = 0;
     setSearchExpanded(true);
     requestAnimationFrame(() => {
       searchInputRef.current?.focus();
@@ -485,6 +516,7 @@ export function CaptureScreen({
       searchBlurTimerRef.current = null;
     }
     setSearchFocused(false);
+    searchExpandedRef.current = false;
     setSearchExpanded(false);
     releaseComposerFocus();
     requestAnimationFrame(() => {
@@ -501,6 +533,7 @@ export function CaptureScreen({
     }
     setSearchFocused(false);
     setSearchQuery('');
+    searchExpandedRef.current = false;
     setSearchExpanded(false);
     Keyboard.dismiss();
     streamEchoPagerRef.current?.scrollToStream(false);
@@ -552,14 +585,39 @@ export function CaptureScreen({
       });
   }, []);
 
+  const handleScrollBeginDrag = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const y = e.nativeEvent.contentOffset.y;
+    const eligible = streamPullSearchDragEligibleAtStart(y);
+    streamPullDragEligibleRef.current = eligible;
+    streamPullDragMaxPxRef.current = 0;
+    streamPullStateCommitAtRef.current = 0;
+    if (!eligible) {
+      setSearchPullProgress(0);
+    }
+  }, []);
+
   const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, layoutMeasurement, contentSize, velocity } = e.nativeEvent;
     const y = contentOffset.y;
     streamScrollYRef.current = y;
     const now = Date.now();
+    if (
+      !searchExpandedRef.current &&
+      streamHasRowsRef.current &&
+      streamPullDragEligibleRef.current
+    ) {
+      const pullPx = y < 0 ? -y : 0;
+      if (pullPx > streamPullDragMaxPxRef.current) {
+        streamPullDragMaxPxRef.current = pullPx;
+      }
+      if (now - streamPullStateCommitAtRef.current >= STREAM_SCROLL_STATE_THROTTLE_MS) {
+        streamPullStateCommitAtRef.current = now;
+        setSearchPullProgress(pullPx === 0 ? 0 : streamPullSearchProgress(pullPx));
+      }
+    }
     if (now - streamScrollStateCommitAtRef.current >= STREAM_SCROLL_STATE_THROTTLE_MS) {
       streamScrollStateCommitAtRef.current = now;
-      setStreamScrollY(y);
+      setStreamScrollY(Math.max(0, y));
     }
     if (y < TEMPORAL_NAV_MIN_SCROLL_Y) {
       setTemporalRackAtCapture(true);
@@ -634,6 +692,27 @@ export function CaptureScreen({
       }
     })();
   }, []);
+
+  const handleScrollEndDrag = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const y = e.nativeEvent.contentOffset.y;
+      const maxPullPx = streamPullDragMaxPxRef.current;
+      const dragEligible = streamPullDragEligibleRef.current;
+      streamPullDragEligibleRef.current = false;
+      streamPullDragMaxPxRef.current = 0;
+      setSearchPullProgress(0);
+      if (
+        streamPullSearchShouldCommitFromGesture({ dragEligible, maxPullPx }) &&
+        streamHasRowsRef.current &&
+        !searchExpandedRef.current
+      ) {
+        expandSearch();
+      } else if (y < 0) {
+        streamScrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      }
+    },
+    [expandSearch],
+  );
 
   const runSearch = useCallback(async (q: string) => {
     const trimmed = q.trim();
@@ -1414,15 +1493,33 @@ export function CaptureScreen({
   const composerMinHeight = 76;
   const composerMaxHeight = 120;
   const capturePlaceholderColor = t.colors.capturePlaceholder;
-  /** Centers the search slot on the first capture line so it clusters with the mic. */
-  const searchToggleAlignTop =
-    captureInputPaddingTop +
-    t.typography.capture.lineHeight / 2 -
-    STREAM_SEARCH_TOGGLE_TAP / 2 +
-    Platform.select({ ios: -2, default: -3 });
-  /** Collapsed search lives beside the mic only when there is a stream to search. */
-  const showSearchToggle = streamDisplayEntries.length > 0 && !searchExpanded;
+  /** Empty field: show mic; typing: step aside; voice active: keep mic reachable. */
+  const composerActionClusterOpen = composerActionClusterExpanded(text, voicePhase);
+  const showStreamPullSearchHint =
+    streamDisplayEntries.length > 0 && !searchExpanded && searchPullProgress > 0;
   const headerLogoColor = t.colors.logoMark;
+
+  useEffect(() => {
+    Animated.timing(composerActionClusterPresence, {
+      toValue: composerActionClusterOpen ? 1 : 0,
+      duration: motion.capture.relaxed,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [composerActionClusterOpen, composerActionClusterPresence]);
+
+  const composerActionClusterWidth = composerActionClusterPresence.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, COMPOSER_ACTION_CLUSTER_WIDTH],
+  });
+  const composerActionClusterLeadingGap = composerActionClusterPresence.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, COMPOSER_ACTION_CLUSTER_LEADING_GAP],
+  });
+  const composerActionClusterOpacity = composerActionClusterPresence.interpolate({
+    inputRange: [0, 0.35, 1],
+    outputRange: [0, 0, 1],
+  });
   const headerLogoSize = 42;
   /** Ring geometry: align **outer ring** with search field (gutter only); composer is inset +`screenContentInnerPad`. */
   const headerLogoAlignStyle = { marginLeft: -chinottoLogoLeadingOutset(headerLogoSize) };
@@ -1464,7 +1561,8 @@ export function CaptureScreen({
     }
   }, [echoOnEchoPage, stashSearchForEchoNavigation]);
 
-  const composerDimFromSearch = searchModeActive ? ECHO_COMPOSER_DIM_AT_FULL : 1;
+  /** Search recall replaces capture at full presence — no competing dim on the top row. */
+  const composerDimFromSearch = 1;
 
   const composerOpacity = useMemo(() => {
     if (!echoLayerEligible || echoPageWidth <= 0) {
@@ -1643,7 +1741,7 @@ export function CaptureScreen({
 
   const temporalScrubberEligible = isTemporalScrubberEligible({
     active: TEMPORAL_NAV_ENABLED,
-    searchActive,
+    searchActive: recallSearchActive,
     readSheetOpen: readEntry != null,
     totalEntryCount,
     hasStreamRows: streamDisplayEntries.length > 0,
@@ -1846,82 +1944,92 @@ export function CaptureScreen({
                 </View>
               </View>
               <View style={styles.captureStreamStack}>
-                <View style={{ paddingHorizontal: gutter }}>
+                <View style={{ paddingHorizontal: gutter, zIndex: searchRecallMode ? 2 : 0 }}>
                   <Animated.View
                     style={[
                       styles.composerBlock,
                       { opacity: composerOpacity },
-                      recallSearchActive && styles.composerBlockedWhileSearch,
                     ]}
                   >
-                    <View style={styles.composerInputRow}>
-                      <View style={styles.composerInputWrap}>
-                        <CaptureInput
-                          ref={inputRef}
-                          value={text}
-                          onChangeText={setText}
-                          onFocus={onCaptureComposerFocus}
-                          onSubmit={handleSubmit}
-                          minHeight={composerMinHeight}
-                          maxHeight={composerMaxHeight}
-                          placeholder="Jot a thought…"
-                          placeholderTextColor={capturePlaceholderColor}
-                          autoFocus={
-                            allowCaptureFocus &&
-                            !deferKeyboardForFirstLaunchReveal &&
-                            readEntry == null &&
-                            !echoOnEchoPage &&
-                            !recallSearchActive &&
-                            !suppressComposerAutoFocus
-                          }
-                          editable={readEntry == null && !echoOnEchoPage && !recallSearchActive}
-                          showSoftInputOnFocus={
-                            readEntry == null && !echoOnEchoPage && !recallSearchActive
-                          }
+                    {searchRecallMode ? (
+                      <View testID="stream-search-mode">
+                        <StreamSearchField
+                          ref={searchInputRef}
+                          glassSticky
+                          expanded
+                          focused={searchFocused}
+                          value={searchQuery}
+                          onChangeText={onSearchChangeText}
+                          onFocus={onSearchFocus}
+                          onBlur={onSearchBlur}
+                          onPressExpand={expandSearch}
+                          onPressClose={collapseSearch}
+                          resultLabel={searchResultLabel}
                         />
                       </View>
-                      {showVoiceCapture ? (
-                        <VoiceMicButton
-                          phase={voicePhase}
-                          theme={t}
-                          onPress={() => {
-                            if (voicePhase === 'listening') {
-                              stopVoiceCaptureSession();
-                            } else {
-                              voiceCaptureBaseRef.current = text;
-                              void startVoiceCaptureSession();
+                    ) : (
+                      <View style={styles.composerInputRow}>
+                        <View style={styles.composerInputWrap}>
+                          <CaptureInput
+                            ref={inputRef}
+                            value={text}
+                            onChangeText={setText}
+                            onFocus={onCaptureComposerFocus}
+                            onSubmit={handleSubmit}
+                            minHeight={composerMinHeight}
+                            maxHeight={composerMaxHeight}
+                            placeholder="Jot a thought…"
+                            placeholderTextColor={capturePlaceholderColor}
+                            autoFocus={
+                              allowCaptureFocus &&
+                              !deferKeyboardForFirstLaunchReveal &&
+                              readEntry == null &&
+                              !echoOnEchoPage &&
+                              !recallSearchActive &&
+                              !suppressComposerAutoFocus
                             }
-                          }}
-                        />
-                      ) : null}
-                      {/* Fixed slot keeps the mic anchored: search appears/expands/collapses
-                          inside this reserved space without ever shifting capture controls. */}
-                      <View style={[styles.searchSlot, { marginTop: searchToggleAlignTop }]}>
-                        {showSearchToggle ? <StreamSearchToggle onPress={expandSearch} /> : null}
+                            editable={readEntry == null && !echoOnEchoPage && !recallSearchActive}
+                            showSoftInputOnFocus={
+                              readEntry == null && !echoOnEchoPage && !recallSearchActive
+                            }
+                          />
+                        </View>
+                        <Animated.View
+                          testID="composer-action-cluster"
+                          pointerEvents={composerActionClusterOpen ? 'auto' : 'none'}
+                          accessibilityElementsHidden={!composerActionClusterOpen}
+                          importantForAccessibility={
+                            composerActionClusterOpen ? 'auto' : 'no-hide-descendants'
+                          }
+                          style={[
+                            styles.composerActionCluster,
+                            {
+                              width: composerActionClusterWidth,
+                              marginLeft: composerActionClusterLeadingGap,
+                              opacity: composerActionClusterOpacity,
+                              paddingTop: VOICE_MIC_CLUSTER_OVERFLOW_PAD_TOP,
+                            },
+                          ]}
+                        >
+                          {showVoiceCapture ? (
+                            <VoiceMicButton
+                              phase={voicePhase}
+                              theme={t}
+                              onPress={() => {
+                                if (voicePhase === 'listening') {
+                                  stopVoiceCaptureSession();
+                                } else {
+                                  voiceCaptureBaseRef.current = text;
+                                  void startVoiceCaptureSession();
+                                }
+                              }}
+                            />
+                          ) : null}
+                        </Animated.View>
                       </View>
-                    </View>
+                    )}
                   </Animated.View>
                 </View>
-                {streamDisplayEntries.length > 0 && searchExpanded ? (
-                  <View
-                    testID="stream-search-sticky"
-                    style={[styles.searchStickyHeader, { paddingHorizontal: gutter }]}
-                  >
-                    <StreamSearchField
-                      ref={searchInputRef}
-                      glassSticky
-                      expanded={searchExpanded}
-                      focused={searchFocused}
-                      value={searchQuery}
-                      onChangeText={onSearchChangeText}
-                      onFocus={onSearchFocus}
-                      onBlur={onSearchBlur}
-                      onPressExpand={expandSearch}
-                      onPressClose={collapseSearch}
-                      resultLabel={searchResultLabel}
-                    />
-                  </View>
-                ) : null}
                 <ScrollView
                   testID="capture-stream-scroll"
                   ref={streamScrollViewRef}
@@ -1931,16 +2039,33 @@ export function CaptureScreen({
                   keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
                   nestedScrollEnabled
                   directionalLockEnabled
+                  bounces
+                  overScrollMode="always"
                   scrollEventThrottle={16}
                   onScroll={handleScroll}
+                  onScrollBeginDrag={handleScrollBeginDrag}
+                  onScrollEndDrag={handleScrollEndDrag}
                   onLayout={(e) => setStreamViewportHeight(e.nativeEvent.layout.height)}
                   contentContainerStyle={[
                     styles.scrollContent,
                     {
                       flexGrow: 1,
+                      paddingBottom: Math.max(insets.bottom, spacing.sm) + spacing.xl,
                     },
                   ]}
                 >
+                  {showStreamPullSearchHint ? (
+                    <View
+                      testID="stream-pull-search-hint"
+                      pointerEvents="none"
+                      style={[
+                        styles.streamPullSearchHint,
+                        { opacity: searchPullProgress * 0.55 },
+                      ]}
+                    >
+                      <StreamSearchGlyph color={t.colors.muted} size={13} />
+                    </View>
+                  ) : null}
                   <RecentList
                     entries={searchTrimmed.length > 0 ? searchResults : streamDisplayEntries}
                     visible
@@ -2193,31 +2318,26 @@ const styles = StyleSheet.create({
   composerBlock: {
     paddingHorizontal: screenContentInnerPad,
     paddingTop: 14,
-    /** Tighter than top — pulls search closer without compressing capture. */
+    /** Tighter than top — stream sits closer without compressing capture. */
     paddingBottom: 6,
-  },
-  composerBlockedWhileSearch: {
-    pointerEvents: 'none',
   },
   composerInputRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 6,
   },
   composerInputWrap: {
     flex: 1,
     minWidth: 0,
   },
-  /** Reserved trailing space so the mic never moves as search appears/opens/closes. */
-  searchSlot: {
-    width: STREAM_SEARCH_TOGGLE_TAP,
-    height: STREAM_SEARCH_TOGGLE_TAP,
-    alignItems: 'center',
-    justifyContent: 'center',
+  /** Mic only; width animates to 0 so the thought can use the full row. */
+  composerActionCluster: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    overflow: 'hidden',
   },
-  searchStickyHeader: {
-    zIndex: 2,
-    paddingTop: 2,
-    paddingBottom: 10,
+  streamPullSearchHint: {
+    alignItems: 'center',
+    paddingBottom: 6,
+    marginTop: -4,
   },
 });

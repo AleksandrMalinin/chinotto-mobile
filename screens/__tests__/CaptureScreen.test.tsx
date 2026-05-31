@@ -141,6 +141,25 @@ const STREAM_SEARCH_SEED_ENTRY = {
   createdAt: '2025-01-01T12:00:00.000Z',
 };
 
+const SCROLL_LAYOUT_NATIVE = {
+  contentSize: { height: 2000, width: 390 },
+  layoutMeasurement: { height: 600, width: 390 },
+};
+
+const PULL_SEARCH_SCROLL_EVENT = {
+  contentOffset: { y: -56, x: 0 },
+  ...SCROLL_LAYOUT_NATIVE,
+};
+
+function pullStreamToSearch(getByTestId: (id: string) => unknown) {
+  const scroll = getByTestId('capture-stream-scroll');
+  fireEvent(scroll, 'scrollBeginDrag', {
+    nativeEvent: { contentOffset: { y: 0, x: 0 }, ...SCROLL_LAYOUT_NATIVE },
+  });
+  fireEvent.scroll(scroll, { nativeEvent: PULL_SEARCH_SCROLL_EVENT });
+  fireEvent(scroll, 'scrollEndDrag', { nativeEvent: PULL_SEARCH_SCROLL_EVENT });
+}
+
 describe('CaptureScreen', () => {
   beforeEach(() => {
     jest.mocked(entryRepository.saveEntry).mockReset();
@@ -474,6 +493,7 @@ describe('CaptureScreen', () => {
 
     await findByTestId('capture-input');
     expect(queryByTestId('stream-search-toggle')).toBeNull();
+    expect(queryByTestId('stream-pull-search-hint')).toBeNull();
   });
 
   it('hides the system scroll indicator on the stream list', async () => {
@@ -530,7 +550,7 @@ describe('CaptureScreen', () => {
     }
   });
 
-  it('shows search only after tapping the search toggle', async () => {
+  it('opens search recall mode when the stream is pulled down', async () => {
     jest.mocked(Haptics.impactAsync).mockClear();
     jest
       .mocked(entryRepository.getRecentEntries)
@@ -541,16 +561,78 @@ describe('CaptureScreen', () => {
       </SafeAreaProvider>
     );
 
-    await findByTestId('capture-input');
-    await waitFor(() => {
-      expect(getByTestId('stream-search-toggle')).toBeTruthy();
-    });
+    await findByTestId(`recent-entry-${STREAM_SEARCH_SEED_ENTRY.id}`);
     expect(queryByTestId('stream-search-input')).toBeNull();
+    expect(queryByTestId('stream-search-toggle')).toBeNull();
 
-    fireEvent.press(getByTestId('stream-search-toggle'));
+    pullStreamToSearch(getByTestId);
     expect(getByTestId('stream-search-input')).toBeTruthy();
-    expect(getByTestId('capture-input').props.autoFocus).toBe(false);
+    expect(queryByTestId('capture-input')).toBeNull();
+    expect(queryByTestId('composer-action-cluster')).toBeNull();
     expect(jest.mocked(Haptics.impactAsync)).toHaveBeenCalledWith(Haptics.ImpactFeedbackStyle.Light);
+  });
+
+  it('does not open search when overscroll follows a scroll-up from below the top', async () => {
+    jest
+      .mocked(entryRepository.getRecentEntries)
+      .mockImplementation(() => Promise.resolve([STREAM_SEARCH_SEED_ENTRY]));
+    const { getByTestId, queryByTestId, findByTestId } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <CaptureScreen />
+      </SafeAreaProvider>
+    );
+
+    await findByTestId(`recent-entry-${STREAM_SEARCH_SEED_ENTRY.id}`);
+    const scroll = getByTestId('capture-stream-scroll');
+    fireEvent(scroll, 'scrollBeginDrag', {
+      nativeEvent: { contentOffset: { y: 180, x: 0 }, ...SCROLL_LAYOUT_NATIVE },
+    });
+    fireEvent.scroll(scroll, { nativeEvent: PULL_SEARCH_SCROLL_EVENT });
+    fireEvent(scroll, 'scrollEndDrag', { nativeEvent: PULL_SEARCH_SCROLL_EVENT });
+
+    expect(queryByTestId('stream-search-input')).toBeNull();
+    expect(getByTestId('capture-input')).toBeTruthy();
+  });
+
+  it('restores the capture row when search recall mode closes', async () => {
+    jest
+      .mocked(entryRepository.getRecentEntries)
+      .mockImplementation(() => Promise.resolve([STREAM_SEARCH_SEED_ENTRY]));
+    const { getByTestId, queryByTestId, findByTestId } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <CaptureScreen />
+      </SafeAreaProvider>
+    );
+
+    await findByTestId(`recent-entry-${STREAM_SEARCH_SEED_ENTRY.id}`);
+    pullStreamToSearch(getByTestId);
+    expect(queryByTestId('capture-input')).toBeNull();
+
+    fireEvent.press(getByTestId('stream-search-collapse'));
+    expect(getByTestId('capture-input')).toBeTruthy();
+    expect(queryByTestId('stream-search-mode')).toBeNull();
+  });
+
+  it('steps the action cluster aside while the user types', async () => {
+    jest
+      .mocked(entryRepository.getRecentEntries)
+      .mockImplementation(() => Promise.resolve([STREAM_SEARCH_SEED_ENTRY]));
+    const { findByTestId, getByTestId } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <CaptureScreen />
+      </SafeAreaProvider>
+    );
+
+    await findByTestId('capture-input');
+    expect(getByTestId('composer-action-cluster').props.pointerEvents).toBe('auto');
+
+    fireEvent.changeText(getByTestId('capture-input'), 'a thought');
+    expect(
+      getByTestId('composer-action-cluster', { includeHiddenElements: true }).props.pointerEvents,
+    ).toBe('none');
+
+    fireEvent.changeText(getByTestId('capture-input'), '');
+    expect(getByTestId('composer-action-cluster').props.pointerEvents).toBe('auto');
   });
 
   it('keeps focus on search input after a transient blur while typing', async () => {
@@ -559,23 +641,20 @@ describe('CaptureScreen', () => {
       jest
         .mocked(entryRepository.getRecentEntries)
         .mockImplementation(() => Promise.resolve([STREAM_SEARCH_SEED_ENTRY]));
-      const { getByTestId, findByTestId } = render(
+      const { getByTestId, queryByTestId, findByTestId } = render(
         <SafeAreaProvider initialMetrics={safeAreaMetrics}>
           <CaptureScreen />
         </SafeAreaProvider>
       );
 
-      await findByTestId('capture-input');
-      await waitFor(() => {
-        expect(getByTestId('stream-search-toggle')).toBeTruthy();
-      });
-      fireEvent.press(getByTestId('stream-search-toggle'));
+      await findByTestId(`recent-entry-${STREAM_SEARCH_SEED_ENTRY.id}`);
+      pullStreamToSearch(getByTestId);
       fireEvent(getByTestId('stream-search-input'), 'focus');
       fireEvent(getByTestId('stream-search-input'), 'blur');
       fireEvent.changeText(getByTestId('stream-search-input'), 'needle');
 
       expect(getByTestId('stream-search-input')).toBeTruthy();
-      expect(getByTestId('capture-input').props.autoFocus).toBe(false);
+      expect(queryByTestId('capture-input')).toBeNull();
 
       await act(async () => {
         jest.advanceTimersByTime(250);
@@ -600,11 +679,8 @@ describe('CaptureScreen', () => {
         </SafeAreaProvider>
       );
 
-      await findByTestId('capture-input');
-      await waitFor(() => {
-        expect(getByTestId('stream-search-toggle')).toBeTruthy();
-      });
-      fireEvent.press(getByTestId('stream-search-toggle'));
+      await findByTestId(`recent-entry-${STREAM_SEARCH_SEED_ENTRY.id}`);
+      pullStreamToSearch(getByTestId);
       fireEvent.changeText(getByTestId('stream-search-input'), 'needle');
 
       expect(jest.mocked(entryRepository.searchEntriesForRecall)).not.toHaveBeenCalled();
@@ -635,11 +711,8 @@ describe('CaptureScreen', () => {
       </SafeAreaProvider>
     );
 
-    await findByTestId('capture-input');
-    await waitFor(() => {
-      expect(getByTestId('stream-search-toggle')).toBeTruthy();
-    });
-    fireEvent.press(getByTestId('stream-search-toggle'));
+    await findByTestId(`recent-entry-${STREAM_SEARCH_SEED_ENTRY.id}`);
+    pullStreamToSearch(getByTestId);
     fireEvent.changeText(getByTestId('stream-search-input'), 'temp');
     jest.mocked(Haptics.impactAsync).mockClear();
 
@@ -647,7 +720,7 @@ describe('CaptureScreen', () => {
 
     expect(jest.mocked(Haptics.impactAsync)).toHaveBeenCalledWith(Haptics.ImpactFeedbackStyle.Light);
     expect(queryByTestId('stream-search-input')).toBeNull();
-    fireEvent.press(getByTestId('stream-search-toggle'));
+    pullStreamToSearch(getByTestId);
     expect(getByTestId('stream-search-input').props.value).toBe('');
   });
 

@@ -6,6 +6,7 @@ import {
 
 export function isTemporalScrubberEligible(params: {
   active: boolean;
+  /** Recall/search mode — hide temporal rack (not only when query is non-empty). */
   searchActive: boolean;
   /** Thought sheet open — hide rack chrome. */
   readSheetOpen?: boolean;
