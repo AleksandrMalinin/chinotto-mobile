@@ -120,6 +120,17 @@ export function VoiceMicButton({ phase, onPress, theme: t }: VoiceMicButtonProps
 const MIC_OUTER = 42;
 const MIC_INNER = 36;
 
+/** Pad the action cluster so mic ring alignment (negative marginTop) isn't clipped by overflow:hidden. */
+export const VOICE_MIC_CLUSTER_OVERFLOW_PAD_TOP = Math.max(
+  0,
+  -(
+    captureInputPaddingTop +
+    26 / 2 -
+    MIC_OUTER / 2 +
+    (Platform.OS === 'ios' ? -2 : -3)
+  ),
+);
+
 const styles = StyleSheet.create({
   micGradientRing: {
     width: MIC_OUTER,
