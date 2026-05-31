@@ -46,7 +46,11 @@ import { ChinottoLogo, chinottoLogoLeadingOutset } from '../components/ChinottoL
 import { EnableSyncModal } from '../components/EnableSyncModal';
 import { EntryThoughtSheet } from '../components/EntryThoughtSheet';
 import { RecentList } from '../components/RecentList';
-import { StreamSearchField, StreamSearchToggle } from '../components/StreamSearchField';
+import {
+  STREAM_SEARCH_TOGGLE_TAP,
+  StreamSearchField,
+  StreamSearchToggle,
+} from '../components/StreamSearchField';
 import { TemporalMapSheet } from '../components/temporal/TemporalMapSheet';
 import { TemporalMonthRack } from '../components/temporal/TemporalMonthRack';
 import type { ThoughtSheetOpenAnchor } from '../components/thoughtSheet/detents';
@@ -1410,11 +1414,11 @@ export function CaptureScreen({
   const composerMinHeight = 76;
   const composerMaxHeight = 120;
   const capturePlaceholderColor = t.colors.capturePlaceholder;
-  /** Centers the search toggle on the first capture line so it clusters with the mic. */
+  /** Centers the search slot on the first capture line so it clusters with the mic. */
   const searchToggleAlignTop =
     captureInputPaddingTop +
     t.typography.capture.lineHeight / 2 -
-    16 +
+    STREAM_SEARCH_TOGGLE_TAP / 2 +
     Platform.select({ ios: -2, default: -3 });
   /** Collapsed search lives beside the mic only when there is a stream to search. */
   const showSearchToggle = streamDisplayEntries.length > 0 && !searchExpanded;
@@ -1890,12 +1894,11 @@ export function CaptureScreen({
                           }}
                         />
                       ) : null}
-                      {showSearchToggle ? (
-                        <StreamSearchToggle
-                          onPress={expandSearch}
-                          style={{ marginTop: searchToggleAlignTop }}
-                        />
-                      ) : null}
+                      {/* Fixed slot keeps the mic anchored: search appears/expands/collapses
+                          inside this reserved space without ever shifting capture controls. */}
+                      <View style={[styles.searchSlot, { marginTop: searchToggleAlignTop }]}>
+                        {showSearchToggle ? <StreamSearchToggle onPress={expandSearch} /> : null}
+                      </View>
                     </View>
                   </Animated.View>
                 </View>
@@ -2204,6 +2207,13 @@ const styles = StyleSheet.create({
   composerInputWrap: {
     flex: 1,
     minWidth: 0,
+  },
+  /** Reserved trailing space so the mic never moves as search appears/opens/closes. */
+  searchSlot: {
+    width: STREAM_SEARCH_TOGGLE_TAP,
+    height: STREAM_SEARCH_TOGGLE_TAP,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   searchStickyHeader: {
     zIndex: 2,

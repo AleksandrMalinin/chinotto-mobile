@@ -41,7 +41,8 @@ const SHELL_RADIUS = 20;
 const BORDER_RING = 1;
 const CAPSULE_ROW_HEIGHT = 44;
 const SEARCH_PLACEHOLDER = 'Type a word or phrase…';
-const TOGGLE_TAP = 32;
+/** Fixed tap-target size for the collapsed search glyph; also the reserved slot width in the composer. */
+export const STREAM_SEARCH_TOGGLE_TAP = 32;
 
 /**
  * Quiet, on-demand search affordance. Lives beside the mic as a secondary-action cluster so search
@@ -360,8 +361,8 @@ const styles = StyleSheet.create({
   },
   /** Quiet tap target; sits in the composer's trailing cluster beside the mic (auxiliary to it). */
   clusterToggle: {
-    width: TOGGLE_TAP,
-    height: TOGGLE_TAP,
+    width: STREAM_SEARCH_TOGGLE_TAP,
+    height: STREAM_SEARCH_TOGGLE_TAP,
     alignItems: 'center',
     justifyContent: 'center',
     opacity: 0.32,
