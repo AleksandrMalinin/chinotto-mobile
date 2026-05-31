@@ -264,7 +264,13 @@ export const StreamSearchField = forwardRef<TextInputType, StreamSearchFieldProp
           onPress={onPressClose}
           style={({ pressed }) => [
             styles.trailingControl,
-            { backgroundColor: pressed ? closeFill : 'rgba(255,255,255,0.06)' },
+            {
+              backgroundColor: pressed
+                ? closeFill
+                : t.isDark
+                  ? 'rgba(255,255,255,0.1)'
+                  : 'rgba(255,255,255,0.06)',
+            },
           ]}
         >
           <Text style={[styles.closeGlyph, { color: colors.metaFg }]}>×</Text>

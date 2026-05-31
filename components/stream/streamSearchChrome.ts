@@ -23,15 +23,34 @@ export type StreamSearchChrome = {
   shadowActive: ViewStyle;
 };
 
+type IosLegibleInterior = {
+  idleVeil: string;
+  activeVeil: string;
+  idleInner: string;
+  activeInner: string;
+  idleSpecular: string;
+  activeSpecular: string;
+};
+
+/** Dark glass inside the glow — white type stays legible; outer rim/shadow unchanged. */
+function iosLegibleSearchInterior(veilRgb: string, fillRgb: string): IosLegibleInterior {
+  return {
+    idleVeil: `rgba(${veilRgb}, 0.5)`,
+    activeVeil: `rgba(${veilRgb}, 0.62)`,
+    idleInner: `rgba(${fillRgb}, 0.36)`,
+    activeInner: `rgba(${fillRgb}, 0.42)`,
+    idleSpecular: 'rgba(255, 255, 255, 0.1)',
+    activeSpecular: 'rgba(255, 255, 255, 0.14)',
+  };
+}
+
 /** Stream search — floating glass capsule (iOS material + gradient rim). */
 export function streamSearchChrome(t: AppTheme, active: boolean): StreamSearchChrome {
   const { colors, isDark, sunlightMode } = t;
 
   const blurTint =
     Platform.OS === 'ios'
-      ? sunlightMode
-        ? 'systemUltraThinMaterialLight'
-        : 'systemUltraThinMaterialDark'
+      ? 'systemUltraThinMaterialDark'
       : isDark
         ? 'dark'
         : 'light';
@@ -39,45 +58,51 @@ export function streamSearchChrome(t: AppTheme, active: boolean): StreamSearchCh
   const accent = colors.accent;
   const borderFocus = colors.borderFocus;
 
-  /** Idle: cool atmosphere tint — not a flat gray pill. */
-  const idleVeilIos = sunlightMode
-    ? 'rgba(102, 118, 198, 0.06)'
-    : isDark
-      ? 'rgba(88, 104, 168, 0.045)'
-      : 'rgba(100, 110, 170, 0.05)';
-  const activeVeilIos = sunlightMode
-    ? 'rgba(102, 118, 198, 0.1)'
-    : isDark
-      ? 'rgba(8, 9, 14, 0.09)'
-      : 'rgba(80, 90, 140, 0.08)';
+  const iosInterior = isDark
+    ? sunlightMode
+      ? iosLegibleSearchInterior('19, 18, 28', '29, 33, 48')
+      : iosLegibleSearchInterior('10, 10, 14', '15, 15, 20')
+    : null;
+
+  const idleVeilIos = iosInterior?.idleVeil ?? 'rgba(100, 110, 170, 0.05)';
+  const activeVeilIos = iosInterior?.activeVeil ?? 'rgba(80, 90, 140, 0.08)';
 
   const idleVeilAndroid = sunlightMode
     ? 'rgba(102, 118, 198, 0.1)'
     : isDark
-      ? 'rgba(100, 110, 175, 0.12)'
+      ? 'rgba(10, 10, 14, 0.52)'
       : 'rgba(255, 255, 255, 0.42)';
   const activeVeilAndroid = sunlightMode
     ? 'rgba(102, 118, 198, 0.16)'
     : isDark
-      ? 'rgba(10, 11, 16, 0.55)'
+      ? 'rgba(10, 10, 14, 0.64)'
       : 'rgba(255, 255, 255, 0.55)';
 
   const idleInnerAndroid = sunlightMode
     ? 'rgba(102, 118, 198, 0.08)'
     : isDark
-      ? 'rgba(128, 138, 188, 0.05)'
+      ? 'rgba(15, 15, 20, 0.36)'
       : 'rgba(252, 252, 254, 0.78)';
   const activeInnerAndroid = sunlightMode
     ? colors.surfaceSearch
     : isDark
-      ? 'rgba(14, 15, 20, 0.82)'
+      ? 'rgba(15, 15, 20, 0.42)'
       : 'rgba(252, 252, 254, 0.92)';
 
   return {
     blurTint,
     blurIntensity: Platform.OS === 'ios' ? (active ? 62 : 48) : active ? 48 : 36,
     veil: Platform.OS === 'ios' ? (active ? activeVeilIos : idleVeilIos) : active ? activeVeilAndroid : idleVeilAndroid,
-    innerFill: Platform.OS === 'ios' ? 'transparent' : active ? activeInnerAndroid : idleInnerAndroid,
+    innerFill:
+      Platform.OS === 'ios'
+        ? iosInterior
+          ? active
+            ? iosInterior.activeInner
+            : iosInterior.idleInner
+          : 'transparent'
+        : active
+          ? activeInnerAndroid
+          : idleInnerAndroid,
     borderGradientIdle: sunlightMode
       ? ['rgba(170, 188, 255, 0.28)', 'rgba(102, 118, 198, 0.1)', 'rgba(170, 188, 255, 0.16)']
       : isDark
@@ -86,8 +111,10 @@ export function streamSearchChrome(t: AppTheme, active: boolean): StreamSearchCh
     borderGradientActive: sunlightMode
       ? [accent, borderFocus, 'rgba(200, 210, 255, 0.5)']
       : [accent, borderFocus, 'rgba(100, 110, 170, 0.45)'],
-    specularTop: sunlightMode
-      ? 'rgba(255, 255, 255, 0.28)'
+    specularTop: iosInterior
+      ? active
+        ? iosInterior.activeSpecular
+        : iosInterior.idleSpecular
       : active
         ? 'rgba(255, 255, 255, 0.12)'
         : 'rgba(200, 210, 255, 0.07)',
