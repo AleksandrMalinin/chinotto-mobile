@@ -41,6 +41,6 @@ export function warnIfActiveSubscriptionButMissingChinottoProEntitlement(info: C
     subs,
     '\n  entitlements.active keys:',
     Object.keys(info.entitlements.active ?? {}),
-    '\n  → RevenueCat → Product → attach to entitlement **Chinotto Pro** (exact name). See docs/billing/revenuecat-dashboard.md.'
+    '\n  → RevenueCat → Product → attach to entitlement **Chinotto Pro** (exact name). See docs/internal/billing/revenuecat-dashboard.md.'
   );
 }

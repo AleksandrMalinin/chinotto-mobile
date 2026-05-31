@@ -17,9 +17,9 @@ Mobile app role:
 - Input is the primary UI
 - Thinking happens on desktop
 
-**Platform priority (this repo):** **iOS first** — ship-quality UX and sync (Sign in with Apple) target iPhone; **Android parity is deferred**. **Windows and Linux** desktop apps are **planned later** (desktop lives outside this repo). Product source of truth: `docs/product/product-spec.md`. External overview: `docs/product/product-brief.md`.
+**Platform priority (this repo):** **iOS first** — ship-quality UX and sync (Sign in with Apple) target iPhone; **Android parity is deferred**. **Windows and Linux** desktop apps are **planned later** (desktop lives outside this repo). Product source of truth: `docs/internal/product/product-spec.md`. External overview: `docs/internal/product/product-brief.md`.
 
-**Sync documentation:** **Wire contract** — `docs/sync/sync.md` (this repo). **Desktop** implementation and ops — Chinotto repo `docs/sync.md` (https://github.com/AleksandrMalinin/chinotto/blob/main/docs/sync.md). **Ship alignment** — `docs/sync/sync-release-checklist.md`, mirrored in `chinotto-app` (update both when criteria change). Log mobile implementation tweaks in `docs/sync/sync.md` § Changelog.
+**Sync documentation:** **Wire contract** — `docs/internal/sync/sync.md` (this repo). **Desktop** implementation and ops — Chinotto repo `docs/internal/sync.md` (https://github.com/AleksandrMalinin/chinotto/blob/main/docs/internal/sync.md). **Ship alignment** — `docs/internal/sync/sync-release-checklist.md`, mirrored in `chinotto-app` (update both when criteria change). Log mobile implementation tweaks in `docs/internal/sync/sync.md` § Changelog.
 
 Golden rule:
 > If a feature slows down capturing a thought → do not implement it.
@@ -234,7 +234,7 @@ Before implementing:
 If a feature requires a specific SDK version:
 → explicitly mention it
 
-**iOS App Store / TestFlight version + build:** this repo commits **`ios/`**. Bumping **`app.json` alone does not update `CFBundleShortVersionString`** in `ios/Chinotto/Info.plist`. Follow **`docs/release/ios-app-store-version-bump.md`** (and Cursor skill **`ios-version-app-store-release`**) whenever you change marketing version or build number for store submission.
+**iOS App Store / TestFlight version + build:** this repo commits **`ios/`**. Bumping **`app.json` alone does not update `CFBundleShortVersionString`** in `ios/Chinotto/Info.plist`. Follow **`docs/internal/release/ios-app-store-version-bump.md`** (and Cursor skill **`ios-version-app-store-release`**) whenever you change marketing version or build number for store submission.
 
 ---
 

@@ -28,7 +28,7 @@ import { refreshEntitlementCacheFromRevenueCat } from './revenueCat';
 let didConfigure = false;
 
 /**
- * RevenueCat / App Store setup checklist: `docs/billing/revenuecat-dashboard.md` (entitlement **Chinotto Pro**, products, current offering).
+ * RevenueCat / App Store setup checklist: `docs/internal/billing/revenuecat-dashboard.md` (entitlement **Chinotto Pro**, products, current offering).
  *
  * **Customer info:** registers the canonical `addCustomerInfoUpdateListener` that keeps `entitlementCache` in sync.
  * Avoid stacking a second listener for the same job (see `useSubscription` — prefer refresh helpers until consolidated).

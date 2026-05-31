@@ -269,7 +269,7 @@ export async function getNewestEntryInMonth(monthKey: MonthKey): Promise<Entry |
 }
 
 /**
- * Next page in global newest-first order. Tie-break on `id` matches docs/sync/sync.md ordering.
+ * Next page in global newest-first order. Tie-break on `id` matches docs/internal/sync/sync.md ordering.
  */
 export async function getEntriesOlderThan(cursor: EntryCursor, limit: number): Promise<Entry[]> {
   return runSerializedDb(async () => {

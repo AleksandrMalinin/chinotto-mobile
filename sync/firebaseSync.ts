@@ -45,7 +45,7 @@ export function getOrInitFirestore(): Firestore {
  * Idempotent Firestore upsert: `users/{uid}/entries/{entry.id}` with merge.
  * Sends `text`, `createdAt`, `updatedAt` (parity with desktop Phase 2+); clears `deletedAt` when reviving.
  * Requires a signed-in Firebase user (Sign in with Apple for stable sync). Queue stays pending until then.
- * Retries are safe if remote dedupes by document id (see docs/sync/sync.md).
+ * Retries are safe if remote dedupes by document id (see docs/internal/sync/sync.md).
  */
 export async function firebasePushEntry(entry: Entry): Promise<void> {
   if (!isFirebaseSyncConfigured()) {

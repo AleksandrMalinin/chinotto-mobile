@@ -465,7 +465,7 @@ private struct ChinottoLogoMark: View {
 
   var body: some View {
     ZStack {
-      // Matches docs/engineering/logo.svg geometry (64x64 viewBox).
+      // Matches docs/logo.svg geometry (64x64 viewBox).
       Circle()
         .stroke(markColor, lineWidth: max(1.2, size * 0.032))
         .frame(width: size * 0.875, height: size * 0.875)

@@ -16,7 +16,7 @@ This repo **commits `ios/`**. Updating **only** `app.json` / `package.json` can 
 
 Follow the canonical checklist (single source of truth):
 
-**`docs/release/ios-app-store-version-bump.md`**
+**`docs/internal/release/ios-app-store-version-bump.md`**
 
 ## Agent summary
 

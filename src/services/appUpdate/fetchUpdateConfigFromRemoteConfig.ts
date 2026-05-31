@@ -4,8 +4,8 @@
  * @see https://rnfirebase.io/remote-config/usage
  *
  * Console: parameter {@link APP_UPDATE_REMOTE_CONFIG_KEY} (string) — JSON matching {@link UpdateConfig}.
- * Starter for **Import template**: `docs/app-update/firebase-remote-config-template.json` (see
- * `docs/app-update/README.md`). In-app defaults match {@link mockUpdateConfig} until you publish.
+ * Starter for **Import template**: `docs/internal/app-update/firebase-remote-config-template.json` (see
+ * `docs/internal/app-update/README.md`). In-app defaults match {@link mockUpdateConfig} until you publish.
  */
 import remoteConfig from '@react-native-firebase/remote-config';
 

@@ -1,5 +1,5 @@
 /**
- * Chinotto mobile theme — mirrors `chinotto-app/docs/design-system.md` §2 (`:root` tokens).
+ * Chinotto mobile theme — mirrors `chinotto-app/docs/internal/design-system.md` §2 (`:root` tokens).
  *
  * Typography (matches live desktop app):
  * - **Open Sauce One** weights **400** and **500** for almost all UI after shell load

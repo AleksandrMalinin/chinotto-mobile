@@ -17,7 +17,7 @@ import { IntroRadialBlobView, type IntroBlobProfile } from './introRadialBlob';
 
 /**
  * Port of `chinotto-app` `StreamFlowPanel` + `stream-flow-*` CSS.
- * @see chinotto-app/docs/stream-flow-panel-animation.md
+ * @see chinotto-app/docs/internal/stream-flow-panel-animation.md
  */
 const VIEW_W = 220;
 const VIEW_H = 260;
