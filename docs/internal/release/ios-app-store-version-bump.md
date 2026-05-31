@@ -67,4 +67,4 @@ grep MARKETING_VERSION ios/Chinotto.xcodeproj/project.pbxproj | sort -u
 
 ## Связанные документы
 
-- Paywall / биллинг не зависят от номера версии; см. `docs/billing/` при проблемах с IAP.
+- Paywall / биллинг не зависят от номера версии; см. `docs/internal/billing/` при проблемах с IAP.

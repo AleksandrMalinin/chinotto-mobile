@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/engineering/logo.svg" width="80" alt="Chinotto" />
+  <img src="docs/logo.svg" width="80" alt="Chinotto" />
 </p>
 
 # Chinotto
@@ -13,52 +13,40 @@ Capture them instantly — without projects, folders, or workspaces.
 Structure can come later — when you revisit on desktop.
 
 Local-first. Works fully offline.  
-Your entries stay on your device.
-
 Optional sync (with Apple ID) keeps your thoughts with you across devices.
 
----
+## Download (iOS)
 
-## Run locally
+[App Store](https://apps.apple.com/us/app/chinotto/id6761345307)
 
-Prerequisites: Node.js, pnpm, Xcode (for iOS simulator or device).
+## Features
 
-```bash
-pnpm install
-pnpm start
-```
+- Capture thoughts instantly
+- One continuous stream instead of documents and folders
+- Full-text search
+- Share in from other apps (iOS)
+- iOS Home Widget — quick capture and recent thoughts
+- Voice capture
+- Optional sync with Chinotto desktop
 
-Open in Expo Go or a dev client, or run:
+## Data ownership
 
-```bash
-pnpm ios
-pnpm android
-```
+- **Local storage** — entries stay on your device in SQLite
+- **Account deletion** — when signed in for sync, remove cloud data from Settings → Account
 
-## Stack
+See [Privacy](docs/privacy.md) for local storage, optional sync, and analytics.
 
-- Expo (React Native)
-- TypeScript
-- SQLite (`expo-sqlite`)
-- Firebase (optional, for sync)
+## Updates
 
-## Core behavior
+New versions ship through the App Store. The app may prompt when a newer version is available.
 
-- **Capture** — open and start typing
-- **Stream** — recent thoughts; tap to read or continue in place
-- **Search** — find thoughts by text
-- **Share in** — capture from other apps
-- **iOS Home Widget** — Small / Medium / Large sizes with quick capture entry and recent thoughts preview
-- **Sync** (optional) — keep thoughts in sync across devices
+## Documentation
 
-### Widget interactions (iOS)
-
-- Tap the header/action area → opens capture (`chinotto://capture`)
-- Tap a thought row → opens that thought (`chinotto://thought/<id>`)
+- [Privacy](docs/privacy.md)
+- [Architecture](docs/architecture.md)
+- [Development](docs/development.md)
 
 ## Related
 
 - [Chinotto desktop](https://github.com/AleksandrMalinin/chinotto) — primary thinking surface
 - [Chinotto web](https://github.com/AleksandrMalinin/chinotto-web) — web companion / info site
-
-**Sync docs (this repo):** [docs/sync/sync.md](docs/sync/sync.md) — Firestore wire contract for mobile ↔ desktop. **Desktop app** (ingest, IPC, troubleshooting): [Chinotto `docs/sync.md`](https://github.com/AleksandrMalinin/chinotto/blob/main/docs/sync.md). **Release checklist:** [docs/sync/sync-release-checklist.md](docs/sync/sync-release-checklist.md) (keep in sync with the desktop copy).

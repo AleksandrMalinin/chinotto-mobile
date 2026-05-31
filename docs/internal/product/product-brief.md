@@ -57,5 +57,5 @@ Chinotto Mobile succeeds when it feels like a pocket for thoughts:
 
 ## Related docs
 
-- Product source of truth: `docs/product/product-spec.md`
-- Sync contract: `docs/sync/sync.md`
+- Product source of truth: `docs/internal/product/product-spec.md`
+- Sync contract: `docs/internal/sync/sync.md`

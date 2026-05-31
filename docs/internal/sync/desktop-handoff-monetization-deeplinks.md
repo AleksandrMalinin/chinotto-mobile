@@ -34,7 +34,7 @@ Do not assume desktop and mobile share a single checkout surface unless you add 
 ## Desktop should **not** assume
 
 - That opening the link **without** completing paywall + Apple on the phone means sync is paid or entitled.
-- **Exception:** `ds` is **not** proof of purchase by itself; Firestore **`sync_desktop_sessions/{ds}.unlocked`** is set only after mobile confirms access (see `docs/sync/sync.md` §3).
+- **Exception:** `ds` is **not** proof of purchase by itself; Firestore **`sync_desktop_sessions/{ds}.unlocked`** is set only after mobile confirms access (see `docs/internal/sync/sync.md` §3).
 - Android app links (mobile is **iOS-first** for this path; Android may follow separately).
 
 ---
@@ -42,6 +42,6 @@ Do not assume desktop and mobile share a single checkout surface unless you add 
 ## Pointers
 
 - **End-to-end unlock UX & states (desktop + mobile):** [`cross-device-sync-unlock-flow.md`](./cross-device-sync-unlock-flow.md)
-- Mobile universal links & testing: [`docs/sync/universal-links.md`](./universal-links.md)
-- RevenueCat / entitlement checklist (mobile): [`docs/billing/revenuecat-dashboard.md`](../billing/revenuecat-dashboard.md)
-- Wire + Firestore: [`docs/sync/sync.md`](./sync.md)
+- Mobile universal links & testing: [`docs/internal/sync/universal-links.md`](./universal-links.md)
+- RevenueCat / entitlement checklist (mobile): [`docs/internal/billing/revenuecat-dashboard.md`](../billing/revenuecat-dashboard.md)
+- Wire + Firestore: [`docs/internal/sync/sync.md`](./sync.md)

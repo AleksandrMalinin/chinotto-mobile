@@ -51,7 +51,7 @@ You **cannot** reset “legacy subscribed” for a specific Apple ID from the se
 
 If logs show **`activeSubscriptions`** with `chinotto.pro.*` but **`activeEntitlementIds`** is **empty** (or no **Chinotto Pro**), RevenueCat is **not** granting the entitlement. The app only checks **`entitlements.active["Chinotto Pro"]`**, not raw subscription ids.
 
-**Fix:** [RevenueCat dashboard](https://app.revenuecat.com) → each **product** → ensure **Chinotto Pro** is attached under entitlements. Name must match **exactly** `Chinotto Pro` (see `docs/billing/revenuecat-dashboard.md`).
+**Fix:** [RevenueCat dashboard](https://app.revenuecat.com) → each **product** → ensure **Chinotto Pro** is attached under entitlements. Name must match **exactly** `Chinotto Pro` (see `docs/internal/billing/revenuecat-dashboard.md`).
 
 After fixing, use **Restore purchases** on the paywall or relaunch; in **`__DEV__`** you should also see **`[Chinotto][RevenueCat]`** warning when this mismatch is detected.
 
