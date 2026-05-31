@@ -1,7 +1,10 @@
 import { motion } from './motion';
 
-/** Feature gate — Remote Config kill switch later. */
-export const ECHO_LAYER_ENABLED = true;
+/** Production feature gate — Remote Config kill switch later. Off for launch; flip to `true` to ship Echo to everyone. */
+export const ECHO_LAYER_ENABLED = false;
+
+/** Runtime gate: off in production until launch, but always on in dev builds for dogfooding. */
+export const ECHO_LAYER_ACTIVE = ECHO_LAYER_ENABLED || __DEV__;
 
 /** Show echo layer only after this many local thoughts (avoids noise for new users). */
 export const ECHO_LAYER_MIN_ENTRY_COUNT = 40;

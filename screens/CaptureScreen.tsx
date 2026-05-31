@@ -80,7 +80,7 @@ import {
 import { ECHO_UI_VARIANT_SHIPPED } from '../constants/echoUiVariant';
 import {
   ECHO_COMPOSER_DIM_AT_FULL,
-  ECHO_LAYER_ENABLED,
+  ECHO_LAYER_ACTIVE,
   ECHO_COMPOSER_DIM_RELEASE_AT,
   ECHO_EDGE_PEEK_INITIAL_DELAY_MS,
   ECHO_RECALL_DIM_IN_MS,
@@ -702,7 +702,7 @@ export function CaptureScreen({
   }, [entries.length]);
 
   useEffect(() => {
-    if (!ECHO_LAYER_ENABLED) {
+    if (!ECHO_LAYER_ACTIVE) {
       setEchoCandidates([]);
       return;
     }
@@ -1272,7 +1272,7 @@ export function CaptureScreen({
   const onReadEntryUpdated = useCallback((updated: Entry) => {
     setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
     setSearchResults((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
-    if (ECHO_LAYER_ENABLED) {
+    if (ECHO_LAYER_ACTIVE) {
       void resolveEchoCandidates({
         fallbackEntries: streamDisplayEntries,
         preferStreamFallback: __DEV__ && streamDisplayEntries.length > 0,
@@ -1420,7 +1420,7 @@ export function CaptureScreen({
     [echoCandidates, streamDisplayEntries],
   );
   const echoLayerEligible = isEchoLayerMountedForCapture({
-    active: ECHO_LAYER_ENABLED,
+    active: ECHO_LAYER_ACTIVE,
     searchActive,
     readSheetOpen: readEntry != null,
     totalEntryCount: Math.max(totalEntryCount, streamDisplayEntries.length),

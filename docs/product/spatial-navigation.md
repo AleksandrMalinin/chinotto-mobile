@@ -2,7 +2,7 @@
 
 Product and implementation plan for **adjacent mental layers** beside the capture stream — without tabs, folders, or PKM chrome.
 
-**Status:** Echo layer shipped behind `ECHO_LAYER_ENABLED` (on) — **Threshold** UI (one presence + ghosts). Continuity exploration — [`echo-continuity-exploration.md`](echo-continuity-exploration.md). Temporal orientation — see [`temporal-navigation.md`](temporal-navigation.md).  
+**Status:** Echo layer merged behind `ECHO_LAYER_ENABLED` — **off in production**, on in dev builds for dogfooding (`ECHO_LAYER_ACTIVE = ECHO_LAYER_ENABLED || __DEV__`); flip `ECHO_LAYER_ENABLED` to `true` to launch. **Threshold** UI (one presence + ghosts). Continuity exploration — [`echo-continuity-exploration.md`](echo-continuity-exploration.md). Temporal orientation — see [`temporal-navigation.md`](temporal-navigation.md).  
 **Related:** [`product-spec.md`](product-spec.md), [`../../AGENTS.md`](../../AGENTS.md).
 
 ---
@@ -137,7 +137,7 @@ Echo must **not** reuse stream row chrome (hairlines, section labels, clock time
 
 | Gate | Default |
 |------|---------|
-| Feature flag | `ECHO_LAYER_ENABLED` (on; Remote Config kill switch later) |
+| Feature flag | `ECHO_LAYER_ENABLED` (off in production, on in dev via `ECHO_LAYER_ACTIVE`; Remote Config kill switch later) |
 | Min entries | 40 (`ECHO_LAYER_MIN_ENTRY_COUNT`) |
 | Min candidates | 3 scored thoughts |
 | Blockers | Search active, read sheet open |
@@ -248,3 +248,4 @@ Never duplicate timeline as a full horizontal page. Temporal = **when**; Echo = 
 | 2026-05-24 | `ECHO_LAYER_ENABLED` default on; removed dev menu toggle. |
 | 2026-05-24 | Echo polish — opaque shell, theme text colors, capture veil + composer fade on Echo page. |
 | 2026-05-25 | Threshold Echo UI; continuity mechanics (cooldown, stems, interruption); [`echo-continuity-exploration.md`](echo-continuity-exploration.md). |
+| 2026-05-31 | Merged `feat/echo-layer` to `main`; `ECHO_LAYER_ENABLED` flipped **off for production** (dev-on via `ECHO_LAYER_ACTIVE`). |
