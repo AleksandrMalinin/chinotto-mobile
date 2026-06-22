@@ -1,5 +1,9 @@
 # iOS App Store / TestFlight — bump версии и билда
 
+> **Важно (текущая конфигурация EAS):** `eas.json` использует **`appVersionSource: "remote"`** + `production.autoIncrement: true`. Это значит:
+> - **Номер билда** (`CFBundleVersion`) держит и инкрементит **EAS** на своих серверах. Поле **`ios.buildNumber` в `app.json` игнорируется и удалено**; закоммиченные `CFBundleVersion` / `CURRENT_PROJECT_VERSION` EAS перезаписывает во время сборки. Узнать/выставить remote-значение: `eas build:version:get --platform ios` / `eas build:version:set`.
+> - **Маркетинговая версия** (`CFBundleShortVersionString`) по-прежнему берётся из **`app.json` `version`** — её и нужно держать выровненной (шаг 1). Шаги 2–5 ниже про локальный build number актуальны только если переключиться обратно на `appVersionSource: "local"`.
+
 В этом репозитории закоммичен нативный каталог **`ios/`**. **Только `app.json` / `package.json` недостаточно:** Apple читает **`CFBundleShortVersionString`** и **`CFBundleVersion`** из **`ios/Chinotto/Info.plist`** и настроек таргетов в Xcode. Если их не обновить, в Transporter/App Store Connect уйдёт старая версия (типичные ошибки **90062**, **90186**).
 
 ## Когда открывать этот чеклист
