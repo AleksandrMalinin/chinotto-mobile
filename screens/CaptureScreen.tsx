@@ -170,6 +170,7 @@ import { isHomeDepthRecallVisible, pickHomeDepthRecallCandidate } from '../utils
 import { buildThoughtTrailLinkedIds } from '../utils/thoughtTrail';
 import {
   isTemporalScrubberEligible,
+  isTemporalScrubberVisible,
 } from '../utils/temporalScrubberVisibility';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -1617,7 +1618,12 @@ export function CaptureScreen({
     totalEntryCount,
     hasStreamRows: streamDisplayEntries.length > 0,
   });
-  const showTemporalScrubber = temporalScrubberEligible;
+  const showTemporalScrubber = isTemporalScrubberVisible({
+    eligible: temporalScrubberEligible,
+    atCapture: temporalRackAtCapture,
+    streamScrollY,
+    scrollVelocityY: streamScrollVelocityY,
+  });
 
   const spatialGestureHintsBaseVisible =
     readEntry == null &&
