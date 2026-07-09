@@ -68,4 +68,20 @@ describe('TemporalMapSheet', () => {
     expect(onSelectMonth).toHaveBeenCalledWith('2026-03');
     expect(onClose).toHaveBeenCalled();
   });
+
+  it('renders year density strip blocks', () => {
+    const { getByTestId } = renderMap(
+      <TemporalMapSheet
+        visible
+        months={months}
+        highlightedMonthKey="2026-05"
+        onClose={jest.fn()}
+        onSelectMonth={jest.fn()}
+        hapticsEnabled={false}
+      />,
+    );
+
+    expect(getByTestId('temporal-map-density-strip')).toBeTruthy();
+    expect(getByTestId('temporal-map-density-2026-05')).toBeTruthy();
+  });
 });

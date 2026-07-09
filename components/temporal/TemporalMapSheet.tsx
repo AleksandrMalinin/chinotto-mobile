@@ -35,6 +35,7 @@ import { groupMonthSummariesByYear, maxMonthThoughtCount } from '../../utils/tem
 import { thoughtSheetBackdropA11yLabel } from '../thoughtSheet/backdropAction';
 import { useSheetDragDismiss } from '../thoughtSheet/useSheetDragDismiss';
 import { useSheetEnterAnimation } from '../thoughtSheet/useSheetEnterAnimation';
+import { TemporalMapDensityStrip } from './TemporalMapDensityStrip';
 import { temporalChromeColors } from './temporalChrome';
 
 export type TemporalMapSheetProps = {
@@ -289,6 +290,12 @@ export function TemporalMapSheet({
                       >
                         {group.yearLabel}
                       </Text>
+                      <TemporalMapDensityStrip
+                        months={group.months}
+                        activityMax={activityMax}
+                        highlightedMonthKey={highlightedMonthKey}
+                        onSelectMonth={handleSelectMonth}
+                      />
                       <View
                         style={[
                           styles.monthGroup,
