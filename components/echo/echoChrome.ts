@@ -77,7 +77,10 @@ export function echoChromeFromTheme(t: AppTheme): EchoChromeColors {
 }
 
 export function echoAccentForKind(chrome: EchoChromeColors, kind: EchoCandidateKind): string {
-  return kind === 'gravity' ? chrome.gravityAccent : chrome.driftAccent;
+  if (kind === 'gravity') {
+    return chrome.gravityAccent;
+  }
+  return chrome.driftAccent;
 }
 
 /** Warm vs cool fragment edge — no dot, no badge. */
@@ -85,7 +88,10 @@ export function echoFragmentBorderForKind(
   chrome: EchoChromeColors,
   kind: EchoCandidateKind,
 ): string {
-  return kind === 'gravity' ? chrome.fragmentBorderGravity : chrome.fragmentBorderDrift;
+  if (kind === 'gravity') {
+    return chrome.fragmentBorderGravity;
+  }
+  return chrome.fragmentBorderDrift;
 }
 
 /** @deprecated Use {@link echoChromeFromTheme}. Kept for tests that pass isDark only. */

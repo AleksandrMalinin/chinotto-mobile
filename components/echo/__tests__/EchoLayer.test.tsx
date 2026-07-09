@@ -9,13 +9,8 @@ const candidates: EchoCandidate[] = [
     id: '1',
     text: 'Persistent thought',
     createdAt: '2026-05-01T10:00:00.000Z',
-    kind: 'gravity',
-  },
-  {
-    id: '2',
-    text: 'Older drift',
-    createdAt: '2025-01-01T10:00:00.000Z',
-    kind: 'drift',
+    kind: 'temporal',
+    reason: 'From last week',
   },
 ];
 
@@ -35,23 +30,20 @@ function renderEcho() {
 }
 
 describe('EchoLayer', () => {
-  it('uses palimpsest vessel without scroll or explanatory headline', () => {
+  it('uses recall vessel without scroll or explanatory headline', () => {
     const { getByTestId, queryByTestId, queryByText } = renderEcho();
 
     expect(getByTestId('echo-layer')).toBeTruthy();
-    expect(getByTestId('echo-palimpsest-vessel')).toBeTruthy();
+    expect(getByTestId('echo-recall-card')).toBeTruthy();
     expect(queryByTestId('echo-layer-scroll')).toBeNull();
-    expect(queryByTestId('echo-layer-kicker')).toBeNull();
-    expect(queryByTestId('echo-memory-vessel')).toBeNull();
+    expect(queryByTestId('echo-palimpsest-vessel')).toBeNull();
     expect(queryByText('Thoughts that resurfaced over time.')).toBeNull();
-    expect(queryByText('Revisited')).toBeNull();
-    expect(queryByText('Earlier')).toBeNull();
   });
 
-  it('opens thought from primary press', () => {
-    const { getByTestId, onEntryPress } = renderEcho();
+  it('opens thought from recall card press', () => {
+    const { getByText, onEntryPress } = renderEcho();
 
-    fireEvent.press(getByTestId('echo-palimpsest-primary-1'));
+    fireEvent.press(getByText('Resume'));
     expect(onEntryPress).toHaveBeenCalledWith(
       expect.objectContaining({ id: '1' }),
       undefined,

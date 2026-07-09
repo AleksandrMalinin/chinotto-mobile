@@ -6,6 +6,7 @@ import type { EchoSessionThread } from '../utils/echoContinuitySignals';
 
 const KEY_EDGE_PEEK = '@chinotto/echo_layer_edge_peek_done_v1';
 const KEY_EDGE_PEEK_LAST = '@chinotto/echo_layer_edge_peek_last_v1';
+const KEY_SWIPE_HINT_DISMISSED = '@chinotto/echo_swipe_hint_dismissed_v1';
 const KEY_DISPLAY_COOLDOWN = '@chinotto/echo_display_cooldown_v1';
 const KEY_SESSION_THREAD = '@chinotto/echo_session_thread_v1';
 const KEY_LAST_BACKGROUND = '@chinotto/echo_last_background_v1';
@@ -90,6 +91,30 @@ export async function shouldOfferEchoEdgePeek(now: Date = new Date()): Promise<b
 export async function clearEchoEdgePeekDone(): Promise<void> {
   try {
     await AsyncStorage.multiRemove([KEY_EDGE_PEEK, KEY_EDGE_PEEK_LAST]);
+  } catch {
+    /* ignore */
+  }
+}
+
+export async function getEchoSwipeHintDismissed(): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(KEY_SWIPE_HINT_DISMISSED)) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export async function setEchoSwipeHintDismissed(): Promise<void> {
+  try {
+    await AsyncStorage.setItem(KEY_SWIPE_HINT_DISMISSED, '1');
+  } catch {
+    /* ignore */
+  }
+}
+
+export async function clearEchoSwipeHintDismissed(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(KEY_SWIPE_HINT_DISMISSED);
   } catch {
     /* ignore */
   }

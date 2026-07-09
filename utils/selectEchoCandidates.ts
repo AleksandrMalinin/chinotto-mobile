@@ -19,10 +19,14 @@ export type EchoEngagementRow = {
   lastOpenedAt: string | null;
 };
 
-export type EchoCandidateKind = 'gravity' | 'drift';
+export type EchoCandidateKind = 'gravity' | 'drift' | 'temporal';
 
 export type EchoCandidate = Entry & {
   kind: EchoCandidateKind;
+  reason?: string;
+  trailNeighborCount?: number;
+  /** Submerged one-line traces — trail neighbors, not a feed. */
+  ghostTraces?: readonly string[];
 };
 
 export type SelectEchoCandidatesOptions = {
@@ -192,8 +196,16 @@ export function selectEchoCandidates(
   );
 
   const out: EchoCandidate[] = [
-    ...gravityPicked.map(({ entry }) => ({ ...entry, kind: 'gravity' as const })),
-    ...drift.map(({ entry }) => ({ ...entry, kind: 'drift' as const })),
+    ...gravityPicked.map(({ entry }) => ({
+      ...entry,
+      kind: 'gravity' as const,
+      reason: 'Still here',
+    })),
+    ...drift.map(({ entry }) => ({
+      ...entry,
+      kind: 'drift' as const,
+      reason: 'From earlier',
+    })),
   ];
 
   if (out.length >= limit) {
@@ -208,7 +220,7 @@ export function selectEchoCandidates(
     if (out.length >= limit) {
       break;
     }
-    out.push({ ...row.entry, kind: 'drift' });
+    out.push({ ...row.entry, kind: 'drift', reason: 'From earlier' });
   }
 
   return withPrimaryFirst(out.slice(0, limit), options.primaryEntryId);

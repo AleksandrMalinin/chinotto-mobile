@@ -1,4 +1,4 @@
-/** Shipped Echo surface — palimpsest peel deck. */
-export type EchoUiVariant = 'threshold' | 'palimpsest' | 'filament' | 'field';
+/** Shipped Echo surface — temporal recall card aligned with desktop MemoryEcho. */
+export type EchoUiVariant = 'threshold' | 'palimpsest' | 'filament' | 'field' | 'recall';
 
-export const ECHO_UI_VARIANT_SHIPPED: EchoUiVariant = 'palimpsest';
+export const ECHO_UI_VARIANT_SHIPPED: EchoUiVariant = 'recall';

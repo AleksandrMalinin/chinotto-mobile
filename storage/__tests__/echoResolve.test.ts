@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { recordEchoCandidatesDisplayed } from '../echoLayerPrefs';
 import { buildEchoCandidates } from '../echoResolve';
+import { markAsShown } from '../resurfaceSession';
 import type { EchoEngagementRow } from '../../utils/selectEchoCandidates';
 
 function row(
@@ -24,29 +25,43 @@ describe('buildEchoCandidates', () => {
     await AsyncStorage.clear();
   });
 
-  it('returns scored candidates with cooldown and session prefs applied', async () => {
+  it('returns one temporal recall candidate with reason copy', async () => {
     const rows = [
-      row('hot', '2026-05-20T10:00:00.000Z', {
-        openCount: 4,
-        lastOpenedAt: '2026-05-23T10:00:00.000Z',
-      }),
-      row('old', '2025-01-10T10:00:00.000Z'),
+      row('week', '2026-05-17T10:00:00.000Z'),
+      row('noise', '2026-05-23T10:00:00.000Z'),
     ];
-    const picked = await buildEchoCandidates({ rows, limit: 5, now });
-    expect(picked.length).toBeGreaterThan(0);
-    expect(picked.some((c) => c.kind === 'gravity' || c.kind === 'drift')).toBe(true);
+    const picked = await buildEchoCandidates({
+      rows,
+      limit: 1,
+      now,
+      rng: () => 0,
+    });
+    expect(picked).toHaveLength(1);
+    expect(picked[0]?.kind).toBe('temporal');
+    expect(picked[0]?.reason).toMatch(/^From /);
   });
 
-  it('excludes displayed entries longer when opened without edit', async () => {
+  it('excludes displayed entries in cooldown', async () => {
     const shown = new Date('2026-05-01T10:00:00.000Z');
     const now = new Date('2026-05-16T12:00:00.000Z');
     await recordEchoCandidatesDisplayed(['stale'], shown);
     const rows = [
-      row('stale', '2025-01-10T10:00:00.000Z', { openCount: 3, editCount: 0 }),
-      row('fresh', '2025-02-10T10:00:00.000Z'),
+      row('stale', '2026-05-09T10:00:00.000Z', { openCount: 3, editCount: 0 }),
+      row('fresh', '2026-05-08T10:00:00.000Z'),
     ];
-    const picked = await buildEchoCandidates({ rows, limit: 5, now });
+    const picked = await buildEchoCandidates({ rows, limit: 1, now, rng: () => 0 });
     expect(picked.every((c) => c.id !== 'stale')).toBe(true);
-    expect(picked.some((c) => c.id === 'fresh')).toBe(true);
+    expect(picked[0]?.id).toBe('fresh');
+  });
+
+  it('excludes resurfaced entries in 7-day cooldown', async () => {
+    const now = new Date('2026-05-24T12:00:00.000Z');
+    await markAsShown('blocked');
+    const rows = [
+      row('blocked', '2026-05-17T10:00:00.000Z'),
+      row('open', '2026-05-16T10:00:00.000Z'),
+    ];
+    const picked = await buildEchoCandidates({ rows, limit: 1, now, rng: () => 0 });
+    expect(picked[0]?.id).toBe('open');
   });
 });

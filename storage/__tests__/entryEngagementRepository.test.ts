@@ -97,9 +97,9 @@ describe('entryEngagementRepository', () => {
       },
     ]);
 
-    const candidates = await getEchoCandidates(7);
-    expect(candidates.length).toBeGreaterThanOrEqual(3);
-    expect(candidates.every((c) => c.text.length > 0)).toBe(true);
+    const candidates = await getEchoCandidates(1);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]?.text.length).toBeGreaterThan(0);
   });
 
   it('resolveEchoCandidates uses stream fallback when DB is sparse', async () => {
@@ -112,7 +112,8 @@ describe('entryEngagementRepository', () => {
         { id: 'b', text: 'two', createdAt: '2025-02-01T00:00:00.000Z' },
       ],
     });
-    expect(candidates).toHaveLength(2);
+    expect(candidates).toHaveLength(1);
+    expect(['a', 'b']).toContain(candidates[0]?.id);
   });
 
   it('resolveEchoCandidates uses stream fallback when DB read throws', async () => {
@@ -126,6 +127,7 @@ describe('entryEngagementRepository', () => {
         { id: 'c', text: 'gamma', createdAt: '2025-03-01T00:00:00.000Z' },
       ],
     });
-    expect(candidates.length).toBeGreaterThanOrEqual(3);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]?.id).toBeTruthy();
   });
 });

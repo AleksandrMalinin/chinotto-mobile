@@ -19,12 +19,14 @@ import { ECHO_UI_VARIANT_SHIPPED } from '../../constants/echoUiVariant';
 import { EchoFieldVessel } from './EchoFieldVessel';
 import { EchoFilamentVessel } from './EchoFilamentVessel';
 import { EchoPalimpsestVessel } from './EchoPalimpsestVessel';
+import { EchoRecallCardVessel } from './EchoRecallCardVessel';
 import { EchoThresholdVessel } from './EchoThresholdVessel';
 import { echoChromeFromTheme } from './echoChrome';
 
 export type EchoLayerProps = {
   candidates: readonly EchoCandidate[];
   onEntryPress?: (entry: EchoCandidate, anchor?: ThoughtSheetOpenAnchor) => void;
+  onDismiss?: () => void;
   /** Pager scroll — drives delayed content fade + parallax. */
   scrollX?: Animated.Value;
   pageWidth?: number;
@@ -40,6 +42,7 @@ export type EchoLayerProps = {
 export function EchoLayer({
   candidates,
   onEntryPress,
+  onDismiss,
   scrollX,
   pageWidth = 0,
   uiVariant = ECHO_UI_VARIANT_SHIPPED,
@@ -102,6 +105,20 @@ export function EchoLayer({
 
   const body = (() => {
     switch (uiVariant) {
+      case 'recall': {
+        const primary = candidates[0];
+        if (!primary) {
+          return null;
+        }
+        return (
+          <EchoRecallCardVessel
+            candidate={primary}
+            chrome={chrome}
+            onEntryPress={onEntryPress != null ? onPrimaryPress : undefined}
+            onDismiss={onDismiss}
+          />
+        );
+      }
       case 'field':
         return (
           <EchoFieldVessel
@@ -166,8 +183,8 @@ export function EchoLayer({
       style={[
         styles.shell,
         {
-          paddingTop: t.spacing.xl,
-          paddingBottom: Math.max(insets.bottom, t.spacing.lg) + t.spacing.xl,
+          paddingTop: t.spacing.sm,
+          paddingBottom: Math.max(insets.bottom, t.spacing.md),
           paddingHorizontal: gutter,
         },
       ]}

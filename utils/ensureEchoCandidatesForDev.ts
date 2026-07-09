@@ -17,17 +17,22 @@ export function ensureEchoCandidatesForDev(
     return [];
   }
   if (streamEntries.length > 0) {
-    return streamEntries.slice(0, 7).map((entry) => ({
-      ...entry,
-      kind: 'gravity' as const,
-    }));
+    const entry = streamEntries[0]!;
+    return [
+      {
+        ...entry,
+        kind: 'temporal',
+        reason: 'From last week',
+      },
+    ];
   }
   return [
     {
       id: '__dev_echo_seed__',
       text: 'A thought that still echoes.',
       createdAt: new Date().toISOString(),
-      kind: 'gravity',
+      kind: 'temporal',
+      reason: 'From yesterday',
     },
   ];
 }

@@ -8,6 +8,7 @@ import { EchoLayer } from './EchoLayer';
 export type EchoPageShellProps = {
   candidates: readonly EchoCandidate[];
   onEntryPress?: (entry: EchoCandidate, anchor?: ThoughtSheetOpenAnchor) => void;
+  onDismiss?: () => void;
   scrollX?: Animated.Value;
   pageWidth?: number;
   uiVariant?: EchoUiVariant;
@@ -19,6 +20,7 @@ export type EchoPageShellProps = {
 export function EchoPageShell({
   candidates,
   onEntryPress,
+  onDismiss,
   scrollX,
   pageWidth,
   uiVariant,
@@ -30,6 +32,7 @@ export function EchoPageShell({
       <EchoLayer
         candidates={candidates}
         onEntryPress={onEntryPress}
+        onDismiss={onDismiss}
         scrollX={scrollX}
         pageWidth={pageWidth}
         uiVariant={uiVariant}

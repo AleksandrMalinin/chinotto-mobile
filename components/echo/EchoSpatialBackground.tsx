@@ -82,7 +82,9 @@ export function EchoSpatialBackground({
         style={[StyleSheet.absoluteFill, { opacity: echoPresence }]}
         pointerEvents="none"
       >
-        <EchoGradientWash chrome={chrome} />
+        <Animated.View style={{ flex: 1, opacity: 0.38 }}>
+          <EchoGradientWash chrome={chrome} />
+        </Animated.View>
       </Animated.View>
     </>
   );
