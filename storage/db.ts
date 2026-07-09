@@ -1,5 +1,7 @@
 import { openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
 
+import { ensureThemeSchema } from './themeSchema';
+
 let initPromise: Promise<SQLiteDatabase> | null = null;
 
 /**
@@ -36,6 +38,7 @@ export function initDatabase(): Promise<SQLiteDatabase> {
         last_edited_at TEXT
       );`
     );
+    await ensureThemeSchema(db);
     return db;
   })();
   return initPromise;
