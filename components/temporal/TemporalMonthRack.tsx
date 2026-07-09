@@ -58,6 +58,8 @@ export type TemporalMonthRackProps = {
   /** Bottom inset above home indicator (include safe area from screen). */
   bottomInset?: number;
   onScrubbingChange?: (scrubbing: boolean) => void;
+  /** Live stream sync while scrubbing — before commit on scroll end. */
+  onMonthPreview?: (monthKey: MonthKey) => void;
   onMonthCommitted: (monthKey: MonthKey) => void;
   onActiveMonthPress: () => void;
   hapticsEnabled?: boolean;
@@ -71,6 +73,7 @@ export function TemporalMonthRack({
   rightInset,
   bottomInset = TEMPORAL_RACK_BOTTOM_INSET,
   onScrubbingChange,
+  onMonthPreview,
   onMonthCommitted,
   onActiveMonthPress,
   hapticsEnabled = true,
@@ -84,6 +87,7 @@ export function TemporalMonthRack({
   const [isScrubbing, setIsScrubbing] = useState(false);
   const programmaticScrollRef = useRef(false);
   const lastHapticIndexRef = useRef(-1);
+  const lastPreviewIndexRef = useRef(-1);
   const [scrollOffsetY, setScrollOffsetY] = useState(0);
   const [reduceMotion, setReduceMotion] = useState(false);
   const yearOpacity = useRef(new Animated.Value(1)).current;
@@ -200,8 +204,15 @@ export function TemporalMonthRack({
       }
       const idx = monthRackIndexFromScrollOffset(y, monthKeys.length);
       fireBoundaryHaptic(idx);
+      if (scrubbingRef.current && idx !== lastPreviewIndexRef.current) {
+        lastPreviewIndexRef.current = idx;
+        const previewKey = monthKeys[idx];
+        if (previewKey != null) {
+          onMonthPreview?.(previewKey);
+        }
+      }
     },
-    [fireBoundaryHaptic, monthKeys.length],
+    [fireBoundaryHaptic, monthKeys, onMonthPreview],
   );
 
   const setScrubbing = useCallback(
@@ -224,6 +235,7 @@ export function TemporalMonthRack({
   }, [activeMonthKey, monthKeys.length, onMonthCommitted]);
 
   const onScrollBeginDrag = useCallback(() => {
+    lastPreviewIndexRef.current = -1;
     setScrubbing(true);
   }, [setScrubbing]);
 

@@ -1,10 +1,10 @@
 /** Feature gate — Remote Config kill switch later. */
 export const TEMPORAL_NAV_ENABLED = true;
 
-/** Show temporal chrome only after this many local thoughts (avoids noise for new users). */
-export const TEMPORAL_NAV_MIN_ENTRY_COUNT = 40;
+/** Show temporal chrome after this many local thoughts (rack needs ≥2 months in data). */
+export const TEMPORAL_NAV_MIN_ENTRY_COUNT = 3;
 
-/** Stream scroll Y (px) past which passive month scrubber may appear. */
+/** Stream scroll Y (px) past which passive month scrubber may appear when peek mode is used. */
 export const TEMPORAL_NAV_MIN_SCROLL_Y = 120;
 
 /** |velocityY| from scroll event above which scrubber may peek in (px/s, approximate). */

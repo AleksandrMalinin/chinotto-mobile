@@ -50,7 +50,10 @@ import {
 } from '../constants/streamFocus';
 import { confirmDeleteThought } from '../utils/confirmDeleteThought';
 import { streamScrollContentYForRow } from '../utils/streamScrollToEntry';
+import { buildThreadPeelNeighbors } from '../utils/streamThreadPeel';
+import { STREAM_THREAD_PEEL_ACTION_WIDTH } from '../constants/streamThreadPeel';
 import { StreamFlowPanel } from './StreamFlowPanel';
+import { StreamThreadPeelActions } from './StreamThreadPeelActions';
 import type { ThoughtSheetOpenAnchor } from './thoughtSheet/detents';
 
 /**
@@ -111,6 +114,12 @@ export type RecentListProps = {
   streamLoadingMore?: boolean;
   /** Scroll velocity — snap focus opacity while the list is moving. */
   streamScrollVelocityY?: number;
+  /** Swipe right on a row to reveal keyword-related neighbors (not search / echo). */
+  threadPeelEnabled?: boolean;
+  /** Entry pool for thread peel neighbor lookup (loaded stream rows). */
+  threadPeelSourceEntries?: readonly Entry[];
+  /** Long-press a day section label — temporal map entry (semantic zoom handoff). */
+  onSectionLabelLongPress?: () => void;
 };
 
 const DELETE_ACTION_WIDTH = 76;
@@ -180,6 +189,8 @@ type StreamRowProps = {
   streamGutter: number;
   onEntryPress?: (entry: Entry, anchor?: ThoughtSheetOpenAnchor) => void;
   onEntryDelete?: (entry: Entry) => void;
+  threadPeelEnabled?: boolean;
+  threadPeelNeighbors?: readonly Entry[];
 };
 
 type EntryBodyPreviewProps = {
@@ -238,6 +249,8 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
   streamGutter,
   onEntryPress,
   onEntryDelete,
+  threadPeelEnabled = false,
+  threadPeelNeighbors = [],
 }: StreamRowProps) {
   const pressShade = useRef(new Animated.Value(0)).current;
   const t = useAppTheme();
@@ -313,6 +326,29 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
     onEntryPress?.(item, null);
   }, [item, onEntryPress]);
 
+  const closePeel = useCallback(() => {
+    swipeableRef.current?.close();
+  }, []);
+
+  const onThreadNeighborPress = useCallback(
+    (neighbor: Entry) => {
+      onEntryPress?.(neighbor, null);
+    },
+    [onEntryPress],
+  );
+
+  const onSwipeableOpen = useCallback(
+    (direction: 'left' | 'right') => {
+      if (direction === 'right') {
+        requestEntryDelete();
+      }
+    },
+    [requestEntryDelete],
+  );
+
+  const showThreadPeel = threadPeelEnabled && threadPeelNeighbors.length > 0;
+  const showSwipeChrome = onEntryDelete != null || showThreadPeel;
+
   const rowContent = (
     <View
       ref={rowRef}
@@ -335,6 +371,9 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
         accessibilityHint={
           [
             onEntryPress != null ? 'Double tap to open thought' : null,
+            threadPeelEnabled && threadPeelNeighbors.length > 0
+              ? 'Swipe right for related thoughts'
+              : null,
             onEntryDelete != null ? 'Swipe left, then tap Delete' : null,
           ]
             .filter(Boolean)
@@ -394,7 +433,7 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
     </View>
   );
 
-  if (onEntryDelete == null) {
+  if (!showSwipeChrome) {
     return rowContent;
   }
 
@@ -403,36 +442,54 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
       ref={swipeableRef}
       friction={2}
       overshootRight={false}
+      overshootLeft={false}
       /** Full-width reveal before commit — reduces accidental delete vs horizontal chrome. */
-      rightThreshold={DELETE_ACTION_WIDTH}
-      renderRightActions={() => (
-        <Pressable
-          testID={`recent-entry-delete-${item.id}`}
-          accessibilityRole="button"
-          accessibilityLabel="Delete thought"
-          onPress={requestEntryDelete}
-          style={({ pressed }) => [
-            styles.deleteTrack,
-            {
-              width: DELETE_ACTION_WIDTH,
-              backgroundColor: colors.swipeDeleteBg,
-              borderLeftWidth: StyleSheet.hairlineWidth,
-              borderLeftColor: colors.borderFocus,
-              opacity: pressed ? 0.88 : 1,
-            },
-          ]}
-        >
-          <Text
-            style={[
-              styles.deleteLabel,
-              { fontFamily: fonts.medium, color: colors.fg },
-            ]}
-          >
-            Delete
-          </Text>
-        </Pressable>
-      )}
-      onSwipeableOpen={requestEntryDelete}
+      rightThreshold={onEntryDelete != null ? DELETE_ACTION_WIDTH : 40}
+      leftThreshold={showThreadPeel ? STREAM_THREAD_PEEL_ACTION_WIDTH : 40}
+      renderLeftActions={
+        showThreadPeel
+          ? () => (
+              <StreamThreadPeelActions
+                anchor={item}
+                neighbors={threadPeelNeighbors}
+                onSelect={onThreadNeighborPress}
+                onClose={closePeel}
+              />
+            )
+          : undefined
+      }
+      renderRightActions={
+        onEntryDelete != null
+          ? () => (
+              <Pressable
+                testID={`recent-entry-delete-${item.id}`}
+                accessibilityRole="button"
+                accessibilityLabel="Delete thought"
+                onPress={requestEntryDelete}
+                style={({ pressed }) => [
+                  styles.deleteTrack,
+                  {
+                    width: DELETE_ACTION_WIDTH,
+                    backgroundColor: colors.swipeDeleteBg,
+                    borderLeftWidth: StyleSheet.hairlineWidth,
+                    borderLeftColor: colors.borderFocus,
+                    opacity: pressed ? 0.88 : 1,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.deleteLabel,
+                    { fontFamily: fonts.medium, color: colors.fg },
+                  ]}
+                >
+                  Delete
+                </Text>
+              </Pressable>
+            )
+          : undefined
+      }
+      onSwipeableOpen={onEntryDelete != null ? onSwipeableOpen : undefined}
     >
       {rowContent}
     </Swipeable>
@@ -679,6 +736,9 @@ function RecentListInner({
   onScrollToEntryComplete,
   streamLoadingMore = false,
   streamScrollVelocityY = 0,
+  threadPeelEnabled = false,
+  threadPeelSourceEntries = [],
+  onSectionLabelLongPress,
 }: RecentListProps) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const streamGutter = screenContentGutter(windowWidth);
@@ -765,6 +825,19 @@ function RecentListInner({
   const groups = useMemo(() => groupEntriesByDate(entries), [entries]);
   const newestShownId = groups[0]?.items[0]?.id ?? null;
   const orderedIds = useMemo(() => groups.flatMap((g) => g.items.map((e) => e.id)), [groups]);
+  const threadPeelByEntryId = useMemo(() => {
+    if (!threadPeelEnabled || threadPeelSourceEntries.length === 0) {
+      return null;
+    }
+    const map = new Map<string, Entry[]>();
+    for (const entry of entries) {
+      const neighbors = buildThreadPeelNeighbors(entry, threadPeelSourceEntries);
+      if (neighbors.length > 0) {
+        map.set(entry.id, neighbors);
+      }
+    }
+    return map;
+  }, [threadPeelEnabled, threadPeelSourceEntries, entries]);
   const flatItems = useMemo(() => {
     const out: Array<
       | { kind: 'header'; label: string; sectionIndex: number; key: string }
@@ -1055,31 +1128,43 @@ function RecentListInner({
     >
       {flatItems.map((item) => {
         if (item.kind === 'header') {
+          const labelNode = (
+            <Text
+              accessibilityRole="header"
+              style={[
+                styles.sectionLabel,
+                {
+                  paddingHorizontal: streamGutter,
+                  color: colors.sectionFg,
+                  fontFamily: meta.fontFamily,
+                  fontSize: 12,
+                  lineHeight: 16,
+                  letterSpacing: 0.08,
+                  marginBottom: 6,
+                  opacity: t.sunlightMode ? 1 : 0.7,
+                },
+              ]}
+            >
+              {item.label}
+            </Text>
+          );
           return (
             <View
               key={item.key}
               style={item.sectionIndex > 0 ? { marginTop: t.spacing.lg } : undefined}
             >
-              <Text
-                accessibilityRole="header"
-                style={[
-                  styles.sectionLabel,
-                  {
-                    paddingHorizontal: streamGutter,
-                    color: colors.sectionFg,
-                    fontFamily: meta.fontFamily,
-                    // Quiet time-marker, not a section header: smaller, less tracking, and it hugs
-                    // its group (more air above the day, less below the label).
-                    fontSize: 12,
-                    lineHeight: 16,
-                    letterSpacing: 0.08,
-                    marginBottom: 6,
-                    opacity: t.sunlightMode ? 1 : 0.7,
-                  },
-                ]}
-              >
-                {item.label}
-              </Text>
+              {onSectionLabelLongPress != null ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${item.label}. Long press for timeline`}
+                  onLongPress={onSectionLabelLongPress}
+                  delayLongPress={400}
+                >
+                  {labelNode}
+                </Pressable>
+              ) : (
+                labelNode
+              )}
             </View>
           );
         }
@@ -1105,6 +1190,8 @@ function RecentListInner({
               streamGutter={streamGutter}
               onEntryPress={onEntryPress}
               onEntryDelete={onEntryDelete}
+              threadPeelEnabled={threadPeelEnabled}
+              threadPeelNeighbors={threadPeelByEntryId?.get(item.entry.id) ?? []}
             />
           </View>
         );
