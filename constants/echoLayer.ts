@@ -1,7 +1,7 @@
 import { motion } from './motion';
 
 /** Production feature gate — Remote Config kill switch later. */
-export const ECHO_LAYER_ENABLED = false;
+export const ECHO_LAYER_ENABLED = true;
 
 /** Runtime gate: production follows `ECHO_LAYER_ENABLED`; dev is always on for dogfooding. */
 export const ECHO_LAYER_ACTIVE = ECHO_LAYER_ENABLED || __DEV__;

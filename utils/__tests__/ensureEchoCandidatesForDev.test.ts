@@ -8,14 +8,27 @@ describe('ensureEchoCandidatesForDev', () => {
     expect(ensureEchoCandidatesForDev(rows, [])).toEqual(rows);
   });
 
-  it('in dev runtime seeds from stream when DB list is empty', () => {
+  it('in dev runtime seeds synthetic when stream is only recent window', () => {
     const env = process.env.NODE_ENV;
     process.env.NODE_ENV = 'development';
     const out = ensureEchoCandidatesForDev([], [
       { id: 's1', text: 'stream thought', createdAt: '2025-02-01T00:00:00.000Z' },
     ]);
     expect(out).toHaveLength(1);
-    expect(out[0]?.kind).toBe('temporal');
+    expect(out[0]?.id).toBe('__dev_echo_seed__');
+    process.env.NODE_ENV = env;
+  });
+
+  it('in dev runtime seeds from outside recent stream when stream is deep enough', () => {
+    const env = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'development';
+    const stream = Array.from({ length: 6 }, (_, index) => ({
+      id: `s${index}`,
+      text: `thought ${index}`,
+      createdAt: `2025-01-0${index + 1}T00:00:00.000Z`,
+    }));
+    const out = ensureEchoCandidatesForDev([], stream);
+    expect(out[0]?.id).toBe('s5');
     process.env.NODE_ENV = env;
   });
 });

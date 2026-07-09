@@ -1,23 +1,30 @@
 import { useMemo, useState } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ECHO_VESSEL_OPTICAL_LIFT_PT } from '../../constants/echoLayer';
-import { fonts, screenContentInnerPad, useAppTheme } from '../../theme';
-import { echoEmotionalIntensityFromText } from '../../utils/echoEmotionalAtmosphere';
-import { formatEchoRelativeAge } from '../../utils/formatEchoRelativeAge';
+import { fonts, useAppTheme } from '../../theme';
+import { streamPreviewFirstLine } from '../../utils/streamPreviewFirstLine';
 import type { EchoCandidate } from '../../utils/selectEchoCandidates';
 import type { EchoChromeColors } from './echoChrome';
-import { echoAccentForKind } from './echoChrome';
-import { ECHO_FRAGMENT_RADIUS, echoFragmentChrome } from './echoVesselChrome';
+import { echoFragmentBorderForKind } from './echoChrome';
+import { ECHO_FRAGMENT_RADIUS, echoDepthFragmentChrome, echoFragmentChrome } from './echoVesselChrome';
 
-const MAX_BODY_CHARS = 380;
+const MAX_PREVIEW = 220;
 
-function echoPresenceBody(text: string): string {
-  const trimmed = text.trim();
-  if (trimmed.length <= MAX_BODY_CHARS) {
-    return trimmed;
+function truncatePreview(text: string): string {
+  const first = streamPreviewFirstLine(text);
+  if (first.length <= MAX_PREVIEW) {
+    return first;
   }
-  return `${trimmed.slice(0, MAX_BODY_CHARS).trimEnd()}…`;
+  return `${first.slice(0, MAX_PREVIEW).trimEnd()}…`;
+}
+
+function threadHint(count?: number): string | null {
+  if (count == null || count <= 0) {
+    return null;
+  }
+  return `Part of a thread with ${count} related thought${count === 1 ? '' : 's'}`;
 }
 
 export type EchoRecallCardVesselProps = {
@@ -25,155 +32,145 @@ export type EchoRecallCardVesselProps = {
   chrome: EchoChromeColors;
   onEntryPress?: (entry: EchoCandidate) => void;
   onDismiss?: () => void;
+  fixedShell?: boolean;
+  layout?: 'page' | 'depth';
 };
 
-/**
- * Echo recall — one primary fragment with submerged traces.
- * Centered presence with readable body mass; not a lone stream row in a gradient void.
- */
+/** Echo recall — aligned with desktop MemoryEcho: meta above, one calm card body. */
 export function EchoRecallCardVessel({
   candidate,
   chrome,
   onEntryPress,
   onDismiss,
+  fixedShell = false,
+  layout = 'page',
 }: EchoRecallCardVesselProps) {
   const t = useAppTheme();
-  const fragment = useMemo(() => echoFragmentChrome(t, chrome), [t, chrome]);
-  const body = echoPresenceBody(candidate.text);
-  const age = formatEchoRelativeAge(candidate.createdAt);
-  const accent = echoAccentForKind(chrome, candidate.kind);
-  const ghosts = candidate.ghostTraces ?? [];
-  const ghostOpacity = 0.34 + echoEmotionalIntensityFromText(candidate.text) * 0.14;
-
-  return (
-    <View style={styles.shell} testID="echo-recall-card">
-      <View
-        style={[styles.horizon, { borderBottomColor: accent }]}
-        accessibilityElementsHidden
-        importantForAccessibility="no"
-      />
-      <EchoRecallFragment
-        candidate={candidate}
-        body={body}
-        age={age}
-        accent={accent}
-        fragment={fragment}
-        chrome={chrome}
-        onEntryPress={onEntryPress}
-        onDismiss={onDismiss}
-      />
-      {ghosts.length > 0 ? (
-        <View
-          style={[styles.ghostBlock, { opacity: ghostOpacity }]}
-          testID="echo-recall-ghosts"
-        >
-          {ghosts.map((line, index) => (
-            <Text
-              key={`${candidate.id}-ghost-${index}`}
-              style={[styles.ghostLine, { color: chrome.subtitle }]}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {line}
-            </Text>
-          ))}
-        </View>
-      ) : null}
-    </View>
+  const isDepth = layout === 'depth';
+  const fragment = useMemo(
+    () =>
+      isDepth
+        ? echoDepthFragmentChrome(t, chrome, candidate.kind)
+        : echoFragmentChrome(t, chrome),
+    [candidate.kind, chrome, isDepth, t],
   );
-}
-
-type FragmentProps = {
-  candidate: EchoCandidate;
-  body: string;
-  age: string;
-  accent: string;
-  fragment: ReturnType<typeof echoFragmentChrome>;
-  chrome: EchoChromeColors;
-  onEntryPress?: (entry: EchoCandidate) => void;
-  onDismiss?: () => void;
-};
-
-function EchoRecallFragment({
-  candidate,
-  body,
-  age,
-  accent,
-  fragment,
-  chrome,
-  onEntryPress,
-  onDismiss,
-}: FragmentProps) {
-  const [pressed, setPressed] = useState(false);
+  const preview = truncatePreview(candidate.text);
+  const reason = candidate.reason ?? 'From earlier';
+  const thread = threadHint(candidate.trailNeighborCount);
+  const borderColor = echoFragmentBorderForKind(chrome, candidate.kind);
 
   return (
     <View
       style={[
-        styles.fragment,
-        {
-          backgroundColor: pressed ? fragment.pressed : fragment.fill,
-          borderColor: fragment.border,
-        },
+        styles.shell,
+        fixedShell ? styles.shellFixed : null,
+        isDepth ? styles.shellDepth : null,
       ]}
+      testID="echo-recall-card"
+      accessibilityLabel="Memory from earlier"
     >
-      <View style={styles.fragmentHeader}>
-        <View style={[styles.dot, { backgroundColor: accent }]} />
-        <View style={styles.metaBlock}>
-          <Text style={[styles.reason, { color: chrome.headline }]}>
-            {candidate.reason ?? 'From earlier'}
-          </Text>
-          {age ? (
-            <Text style={[styles.age, { color: chrome.subtitle }]}>{age}</Text>
-          ) : null}
+      {!isDepth ? (
+        <View style={styles.horizon} accessibilityElementsHidden importantForAccessibility="no">
+          <LinearGradient
+            colors={['transparent', chrome.metaMuted, 'transparent']}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            locations={[0, 0.5, 1]}
+            style={styles.horizonLine}
+          />
         </View>
+      ) : null}
+
+      <View style={[styles.metaRow, isDepth ? styles.metaRowDepth : null]}>
+        <Text
+          style={[
+            styles.metaReason,
+            { color: chrome.metaMuted },
+            isDepth ? styles.metaReasonDepth : null,
+          ]}
+        >
+          {reason}
+        </Text>
+        {thread != null ? (
+          <Text style={[styles.metaThread, { color: isDepth ? chrome.threadAccent : chrome.subtitle }]}>
+            <Text style={{ color: chrome.metaMuted }}> · </Text>
+            {thread}
+          </Text>
+        ) : null}
+      </View>
+
+      <View style={styles.cardWrap}>
+        <EchoRecallBody
+          preview={preview}
+          fragment={fragment}
+          borderColor={borderColor}
+          chrome={chrome}
+          isDepth={isDepth}
+          onPress={() => onEntryPress?.(candidate)}
+        />
         {onDismiss ? (
           <Pressable
+            testID="echo-recall-dismiss"
             accessibilityRole="button"
             accessibilityLabel="Dismiss memory"
             onPress={onDismiss}
-            hitSlop={10}
-            style={({ pressed: dismissPressed }) => [
+            hitSlop={12}
+            style={({ pressed }) => [
               styles.dismissBtn,
-              { opacity: dismissPressed ? 0.55 : 0.75 },
+              { opacity: pressed ? 0.55 : 0.85 },
             ]}
           >
             <Text style={[styles.dismiss, { color: chrome.metaMuted }]}>×</Text>
           </Pressable>
         ) : null}
       </View>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${body}. Resume this thought`}
-        onPress={() => onEntryPress?.(candidate)}
-        onPressIn={() => setPressed(true)}
-        onPressOut={() => setPressed(false)}
-        {...(Platform.OS === 'android' ? { android_ripple: null } : {})}
-        style={styles.bodyPress}
-      >
-        <Text
-          style={[
-            styles.bodyText,
-            {
-              color: chrome.fragmentBody,
-              fontFamily: fonts.regular,
-            },
-          ]}
-        >
-          {body}
-        </Text>
-        <Text
-          style={[
-            styles.continueLink,
-            {
-              color: accent,
-              fontFamily: fonts.medium,
-            },
-          ]}
-        >
-            Resume
-          </Text>
-      </Pressable>
     </View>
+  );
+}
+
+type BodyProps = {
+  preview: string;
+  fragment: ReturnType<typeof echoFragmentChrome>;
+  borderColor: string;
+  chrome: EchoChromeColors;
+  isDepth: boolean;
+  onPress: () => void;
+};
+
+function EchoRecallBody({ preview, fragment, borderColor, chrome, isDepth, onPress }: BodyProps) {
+  const [pressed, setPressed] = useState(false);
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${preview}. Resume this thought`}
+      onPress={onPress}
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
+      {...(Platform.OS === 'android' ? { android_ripple: null } : {})}
+      style={[
+        styles.body,
+        isDepth ? styles.bodyDepth : null,
+        {
+          backgroundColor: pressed ? fragment.pressed : fragment.fill,
+          borderColor: pressed ? borderColor : fragment.border,
+          borderWidth: isDepth ? 1 : StyleSheet.hairlineWidth,
+        },
+      ]}
+    >
+      <Text
+        style={[
+          styles.bodyText,
+          { color: chrome.fragmentBody },
+          isDepth ? styles.bodyTextDepth : null,
+        ]}
+      >
+        {preview}
+      </Text>
+      <Text style={[styles.cta, { color: isDepth ? chrome.threadAccent : chrome.metaMuted }]}>
+        Resume
+      </Text>
+    </Pressable>
   );
 }
 
@@ -184,83 +181,97 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 8 + ECHO_VESSEL_OPTICAL_LIFT_PT,
   },
+  shellFixed: {
+    justifyContent: 'center',
+    paddingTop: 0,
+    paddingBottom: 12,
+  },
+  shellDepth: {
+    flex: 0,
+    justifyContent: 'flex-start',
+    paddingTop: 0,
+    paddingBottom: 0,
+  },
   horizon: {
-    alignSelf: 'center',
-    width: '42%',
-    maxWidth: 160,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    opacity: 0.28,
-    marginBottom: 28,
+    height: 28,
+    justifyContent: 'center',
+    marginBottom: 12,
   },
-  fragment: {
-    borderRadius: ECHO_FRAGMENT_RADIUS,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingVertical: 20,
-    paddingHorizontal: screenContentInnerPad + 4,
+  horizonLine: {
+    height: StyleSheet.hairlineWidth,
+    width: '100%',
+    opacity: 0.45,
   },
-  fragmentHeader: {
+  metaRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    marginBottom: 14,
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    marginBottom: 10,
+    paddingHorizontal: 2,
   },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginTop: 6,
-    opacity: 0.55,
+  metaRowDepth: {
+    marginBottom: 8,
+    paddingHorizontal: 0,
   },
-  metaBlock: {
-    flex: 1,
-    minWidth: 0,
-    gap: 4,
-  },
-  reason: {
+  metaReason: {
     fontFamily: fonts.medium,
-    fontSize: 13,
-    lineHeight: 18,
-    letterSpacing: 0.12,
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: 0.55,
+    textTransform: 'uppercase',
   },
-  age: {
+  metaReasonDepth: {
+    opacity: 0.92,
+  },
+  metaThread: {
     fontFamily: fonts.regular,
     fontSize: 12,
     lineHeight: 16,
-    letterSpacing: 0.1,
-    fontStyle: 'italic',
+    letterSpacing: 0.15,
+  },
+  cardWrap: {
+    position: 'relative',
   },
   dismissBtn: {
-    marginTop: -2,
-    marginRight: -2,
+    position: 'absolute',
+    top: 4,
+    right: 2,
+    zIndex: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   dismiss: {
     fontFamily: fonts.regular,
     fontSize: 22,
     lineHeight: 24,
   },
-  bodyPress: {
-    gap: 14,
+  body: {
+    borderRadius: ECHO_FRAGMENT_RADIUS,
+    paddingTop: 14,
+    paddingBottom: 12,
+    paddingLeft: 14,
+    paddingRight: 40,
+  },
+  bodyDepth: {
+    paddingTop: 15,
+    paddingBottom: 13,
   },
   bodyText: {
-    fontSize: 18,
-    lineHeight: 27,
-    letterSpacing: 0.15,
+    fontFamily: fonts.regular,
+    fontSize: 16,
+    lineHeight: 24,
+    letterSpacing: 0.12,
+    marginBottom: 10,
   },
-  continueLink: {
-    fontSize: 14,
-    lineHeight: 20,
-    letterSpacing: 0.15,
+  bodyTextDepth: {
+    fontSize: 16.5,
+    lineHeight: 24,
+    letterSpacing: 0.14,
   },
-  ghostBlock: {
-    marginTop: 32,
-    paddingHorizontal: screenContentInnerPad + 8,
-    gap: 16,
-  },
-  ghostLine: {
+  cta: {
     fontFamily: fonts.regular,
     fontSize: 13,
     lineHeight: 18,
-    letterSpacing: 0.12,
-    fontStyle: 'italic',
+    letterSpacing: 0.2,
   },
 });

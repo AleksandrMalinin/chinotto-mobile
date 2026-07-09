@@ -21,6 +21,8 @@ export type EchoChromeColors = {
   fragmentBodyDrift: string;
   gravityAccent: string;
   driftAccent: string;
+  /** Thread hint on home depth — desktop memory-echo-meta-thread parity. */
+  threadAccent: string;
   headline: string;
   subtitle: string;
   metaMuted: string;
@@ -63,6 +65,7 @@ export function echoChromeFromTheme(t: AppTheme): EchoChromeColors {
     gravityAccent: colors.logoMark,
     /** Drift — quieter cool accent. */
     driftAccent: isDark ? 'rgba(158, 168, 220, 0.72)' : 'rgba(178, 188, 238, 0.78)',
+    threadAccent: isDark ? 'rgba(34, 200, 220, 0.78)' : 'rgba(24, 160, 180, 0.82)',
     headline: colors.fg,
     subtitle: colors.fgDim,
     metaMuted: colors.metaFg,

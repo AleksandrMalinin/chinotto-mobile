@@ -26,25 +26,15 @@ import {
   UIManager,
   useWindowDimensions,
   View,
-  PixelRatio,
   type LayoutAnimationConfig,
 } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AmbientBackground } from '../components/AmbientBackground';
 import { CaptureContinuationHint } from '../components/CaptureContinuationHint';
-import { EchoPageShell } from '../components/echo/EchoPageShell';
-import { EchoSpatialBackground } from '../components/echo/EchoSpatialBackground';
-import {
-  EchoSwipeRecallHint,
-} from '../components/echo/EchoSwipeRecallHint';
-import { echoChromeFromTheme } from '../components/echo/echoChrome';
-import {
-  StreamEchoPager,
-  streamEchoPagerHomeOffset,
-  type StreamEchoPagerHandle,
-} from '../components/echo/StreamEchoPager';
-import { runEchoEdgePeekAnimation } from '../components/echo/runEchoEdgePeekAnimation';
+import { HomeDepthRecall } from '../components/HomeDepthRecall';
+import { SpatialGestureHint } from '../components/SpatialGestureHint';
 import { CaptureInput } from '../components/CaptureInput';
 import { ChinottoLogo, chinottoLogoLeadingOutset } from '../components/ChinottoLogo';
 import { EnableSyncModal } from '../components/EnableSyncModal';
@@ -83,18 +73,7 @@ import {
   STREAM_LOAD_MORE_LOOKAHEAD_PX,
   STREAM_SCROLL_STATE_THROTTLE_MS,
 } from '../constants/streamFocus';
-import { ECHO_UI_VARIANT_SHIPPED } from '../constants/echoUiVariant';
-import {
-  ECHO_COMPOSER_DIM_AT_FULL,
-  ECHO_LAYER_ACTIVE,
-  ECHO_COMPOSER_DIM_RELEASE_AT,
-  ECHO_EDGE_PEEK_INITIAL_DELAY_MS,
-  ECHO_RECALL_DIM_IN_MS,
-  ECHO_RECALL_DIM_OUT_DELAY_MS,
-  ECHO_RECALL_DIM_OUT_MS,
-  ECHO_RECALL_SHEET_DIM,
-  RESURFACE_SHOW_PROBABILITY,
-} from '../constants/echoLayer';
+import { ECHO_LAYER_ACTIVE, ECHO_RECALL_DIM_IN_MS, ECHO_RECALL_DIM_OUT_DELAY_MS, ECHO_RECALL_DIM_OUT_MS, ECHO_RECALL_SHEET_DIM, RESURFACE_SHOW_PROBABILITY } from '../constants/echoLayer';
 import {
   TEMPORAL_NAV_ENABLED,
   TEMPORAL_NAV_MIN_SCROLL_Y,
@@ -110,17 +89,18 @@ import {
   setFirstLaunchEmptyCaptureRevealDone,
 } from '../storage/firstLaunchCapturePrefs';
 import {
-  clearEchoEdgePeekDone,
-  getEchoSwipeHintDismissed,
+  clearSpatialGestureHints,
+  getTemporalMapHintDismissed,
+  getThreadPeelHintDismissed,
+  setTemporalMapHintDismissed as persistTemporalMapHintDismissed,
+  setThreadPeelHintDismissed as persistThreadPeelHintDismissed,
+} from '../storage/spatialGesturePrefs';
+import {
   recordEchoCandidatesDisplayed,
-  setEchoEdgePeekLastAt,
-  setEchoSwipeHintDismissed,
-  shouldOfferEchoEdgePeek,
   setEchoLastBackgroundAt,
   setEchoSessionThread,
 } from '../storage/echoLayerPrefs';
 import {
-  getEchoCandidates,
   recordEntryOpened,
   resolveEchoCandidates,
 } from '../storage/entryEngagementRepository';
@@ -175,6 +155,7 @@ import { monthKeyFromIso } from '../utils/streamMonthIndex';
 import { streamSearchResultLabel } from '../utils/streamSearchResultLabel';
 import { loadStreamUntilEntryIncluded, resolveMonthJumpAnchor } from '../utils/temporalJump';
 import { ensureEchoCandidatesForDev } from '../utils/ensureEchoCandidatesForDev';
+import type { EchoCandidate } from '../utils/selectEchoCandidates';
 import {
   COMPOSER_ACTION_CLUSTER_LEADING_GAP,
   COMPOSER_ACTION_CLUSTER_WIDTH,
@@ -185,9 +166,8 @@ import {
   streamPullSearchProgress,
   streamPullSearchShouldCommitFromGesture,
 } from '../utils/streamPullToSearch';
-import { isEchoLayerMountedForCapture } from '../utils/echoLayerMount';
-import { isEchoPagerInteractive } from '../utils/echoLayerVisibility';
-import { echoEmotionalIntensityFromEntries } from '../utils/echoEmotionalAtmosphere';
+import { isHomeDepthRecallVisible, pickHomeDepthRecallCandidate } from '../utils/homeDepthRecallVisibility';
+import { buildThoughtTrailLinkedIds } from '../utils/thoughtTrail';
 import {
   isTemporalScrubberEligible,
 } from '../utils/temporalScrubberVisibility';
@@ -296,6 +276,7 @@ export function CaptureScreen({
     () => mergeDemoStreamWithEntries(entries, demoStreamMode),
     [entries, demoStreamMode],
   );
+  const trailLinkedIds = useMemo(() => buildThoughtTrailLinkedIds(entries), [entries]);
   const [hasMore, setHasMore] = useState(true);
   const [syncModalVisibleInternal, setSyncModalVisibleInternal] = useState(false);
   const syncModalControlled = onSyncModalVisibleChange != null;
@@ -354,17 +335,15 @@ export function CaptureScreen({
   const [streamLoadingMore, setStreamLoadingMore] = useState(false);
   const [totalEntryCount, setTotalEntryCount] = useState(0);
   const [echoCandidates, setEchoCandidates] = useState<EchoCandidate[]>([]);
-  const [echoSwipeHintVisible, setEchoSwipeHintVisible] = useState(false);
+  const [dismissedEchoIds, setDismissedEchoIds] = useState<ReadonlySet<string>>(() => new Set());
   const [captureContinuationHint, setCaptureContinuationHint] =
     useState<CaptureContinuationHintData | null>(null);
+  /** Loaded from AsyncStorage — default hidden until prefs resolve. */
+  const [threadPeelHintDismissed, setThreadPeelHintDismissed] = useState(true);
+  const [temporalMapHintDismissed, setTemporalMapHintDismissed] = useState(true);
   const echoCandidatesRef = useRef<EchoCandidate[]>([]);
-  const [echoPageIndex, setEchoPageIndex] = useState<0 | 1>(0);
-  const echoPageIndexRef = useRef<0 | 1>(0);
-  const echoPagerPageSettledRef = useRef(false);
-  const echoEdgePeekInFlightRef = useRef(false);
+  const homeDepthCandidateRef = useRef<EchoCandidate | null>(null);
   const triedEchoRecallRef = useRef(false);
-  const streamEchoPagerRef = useRef<StreamEchoPagerHandle>(null);
-  const echoPagerScrollX = useRef(new Animated.Value(0)).current;
   const [streamActiveEntry, setStreamActiveEntry] = useState<Entry | null>(null);
   const [monthSummaries, setMonthSummaries] = useState<MonthSummary[]>([]);
   const [temporalRackScrubbing, setTemporalRackScrubbing] = useState(false);
@@ -438,7 +417,6 @@ export function CaptureScreen({
   const firstLaunchPrefsLoadGenerationRef = useRef(0);
   const analyticsGateReportedRef = useRef(false);
   const { width: windowWidth } = useWindowDimensions();
-  const echoPageWidth = PixelRatio.roundToNearestPixel(windowWidth);
   const t = useAppTheme();
   const insets = useSafeAreaInsets();
   const gutter = screenContentGutter(windowWidth);
@@ -524,26 +502,6 @@ export function CaptureScreen({
     searchInputRef.current?.blur();
   }, []);
 
-  /** Close search UI without leaving Echo — avoids search unmount stealing focus to capture. */
-  const stashSearchForEchoNavigation = useCallback(() => {
-    if (!searchExpanded) {
-      releaseComposerFocus();
-      return;
-    }
-    searchDismissIntentRef.current = true;
-    if (searchBlurTimerRef.current) {
-      clearTimeout(searchBlurTimerRef.current);
-      searchBlurTimerRef.current = null;
-    }
-    setSearchFocused(false);
-    searchExpandedRef.current = false;
-    setSearchExpanded(false);
-    releaseComposerFocus();
-    requestAnimationFrame(() => {
-      searchDismissIntentRef.current = false;
-    });
-  }, [releaseComposerFocus, searchExpanded]);
-
   const collapseSearch = useCallback(() => {
     playSearchChromeHaptic();
     searchDismissIntentRef.current = true;
@@ -556,12 +514,10 @@ export function CaptureScreen({
     searchExpandedRef.current = false;
     setSearchExpanded(false);
     Keyboard.dismiss();
-    streamEchoPagerRef.current?.scrollToStream(false);
-    setEchoPageIndex(0);
     requestAnimationFrame(() => {
       searchDismissIntentRef.current = false;
     });
-  }, [playSearchChromeHaptic, releaseComposerFocus]);
+  }, [playSearchChromeHaptic]);
 
   const onSearchFocus = useCallback(() => {
     inputRef.current?.blur();
@@ -828,7 +784,7 @@ export function CaptureScreen({
         }
         if (!triedEchoRecallRef.current) {
           triedEchoRecallRef.current = true;
-          if (Math.random() > RESURFACE_SHOW_PROBABILITY) {
+          if (!__DEV__ && Math.random() > RESURFACE_SHOW_PROBABILITY) {
             setEchoCandidates([]);
             return;
           }
@@ -853,20 +809,6 @@ export function CaptureScreen({
     });
     return () => sub.remove();
   }, []);
-
-  useEffect(() => {
-    if (searchTrimmed.length > 0) {
-      streamEchoPagerRef.current?.scrollToStream(false);
-      setEchoPageIndex(0);
-    }
-  }, [searchTrimmed]);
-
-  useEffect(() => {
-    if (readEntry != null) {
-      streamEchoPagerRef.current?.scrollToStream(false);
-      setEchoPageIndex(0);
-    }
-  }, [readEntry?.id]);
 
   useEffect(() => {
     void syncRecentThoughtsToWidget(entries);
@@ -901,6 +843,15 @@ export function CaptureScreen({
       setFirstLaunchRevealDone(revealDone);
       setComposerHasFocusedOnce((prev) => (prev === true ? true : composerFocused));
     });
+  }, []);
+
+  useEffect(() => {
+    void Promise.all([getThreadPeelHintDismissed(), getTemporalMapHintDismissed()]).then(
+      ([peelDismissed, mapDismissed]) => {
+        setThreadPeelHintDismissed(peelDismissed);
+        setTemporalMapHintDismissed(mapDismissed);
+      },
+    );
   }, []);
 
   useEffect(() => {
@@ -1383,16 +1334,16 @@ export function CaptureScreen({
     openReadEntrySheet(entry, anchor ?? null);
   }, [openReadEntrySheet]);
 
-  const dismissEchoSwipeHint = useCallback(() => {
-    setEchoSwipeHintVisible(false);
-    void setEchoSwipeHintDismissed();
-  }, []);
-
   const onEchoDismiss = useCallback(() => {
-    const id = echoCandidatesRef.current[0]?.id;
+    const id = homeDepthCandidateRef.current?.id;
     if (id) {
       void markAsShown(id);
       void recordEchoCandidatesDisplayed([id]);
+      setDismissedEchoIds((prev) => {
+        const next = new Set(prev);
+        next.add(id);
+        return next;
+      });
     }
     setEchoCandidates([]);
   }, []);
@@ -1574,63 +1525,41 @@ export function CaptureScreen({
   /** Ring geometry: align **outer ring** with search field (gutter only); composer is inset +`screenContentInnerPad`. */
   const headerLogoAlignStyle = { marginLeft: -chinottoLogoLeadingOutset(headerLogoSize) };
 
-  const searchActive = searchTrimmed.length > 0;
-  const echoCandidatesForUi = useMemo(
-    () => ensureEchoCandidatesForDev(echoCandidates, streamDisplayEntries),
-    [echoCandidates, streamDisplayEntries],
+  const echoCandidatesForUi = useMemo(() => {
+    const seeded = ensureEchoCandidatesForDev(echoCandidates, streamDisplayEntries);
+    if (dismissedEchoIds.size === 0) {
+      return seeded;
+    }
+    return seeded.filter((candidate) => !dismissedEchoIds.has(candidate.id));
+  }, [dismissedEchoIds, echoCandidates, streamDisplayEntries]);
+  const streamEntryIds = useMemo(
+    () => streamDisplayEntries.map((entry) => entry.id),
+    [streamDisplayEntries],
   );
-  const echoLayerEligible = isEchoLayerMountedForCapture({
+  const homeDepthCandidate = useMemo(
+    () => pickHomeDepthRecallCandidate(echoCandidatesForUi, streamEntryIds),
+    [echoCandidatesForUi, streamEntryIds],
+  );
+  homeDepthCandidateRef.current = homeDepthCandidate;
+  const showHomeDepthRecall = isHomeDepthRecallVisible({
     active: ECHO_LAYER_ACTIVE,
-    searchActive,
+    searchActive: recallSearchActive,
     readSheetOpen: readEntry != null,
+    streamEmpty: streamDisplayEntries.length === 0,
+    composerHasDraft: text.trim().length > 0,
+    voiceCaptureActive: voicePhase === 'listening',
     totalEntryCount: Math.max(totalEntryCount, streamDisplayEntries.length),
-    candidateCount: echoCandidatesForUi.length,
+    candidate: homeDepthCandidate,
+    streamEntryIds,
   });
-  const echoPagerInteractive = isEchoPagerInteractive({
-    eligible: echoLayerEligible,
-    searchActive,
-    readSheetOpen: readEntry != null,
-    onEchoPage: echoPageIndex === 1,
-  });
-  const echoOnEchoPage = echoPageIndex === 1 && echoLayerEligible;
-  const echoChrome = useMemo(() => echoChromeFromTheme(t), [t]);
 
   useEffect(() => {
     echoCandidatesRef.current = echoCandidatesForUi;
   }, [echoCandidatesForUi]);
 
-  const echoEmotionalIntensity = useMemo(
-    () => echoEmotionalIntensityFromEntries(echoCandidatesForUi),
-    [echoCandidatesForUi],
-  );
-
-  useLayoutEffect(() => {
-    if (echoLayerEligible && echoPageWidth > 0) {
-      echoPagerScrollX.setValue(streamEchoPagerHomeOffset(echoPageWidth));
-    }
-  }, [echoLayerEligible, echoPagerScrollX, echoPageWidth]);
-
-  useLayoutEffect(() => {
-    if (echoOnEchoPage) {
-      stashSearchForEchoNavigation();
-    }
-  }, [echoOnEchoPage, stashSearchForEchoNavigation]);
-
   /** Search recall replaces capture at full presence — no competing dim on the top row. */
   const composerDimFromSearch = 1;
-
-  const composerOpacity = useMemo(() => {
-    if (!echoLayerEligible || echoPageWidth <= 0) {
-      return composerSearchDim;
-    }
-    const releaseAt = echoPageWidth * ECHO_COMPOSER_DIM_RELEASE_AT;
-    const echoFactor = echoPagerScrollX.interpolate({
-      inputRange: [0, releaseAt, echoPageWidth],
-      outputRange: [ECHO_COMPOSER_DIM_AT_FULL, ECHO_COMPOSER_DIM_AT_FULL, 1],
-      extrapolate: 'clamp',
-    });
-    return Animated.multiply(composerSearchDim, echoFactor);
-  }, [composerSearchDim, echoLayerEligible, echoPageWidth, echoPagerScrollX]);
+  const composerOpacity = composerSearchDim;
 
   useEffect(() => {
     Animated.timing(composerSearchDim, {
@@ -1641,135 +1570,10 @@ export function CaptureScreen({
     }).start();
   }, [composerDimFromSearch, composerSearchDim]);
 
-  const onEchoPagerPageChange = useCallback(
-    (index: 0 | 1) => {
-      if (echoPagerPageSettledRef.current && echoPageIndexRef.current !== index) {
-        playSearchChromeHaptic();
-        if (index === 1) {
-          dismissEchoSwipeHint();
-          if (analyticsEnabled) {
-            track({ event: 'echo_layer_revealed' });
-          }
-          const ids = echoCandidatesRef.current.map((c) => c.id);
-          if (ids.length > 0) {
-            void markAsShown(ids[0]!);
-          }
-          void recordEchoCandidatesDisplayed(ids).catch(() => {});
-        }
-      }
-      echoPagerPageSettledRef.current = true;
-      echoPageIndexRef.current = index;
-      if (index === 1) {
-        stashSearchForEchoNavigation();
-      }
-      setEchoPageIndex(index);
-    },
-    [analyticsEnabled, dismissEchoSwipeHint, playSearchChromeHaptic, stashSearchForEchoNavigation],
-  );
-
-  useEffect(() => {
-    if (!echoLayerEligible || searchRecallMode || echoOnEchoPage) {
-      setEchoSwipeHintVisible(false);
-      return;
-    }
-    let cancelled = false;
-    void getEchoSwipeHintDismissed().then((dismissed) => {
-      if (!cancelled) {
-        setEchoSwipeHintVisible(!dismissed);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [echoLayerEligible, echoOnEchoPage, searchRecallMode]);
-
-  const tryEchoEdgePeek = useCallback(async () => {
-    if (
-      !echoLayerEligible ||
-      echoPageWidth <= 0 ||
-      readEntry != null ||
-      searchActive ||
-      !allowCaptureFocus ||
-      text.trim().length > 0
-    ) {
-      return;
-    }
-    if (echoEdgePeekInFlightRef.current) {
-      return;
-    }
-    if (!(await shouldOfferEchoEdgePeek())) {
-      return;
-    }
-    echoEdgePeekInFlightRef.current = true;
-    try {
-      const result = await runEchoEdgePeekAnimation({
-        pager: streamEchoPagerRef.current,
-        respectReduceMotion: true,
-      });
-      if (result === 'played') {
-        await setEchoEdgePeekLastAt();
-      }
-    } finally {
-      echoEdgePeekInFlightRef.current = false;
-    }
-  }, [
-    allowCaptureFocus,
-    echoLayerEligible,
-    echoPageWidth,
-    readEntry,
-    searchActive,
-    text,
-  ]);
-
-  useEffect(() => {
-    if (!echoLayerEligible || echoPageWidth <= 0) {
-      return;
-    }
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      if (!cancelled) {
-        void tryEchoEdgePeek();
-      }
-    }, ECHO_EDGE_PEEK_INITIAL_DELAY_MS);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [echoLayerEligible, echoPageWidth, tryEchoEdgePeek]);
-
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (next) => {
-      if (next === 'active') {
-        void tryEchoEdgePeek();
-      }
-    });
-    return () => sub.remove();
-  }, [tryEchoEdgePeek]);
-
-  const playEchoEdgePeekPreview = useCallback(async () => {
-    setSettingsRoute(null);
-    if (!echoLayerEligible) {
-      Alert.alert(
-        'Echo edge peek',
-        'Echo is not mounted — need 8+ entries and a recall candidate; close search and any open thought.',
-      );
-      return;
-    }
-    const result = await runEchoEdgePeekAnimation({
-      pager: streamEchoPagerRef.current,
-      respectReduceMotion: false,
-    });
-    if (result === 'skipped_no_pager') {
-      Alert.alert('Echo edge peek', 'Pager is not ready — return to capture and try again.');
-    }
-  }, [echoLayerEligible]);
-
-  const resetEchoEdgePeekForDev = useCallback(() => {
-    void clearEchoEdgePeekDone().then(() => {
-      Alert.alert(
-        'Echo edge peek',
-        'Peek schedule cleared. Auto peek will run again when Echo is eligible.',
-      );
+  const resetSpatialGestureHintsForDev = useCallback(() => {
+    void clearSpatialGestureHints().then(() => {
+      setThreadPeelHintDismissed(false);
+      setTemporalMapHintDismissed(false);
     });
   }, []);
 
@@ -1802,16 +1606,9 @@ export function CaptureScreen({
         })();
       },
       onPreviewAppUpdateModal: onDevPreviewAppUpdate,
-      onPreviewEchoEdgePeek: playEchoEdgePeekPreview,
-      onResetEchoEdgePeek: resetEchoEdgePeekForDev,
+      onResetSpatialGestureHints: resetSpatialGestureHintsForDev,
     });
-  }, [
-    onDevPreviewAppUpdate,
-    onResetAnalyticsPrompt,
-    openSyncModal,
-    playEchoEdgePeekPreview,
-    resetEchoEdgePeekForDev,
-  ]);
+  }, [onDevPreviewAppUpdate, onResetAnalyticsPrompt, openSyncModal, resetSpatialGestureHintsForDev]);
 
   const temporalScrubberEligible = isTemporalScrubberEligible({
     active: TEMPORAL_NAV_ENABLED,
@@ -1820,7 +1617,44 @@ export function CaptureScreen({
     totalEntryCount,
     hasStreamRows: streamDisplayEntries.length > 0,
   });
-  const showTemporalScrubber = echoPageIndex === 0 && temporalScrubberEligible;
+  const showTemporalScrubber = temporalScrubberEligible;
+
+  const spatialGestureHintsBaseVisible =
+    readEntry == null &&
+    !recallSearchActive &&
+    text.trim().length === 0 &&
+    voicePhase !== 'listening' &&
+    captureContinuationHint == null &&
+    !showHomeDepthRecall;
+  const showThreadPeelGestureHint =
+    spatialGestureHintsBaseVisible &&
+    !threadPeelHintDismissed &&
+    searchTrimmed.length === 0 &&
+    trailLinkedIds.size >= 2;
+  const showTemporalMapGestureHint =
+    spatialGestureHintsBaseVisible &&
+    !temporalMapHintDismissed &&
+    temporalScrubberEligible;
+
+  const dismissThreadPeelGestureHint = useCallback(() => {
+    setThreadPeelHintDismissed(true);
+    void persistThreadPeelHintDismissed();
+  }, []);
+
+  const onThreadPeelRevealed = useCallback(() => {
+    setThreadPeelHintDismissed((dismissed) => {
+      if (!dismissed) {
+        void persistThreadPeelHintDismissed();
+      }
+      return true;
+    });
+  }, []);
+
+  const dismissTemporalMapGestureHint = useCallback(() => {
+    setTemporalMapHintDismissed(true);
+    void persistTemporalMapHintDismissed();
+  }, []);
+
   const referenceMonthKey = monthKeyFromIso(new Date().toISOString());
   const visibleMonthKey =
     streamActiveEntry != null
@@ -1921,9 +1755,10 @@ export function CaptureScreen({
 
   const onStreamSectionLabelLongPress = useCallback(
     (monthKey: MonthKey) => {
+      dismissTemporalMapGestureHint();
       openTemporalMap(monthKey);
     },
-    [openTemporalMap],
+    [dismissTemporalMapGestureHint, openTemporalMap],
   );
 
   const scrollToStreamNow = useCallback(() => {
@@ -1970,13 +1805,7 @@ export function CaptureScreen({
 
   return (
     <View style={styles.shell}>
-      <EchoSpatialBackground
-        scrollX={echoPagerScrollX}
-        pageWidth={echoPageWidth}
-        echoMounted={echoLayerEligible}
-        chrome={echoChrome}
-        emotionalIntensity={echoEmotionalIntensity}
-      />
+      <AmbientBackground />
       <SafeAreaView style={styles.safe} edges={['top', 'right', 'left']}>
         <KeyboardAvoidingView
           style={styles.flex}
@@ -2060,14 +1889,11 @@ export function CaptureScreen({
                         allowCaptureFocus &&
                         !deferKeyboardForFirstLaunchReveal &&
                         readEntry == null &&
-                        !echoOnEchoPage &&
                         !recallSearchActive &&
                         !suppressComposerAutoFocus
                       }
-                      editable={readEntry == null && !echoOnEchoPage && !recallSearchActive}
-                      showSoftInputOnFocus={
-                        readEntry == null && !echoOnEchoPage && !recallSearchActive
-                      }
+                      editable={readEntry == null && !recallSearchActive}
+                      showSoftInputOnFocus={readEntry == null && !recallSearchActive}
                     />
                   </View>
                   <Animated.View
@@ -2105,16 +1931,14 @@ export function CaptureScreen({
                 </View>
               )}
             </Animated.View>
-            <EchoSwipeRecallHint
-              visible={
-                echoLayerEligible &&
-                echoSwipeHintVisible &&
-                !searchRecallMode &&
-                echoPageIndex === 0 &&
-                readEntry == null
-              }
-              onDismiss={dismissEchoSwipeHint}
-            />
+            {showHomeDepthRecall && homeDepthCandidate ? (
+              <HomeDepthRecall
+                candidate={homeDepthCandidate}
+                recallDim={echoRecallDim}
+                onEntryPress={onEchoEntryPress}
+                onDismiss={onEchoDismiss}
+              />
+            ) : null}
             {captureContinuationHint && !searchRecallMode && readEntry == null ? (
               <CaptureContinuationHint
                 hint={captureContinuationHint}
@@ -2128,28 +1952,24 @@ export function CaptureScreen({
                 onDismiss={() => setCaptureContinuationHint(null)}
               />
             ) : null}
+            {showThreadPeelGestureHint ? (
+              <SpatialGestureHint
+                testID="thread-peel-gesture-hint"
+                message="Swipe right on a dotted thought for a related entry."
+                visible
+                onDismiss={dismissThreadPeelGestureHint}
+              />
+            ) : null}
+            {showTemporalMapGestureHint ? (
+              <SpatialGestureHint
+                testID="temporal-map-gesture-hint"
+                message="Hold a day label to open the timeline map."
+                visible
+                onDismiss={dismissTemporalMapGestureHint}
+              />
+            ) : null}
           </View>
           <View style={styles.flex}>
-          <StreamEchoPager
-            ref={streamEchoPagerRef}
-            pageWidth={echoPageWidth}
-            echoMounted={echoLayerEligible}
-            pagerInteractive={echoPagerInteractive}
-            scrollX={echoLayerEligible ? echoPagerScrollX : undefined}
-            onPageIndexChange={onEchoPagerPageChange}
-            echo={
-              <EchoPageShell
-                candidates={echoCandidatesForUi}
-                onEntryPress={onEchoEntryPress}
-                onDismiss={onEchoDismiss}
-                scrollX={echoLayerEligible ? echoPagerScrollX : undefined}
-                pageWidth={echoPageWidth}
-                uiVariant={ECHO_UI_VARIANT_SHIPPED}
-                recallDim={echoRecallDim}
-                onEchoPage={echoOnEchoPage}
-              />
-            }
-          >
             <View style={styles.captureStreamStack}>
                 <ScrollView
                   testID="capture-stream-scroll"
@@ -2215,13 +2035,15 @@ export function CaptureScreen({
                     }
                     onEntryPress={onStreamEntryPress}
                     onEntryDelete={handleEntryDelete}
-                    threadPeelEnabled={searchTrimmed.length === 0 && echoPageIndex === 0}
+                    threadPeelEnabled={searchTrimmed.length === 0}
                     threadPeelSourceEntries={streamDisplayEntries}
+                    trailLinkedIds={trailLinkedIds}
+                    onThreadPeelRevealed={onThreadPeelRevealed}
                     onSectionLabelLongPress={
                       searchTrimmed.length === 0 ? onStreamSectionLabelLongPress : undefined
                     }
                     onActiveStreamEntryChange={
-                      searchActive || temporalRackScrubbing ? undefined : setStreamActiveEntry
+                      recallSearchActive || temporalRackScrubbing ? undefined : setStreamActiveEntry
                     }
                     scrollToEntryId={scrollToEntryId}
                     streamScrollYRef={streamScrollYRef}
@@ -2253,7 +2075,6 @@ export function CaptureScreen({
                 ) : null}
                 <StreamBackToNowPill visible={showBackToNow} onPress={scrollToStreamNow} />
               </View>
-          </StreamEchoPager>
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
