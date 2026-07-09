@@ -11,6 +11,10 @@ jest.mock('../tombstoneFlush', () => ({
   flushSyncTombstoneOutbox: jest.fn().mockResolvedValue(undefined),
 }));
 
+jest.mock('../userThemeFlush', () => ({
+  flushSyncUserThemeOutbox: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.mock('../syncQueue', () => ({
   getPendingSyncItems: jest.fn(),
   markSynced: jest.fn(),

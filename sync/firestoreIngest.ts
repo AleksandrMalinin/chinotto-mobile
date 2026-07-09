@@ -18,12 +18,25 @@ import { isSyncAccessBlocked } from '../monetization/syncAccessPolicy';
 import {
   applyRemoteTombstoneDeletes,
   ingestRemoteFirestoreRows,
+  type FirestoreIngestEntryRow,
 } from '../storage/entryRepository';
+import {
+  applyRemoteUserThemeTombstones,
+  ingestRemoteUserThemeRows,
+} from '../storage/themeSyncIngest';
 import { getOrInitAuth } from './firebaseAuth';
 import { getOrInitFirestore } from './firebaseSync';
 import { isFirebaseSyncConfigured } from './firebaseConfig';
 import { isFirestoreDocumentTombstoned } from './firestoreTombstone';
+import {
+  parseEntryThemeField,
+  partitionUserThemeDocs,
+  userThemeIngestQuery,
+  userThemesCollection,
+  userThemeTombstoneQuery,
+} from './firestoreThemeIngest';
 import { flushSyncTombstoneOutbox } from './tombstoneFlush';
+import { flushSyncUserThemeOutbox } from './userThemeFlush';
 
 const INGEST_PAGE_SIZE = 500;
 /** One-shot backfill pages beyond the live snapshot window (desktop → mobile history). */
@@ -31,7 +44,7 @@ const BACKFILL_MAX_PAGES = 40;
 /** Tombstones are queried separately so deletes on older entries (outside the recent ingest window) still apply locally. */
 const TOMBSTONE_QUERY_LIMIT = 1000;
 
-export type FirestoreIngestRow = Pick<Entry, 'id' | 'text' | 'createdAt'>;
+export type FirestoreIngestRow = FirestoreIngestEntryRow;
 
 function normalizeCreatedAt(value: unknown): string | null {
   if (value == null) {
@@ -70,7 +83,8 @@ function partitionFirestoreSnapshotDocs(
     if (!createdAt) {
       continue;
     }
-    activeRows.push({ id: d.id, text, createdAt });
+    const theme = parseEntryThemeField(data);
+    activeRows.push({ id: d.id, text, createdAt, ...(theme !== undefined ? { theme } : {}) });
   }
   return { tombstonedIds, activeRows };
 }
@@ -176,6 +190,8 @@ export function startMobileFirestoreIngest(onIngested: () => void): () => void {
   const auth = getOrInitAuth();
   let unsubIngest: (() => void) | undefined;
   let unsubTombstones: (() => void) | undefined;
+  let unsubUserThemes: (() => void) | undefined;
+  let unsubUserThemeTombstones: (() => void) | undefined;
   let backfillGeneration = 0;
 
   const detachFirestoreListeners = () => {
@@ -183,6 +199,10 @@ export function startMobileFirestoreIngest(onIngested: () => void): () => void {
     unsubIngest = undefined;
     unsubTombstones?.();
     unsubTombstones = undefined;
+    unsubUserThemes?.();
+    unsubUserThemes = undefined;
+    unsubUserThemeTombstones?.();
+    unsubUserThemeTombstones = undefined;
   };
 
   const unsubAuth = onAuthStateChanged(auth, (user) => {
@@ -191,8 +211,10 @@ export function startMobileFirestoreIngest(onIngested: () => void): () => void {
       return;
     }
     void flushSyncTombstoneOutbox();
+    void flushSyncUserThemeOutbox();
     const db = getOrInitFirestore();
     const coll = collection(db, 'users', user.uid, 'entries');
+    const userThemeColl = userThemesCollection(db, user.uid);
     const backfillGen = ++backfillGeneration;
     const shouldContinueBackfill = () => {
       const u = auth.currentUser;
@@ -235,10 +257,75 @@ export function startMobileFirestoreIngest(onIngested: () => void): () => void {
           onIngested();
         }
         await flushSyncTombstoneOutbox();
+        await flushSyncUserThemeOutbox();
       },
       (err) => {
         if (__DEV__) {
           console.error('[ChinottoSync] ingest snapshot error', err);
+        }
+      }
+    );
+
+    void getDocs(userThemeIngestQuery(userThemeColl)).then(async (snap) => {
+      const { tombstonedIds, activeRows } = partitionUserThemeDocs(snap.docs);
+      let changed = false;
+      if (tombstonedIds.length > 0) {
+        const removed = await applyRemoteUserThemeTombstones(tombstonedIds);
+        if (removed > 0) {
+          changed = true;
+        }
+      }
+      if (activeRows.length > 0) {
+        const applied = await ingestRemoteUserThemeRows(activeRows);
+        if (applied > 0) {
+          changed = true;
+        }
+      }
+      if (changed) {
+        onIngested();
+      }
+    });
+
+    unsubUserThemes = onSnapshot(
+      userThemeIngestQuery(userThemeColl),
+      async (snap) => {
+        const { tombstonedIds, activeRows } = partitionUserThemeDocs(snap.docs);
+        let changed = false;
+        if (tombstonedIds.length > 0) {
+          const removed = await applyRemoteUserThemeTombstones(tombstonedIds);
+          if (removed > 0) {
+            changed = true;
+          }
+        }
+        if (activeRows.length > 0) {
+          const applied = await ingestRemoteUserThemeRows(activeRows);
+          if (applied > 0) {
+            changed = true;
+          }
+        }
+        if (changed) {
+          onIngested();
+        }
+      },
+      (err) => {
+        if (__DEV__) {
+          console.error('[ChinottoSync] user theme ingest error', err);
+        }
+      }
+    );
+
+    unsubUserThemeTombstones = onSnapshot(
+      userThemeTombstoneQuery(userThemeColl),
+      async (snap) => {
+        const ids = snap.docs.map((d) => d.id);
+        const removed = await applyRemoteUserThemeTombstones(ids);
+        if (removed > 0) {
+          onIngested();
+        }
+      },
+      (err) => {
+        if (__DEV__) {
+          console.error('[ChinottoSync] user theme tombstone error', err);
         }
       }
     );

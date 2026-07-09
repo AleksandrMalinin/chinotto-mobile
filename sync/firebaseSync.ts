@@ -10,6 +10,8 @@ import {
 } from 'firebase/firestore';
 
 import type { Entry } from '../types/entry';
+import type { EntryTheme } from '../types/entryTheme';
+import { toFirestoreEntryThemeWire } from '../types/firestoreSyncTheme';
 import { isFirebaseSyncConfigured } from './firebaseConfig';
 import { getOrInitApp } from './firebaseApp';
 import { getOrInitAuth } from './firebaseAuth';
@@ -47,7 +49,7 @@ export function getOrInitFirestore(): Firestore {
  * Requires a signed-in Firebase user (Sign in with Apple for stable sync). Queue stays pending until then.
  * Retries are safe if remote dedupes by document id (see docs/internal/sync/sync.md).
  */
-export async function firebasePushEntry(entry: Entry): Promise<void> {
+export async function firebasePushEntry(entry: Entry, theme?: EntryTheme | null): Promise<void> {
   if (!isFirebaseSyncConfigured()) {
     throw new Error('Firebase sync is not configured');
   }
@@ -62,6 +64,8 @@ export async function firebasePushEntry(entry: Entry): Promise<void> {
   const uid = user.uid;
   const db = getOrInitFirestore();
   const ref = doc(db, 'users', uid, 'entries', entry.id);
+  const themePayload =
+    theme != null ? { theme: toFirestoreEntryThemeWire(theme) } : { theme: null };
   await setDoc(
     ref,
     {
@@ -69,6 +73,7 @@ export async function firebasePushEntry(entry: Entry): Promise<void> {
       createdAt: entry.createdAt,
       updatedAt: serverTimestamp(),
       deletedAt: deleteField(),
+      ...themePayload,
     },
     { merge: true }
   );

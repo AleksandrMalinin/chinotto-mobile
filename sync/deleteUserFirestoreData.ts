@@ -25,16 +25,10 @@ async function commitDeleteRefs(db: Firestore, refs: DocumentReference[]): Promi
   await batch.commit();
 }
 
-/**
- * Deletes `users/{uid}/entries/*` in batches, then deletes `users/{uid}`.
- * Idempotent: missing docs are skipped when traversing snapshots.
- */
-export async function deleteAllFirestoreDataForUid(uid: string): Promise<void> {
-  const db = getOrInitFirestore();
-  const entriesCol = collection(db, 'users', uid, 'entries');
-
+async function deleteSubcollection(db: Firestore, collPath: string[]): Promise<void> {
+  const coll = collection(db, ...(collPath as [string, ...string[]]));
   for (;;) {
-    const snap = await getDocs(query(entriesCol, limit(BATCH_MAX)));
+    const snap = await getDocs(query(coll, limit(BATCH_MAX)));
     if (snap.empty) {
       break;
     }
@@ -46,6 +40,15 @@ export async function deleteAllFirestoreDataForUid(uid: string): Promise<void> {
       break;
     }
   }
+}
 
+/**
+ * Deletes `users/{uid}/entries/*`, `users/{uid}/user_themes/*`, then `users/{uid}`.
+ * Idempotent: missing docs are skipped when traversing snapshots.
+ */
+export async function deleteAllFirestoreDataForUid(uid: string): Promise<void> {
+  const db = getOrInitFirestore();
+  await deleteSubcollection(db, ['users', uid, 'entries']);
+  await deleteSubcollection(db, ['users', uid, 'user_themes']);
   await deleteDoc(doc(db, 'users', uid));
 }

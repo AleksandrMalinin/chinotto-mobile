@@ -7,6 +7,14 @@ jest.mock('../tombstoneFlush', () => ({
   flushSyncTombstoneOutbox: jest.fn().mockResolvedValue(undefined),
 }));
 
+jest.mock('../../storage/themeRepository', () => ({
+  getEntryTheme: jest.fn(() => Promise.resolve(null)),
+}));
+
+jest.mock('../../storage/themeSettings', () => ({
+  isThemesEnabled: jest.fn(() => Promise.resolve(true)),
+}));
+
 import { isFirebaseSyncConfigured } from '../firebaseConfig';
 import { firebasePushEntry } from '../firebaseSync';
 import { resolvePushEntryForSync } from '../pushEntryForSync';
@@ -117,10 +125,15 @@ describe('resolvePushEntryForSync', () => {
     ).rejects.toThrow(/not configured/i);
   });
 
-  it('returns firebase push when required env vars are set', () => {
+  it('returns firebase push wrapper when required env vars are set', async () => {
     process.env.EXPO_PUBLIC_FIREBASE_API_KEY = 'key';
     process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID = 'proj';
     process.env.EXPO_PUBLIC_FIREBASE_APP_ID = 'app';
-    expect(resolvePushEntryForSync()).toBe(firebasePushEntry);
+    const push = resolvePushEntryForSync();
+    await push({ id: 'e1', text: 'x', createdAt: '2026-01-01T00:00:00.000Z' });
+    expect(jest.mocked(firebasePushEntry)).toHaveBeenCalledWith(
+      { id: 'e1', text: 'x', createdAt: '2026-01-01T00:00:00.000Z' },
+      null
+    );
   });
 });

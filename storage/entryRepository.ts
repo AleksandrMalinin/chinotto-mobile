@@ -1,6 +1,7 @@
 import { randomUUID } from 'expo-crypto';
 
 import type { Entry } from '../types/entry';
+import type { EntryTheme } from '../types/entryTheme';
 import type { MonthKey, MonthSummary } from '../types/temporal';
 import { THEME_RECALL_MIN_CONFIDENCE } from '../utils/entryThemes';
 import { isFirebaseSyncConfigured } from '../sync/firebaseConfig';
@@ -9,6 +10,7 @@ import { insertPendingSyncItem, removePendingSyncItemsForEntry } from '../sync/s
 import { enqueueSyncTombstoneWithDb } from '../sync/tombstoneOutbox';
 import { deleteEntryEngagement, recordEntryEdited } from './entryEngagementRepository';
 import { classifyEntryThemeForEntry } from './themeRepository';
+import { applyRemoteEntryTheme } from './themeSyncIngest';
 import { getDatabase } from './db';
 import { runSerializedDb } from './runSerializedDb';
 
@@ -129,18 +131,24 @@ export async function applyRemoteTombstoneDeletes(entryIds: string[]): Promise<n
   });
 }
 
+export type FirestoreIngestEntryRow = Pick<Entry, 'id' | 'text' | 'createdAt'> & {
+  /** Undefined = omit theme apply; null = clear when local unlocked. */
+  theme?: EntryTheme | null;
+};
+
 /**
  * Apply remote-active rows from Firestore (desktop → mobile).
  * Insert when `id` is new; **update `text` only** when the row already exists (same `id`, same `created_at` contract).
  * Skips suppressed ids. Return value counts rows **inserted or updated** (for ingest refresh coalescing).
  */
-export async function ingestRemoteFirestoreRows(rows: Pick<Entry, 'id' | 'text' | 'createdAt'>[]): Promise<number> {
+export async function ingestRemoteFirestoreRows(rows: FirestoreIngestEntryRow[]): Promise<number> {
   if (rows.length === 0) {
     return 0;
   }
-  return runSerializedDb(async () => {
+  const themeApplies: { id: string; theme: EntryTheme | null }[] = [];
+  let applied = await runSerializedDb(async () => {
     const db = await getDatabase();
-    let applied = 0;
+    let count = 0;
     for (const row of rows) {
       const suppressed = await db.getFirstAsync<{ n: number }>(
         `SELECT 1 AS n FROM firestore_ingest_suppressed_ids WHERE id = ? LIMIT 1`,
@@ -156,20 +164,29 @@ export async function ingestRemoteFirestoreRows(rows: Pick<Entry, 'id' | 'text' 
         row.createdAt
       );
       if (insertRes.changes > 0) {
-        applied += 1;
-        continue;
+        count += 1;
+      } else {
+        const updateRes = await db.runAsync(
+          `UPDATE entries SET text = ? WHERE id = ?`,
+          row.text,
+          row.id
+        );
+        if (updateRes.changes > 0) {
+          count += 1;
+        }
       }
-      const updateRes = await db.runAsync(
-        `UPDATE entries SET text = ? WHERE id = ?`,
-        row.text,
-        row.id
-      );
-      if (updateRes.changes > 0) {
-        applied += 1;
+      if (row.theme !== undefined) {
+        themeApplies.push({ id: row.id, theme: row.theme });
       }
     }
-    return applied;
+    return count;
   });
+  for (const item of themeApplies) {
+    if (await applyRemoteEntryTheme(item.id, item.theme)) {
+      applied += 1;
+    }
+  }
+  return applied;
 }
 
 export type EntryCursor = Pick<Entry, 'createdAt' | 'id'>;

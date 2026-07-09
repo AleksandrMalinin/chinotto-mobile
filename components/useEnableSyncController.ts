@@ -19,6 +19,8 @@ import { resolvePushEntryForSync } from '../sync/pushEntryForSync';
 import { processSyncQueue } from '../sync/syncEngine';
 import { mirrorChinottoSyncAccessToFirestore } from '../sync/firestoreSyncAccessMirror';
 import { flushSyncTombstoneOutbox } from '../sync/tombstoneFlush';
+import { backfillLocalThemesToRemote } from '../sync/themeSyncBackfill';
+import { flushSyncUserThemeOutbox } from '../sync/userThemeFlush';
 import { track } from '../analytics/analytics';
 
 import type { SyncModalAuthPhase } from './EnableSyncModal';
@@ -266,6 +268,8 @@ export function useEnableSyncController(params: {
       await enableAppleSyncWithFirebase();
       await processSyncQueue(resolvePushEntryForSync());
       await flushSyncTombstoneOutbox();
+      await flushSyncUserThemeOutbox();
+      await backfillLocalThemesToRemote();
       await mirrorChinottoSyncAccessToFirestore();
       track({ event: 'sync_apple_mobile_sign_in_outcome', outcome: 'success' });
       onEnabled();

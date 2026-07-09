@@ -4,11 +4,17 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import type { EntryTheme, ThemeCount } from '../types/entryTheme';
 import { classifyEntryTheme } from '../utils/classifyEntryTheme';
 import { MAX_USER_THEMES, SYSTEM_THEME_LINKS, THEME_RECALL_MIN_CONFIDENCE, type UserTheme } from '../utils/entryThemes';
+import { addUserThemeIngestSuppressionWithDb } from '../sync/themeIngestSuppression';
+import { enqueueUserThemeTombstoneWithDb, enqueueUserThemeUpsertWithDb } from '../sync/userThemeOutbox';
 import { getDatabase } from './db';
 import { runSerializedDb } from './runSerializedDb';
 import { isThemesEnabled } from './themeSettings';
 
 export { ensureThemeSchema } from './themeSchema';
+
+function scheduleEntryThemePush(entryId: string): void {
+  void import('../sync/entryThemePush').then((mod) => mod.pushEntryThemeToRemote(entryId));
+}
 
 function mapUserTheme(row: { id: string; label: string; sort_order: number }): UserTheme {
   return {
@@ -52,6 +58,7 @@ export async function createUserTheme(label: string): Promise<UserTheme> {
       sortOrder,
       createdAt
     );
+    await enqueueUserThemeUpsertWithDb(db, id, trimmed, sortOrder);
     return { id, label: trimmed, sortOrder };
   });
 }
@@ -71,6 +78,7 @@ export async function updateUserTheme(id: string, label: string): Promise<UserTh
       throw new Error('Theme not found');
     }
     await db.runAsync('UPDATE user_themes SET label = ? WHERE id = ?', trimmed, id);
+    await enqueueUserThemeUpsertWithDb(db, id, trimmed, existing.sort_order);
     return { id, label: trimmed, sortOrder: existing.sort_order };
   });
 }
@@ -78,10 +86,16 @@ export async function updateUserTheme(id: string, label: string): Promise<UserTh
 export async function deleteUserTheme(id: string): Promise<void> {
   await runSerializedDb(async () => {
     const db = await getDatabase();
-    const res = await db.runAsync('DELETE FROM user_themes WHERE id = ?', id);
-    if (res.changes === 0) {
+    const existing = await db.getFirstAsync<{ label: string; sort_order: number }>(
+      'SELECT label, sort_order FROM user_themes WHERE id = ?',
+      id
+    );
+    if (existing == null) {
       throw new Error('Theme not found');
     }
+    await enqueueUserThemeTombstoneWithDb(db, id);
+    await addUserThemeIngestSuppressionWithDb(db, id);
+    await db.runAsync('DELETE FROM user_themes WHERE id = ?', id);
     await db.runAsync('DELETE FROM entry_themes WHERE theme_id = ?', id);
   });
 }
@@ -151,6 +165,7 @@ export async function setEntryTheme(
       classifiedAt
     );
   });
+  void scheduleEntryThemePush(entryId);
 }
 
 export async function classifyEntryThemeForEntry(entryId: string, text: string): Promise<void> {
@@ -187,6 +202,27 @@ export async function classifyEntryThemeForEntry(entryId: string, text: string):
       classification.source,
       classifiedAt
     );
+  });
+  void scheduleEntryThemePush(entryId);
+}
+
+export async function listEntryIdsWithThemes(): Promise<string[]> {
+  return runSerializedDb(async () => {
+    const db = await getDatabase();
+    const rows = await db.getAllAsync<{ entry_id: string }>('SELECT entry_id FROM entry_themes');
+    return rows.map((row) => row.entry_id);
+  });
+}
+
+export async function enqueueAllLocalUserThemesForSync(): Promise<void> {
+  await runSerializedDb(async () => {
+    const db = await getDatabase();
+    const rows = await db.getAllAsync<{ id: string; label: string; sort_order: number }>(
+      'SELECT id, label, sort_order FROM user_themes'
+    );
+    for (const row of rows) {
+      await enqueueUserThemeUpsertWithDb(db, row.id, row.label, row.sort_order);
+    }
   });
 }
 
