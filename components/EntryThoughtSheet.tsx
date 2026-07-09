@@ -64,6 +64,11 @@ import {
   thoughtSheetBackdropA11yLabel,
 } from './thoughtSheet/backdropAction';
 
+/** Read body — matches stream newest row; edit stays capture (18). */
+const SHEET_READ_FONT_SIZE = 16;
+const SHEET_READ_LINE_HEIGHT = 22;
+const SHEET_READ_LINE_HEIGHT_COMFORTABLE = 24;
+
 /**
  * SHEET SHELL LAYOUT (do not break — see .cursor/rules/entry-thought-sheet-layout.mdc):
  * Modal → GestureHandlerRootView flex:1 → root flex:1 + scrim → dismiss flex:1 → Pan → Animated sheet (last child).
@@ -806,7 +811,7 @@ export function EntryThoughtSheet({
                       styles.expandedEditor,
                       {
                         color: colors.entryBody,
-                        fontFamily: capture.fontFamily,
+                        fontFamily: body.fontFamily,
                         fontSize: capture.fontSize,
                         lineHeight: capture.lineHeight + 2,
                         letterSpacing: capture.letterSpacing,
@@ -850,9 +855,11 @@ export function EntryThoughtSheet({
                           {
                             color: colors.entryBody,
                             fontFamily: body.fontFamily,
-                            fontSize: 17,
-                            lineHeight: comfortableReading ? 28 : 26,
-                            letterSpacing: 0.15,
+                            fontSize: SHEET_READ_FONT_SIZE,
+                            lineHeight: comfortableReading
+                              ? SHEET_READ_LINE_HEIGHT_COMFORTABLE
+                              : SHEET_READ_LINE_HEIGHT,
+                            letterSpacing: 0.14,
                           },
                         ]}
                       >

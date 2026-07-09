@@ -130,6 +130,12 @@ export type RecentListProps = {
 
 const DELETE_ACTION_WIDTH = 76;
 const STREAM_TRAIL_MARK_SIZE = 4;
+/** Stream body — compact vs capture composer (18). Newest stays one step larger. */
+const STREAM_ENTRY_FONT_SIZE = 15;
+const STREAM_ENTRY_LINE_HEIGHT = 21;
+const STREAM_NEWEST_FONT_SIZE = 16;
+const STREAM_NEWEST_LINE_HEIGHT = 22;
+const STREAM_ENTRY_PAD_V = 12;
 
 /** Mid outer gutter (`screenContentGutter`), nudged toward stream text. */
 function streamTrailMarkLeft(gutter: number): number {
@@ -370,8 +376,8 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
     [onThreadPeelRevealed, requestEntryDelete, showThreadPeel],
   );
 
-  const previewLineHeight = showNewest ? 26 : body.lineHeight;
-  const previewFontSize = showNewest ? 18 : body.fontSize;
+  const previewLineHeight = showNewest ? STREAM_NEWEST_LINE_HEIGHT : STREAM_ENTRY_LINE_HEIGHT;
+  const previewFontSize = showNewest ? STREAM_NEWEST_FONT_SIZE : STREAM_ENTRY_FONT_SIZE;
 
   const rowContent = (
     <View
@@ -459,11 +465,9 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
                       : colors.fgDim
                     : colors.entryBody,
                   fontFamily: showNewest ? fonts.medium : body.fontFamily,
-                  // Newest thought echoes the composer (18px) — the thought you just wrote
-                  // visually rhymes with the input it came from.
                   fontSize: previewFontSize,
                   lineHeight: previewLineHeight,
-                  letterSpacing: showNewest ? 0.17 : 0.16,
+                  letterSpacing: showNewest ? 0.15 : 0.14,
                 },
               ]}
             />
@@ -1194,7 +1198,7 @@ function RecentListInner({
           return (
             <View
               key={item.key}
-              style={item.sectionIndex > 0 ? { marginTop: t.spacing.lg } : undefined}
+              style={item.sectionIndex > 0 ? { marginTop: t.spacing.md } : undefined}
             >
               {onSectionLabelLongPress != null ? (
                 <Pressable
@@ -1325,7 +1329,7 @@ const styles = StyleSheet.create({
    */
   entryBlock: {
     width: '100%',
-    paddingVertical: 18,
+    paddingVertical: STREAM_ENTRY_PAD_V,
   },
   entryRow: {
     width: '100%',

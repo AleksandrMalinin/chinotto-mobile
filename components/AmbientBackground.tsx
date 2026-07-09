@@ -14,14 +14,13 @@ import { getTheme, useAppTheme } from '../theme';
 const PULSE_MS = 20000;
 
 /**
- * Cosmic shell: charcoal base + **full-bleed** violet/blue washes (no elliptical clips —
- * those read as two sharp “circles” on device). Top atmosphere + bottom vignette unify edges.
+ * Quiet charcoal shell — same `#0a0a0e` base as desktop, with subtle violet depth for mobile.
+ * Washes stay full-bleed (no elliptical clips — those read as hard rings on device).
+ * Middle ground: near-desktop flatness + just enough lift so the handheld viewport is not a flat void.
  *
- * {@link AppTheme.blendProgress} crossfades the rich default stack toward the near-flat sunlight
- * wash so gradients ease with adaptive brightness (no layout or remount).
+ * {@link AppTheme.blendProgress} crossfades toward the near-flat sunlight wash with adaptive brightness.
  *
- * `fixedChrome`: always use standard dark shell (one-shot surfaces must not follow
- * adaptive sunlight so copy/gradients stay predictable).
+ * `fixedChrome`: always use standard dark shell (one-shot surfaces must not follow sunlight blend).
  */
 export function AmbientBackground({ fixedChrome = false }: { fixedChrome?: boolean }) {
   const adaptiveTheme = useAppTheme();
@@ -44,7 +43,7 @@ export function AmbientBackground({ fixedChrome = false }: { fixedChrome?: boole
       animation = Animated.loop(
         Animated.sequence([
           Animated.timing(pulse, {
-            toValue: 0.82,
+            toValue: 0.9,
             duration: PULSE_MS / 2,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: true,
@@ -73,13 +72,13 @@ export function AmbientBackground({ fixedChrome = false }: { fixedChrome?: boole
       <View style={[StyleSheet.absoluteFill, { backgroundColor: t.colors.bg }]} />
 
       <View style={[StyleSheet.absoluteFill, { opacity: normalWeight }]} pointerEvents="none">
-        {/* Cool-violet wash — upper-left → center; no circular mask = no hard ring */}
+        {/* Cool-violet wash — upper-left → center */}
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: pulse }]}>
           <LinearGradient
             colors={[
-              'rgba(100, 118, 185, 0.125)',
-              'rgba(100, 118, 185, 0.038)',
-              'rgba(100, 118, 185, 0.008)',
+              'rgba(100, 118, 185, 0.075)',
+              'rgba(100, 118, 185, 0.024)',
+              'rgba(100, 118, 185, 0.006)',
               'transparent',
             ]}
             locations={[0, 0.38, 0.66, 1]}
@@ -94,9 +93,9 @@ export function AmbientBackground({ fixedChrome = false }: { fixedChrome?: boole
           <LinearGradient
             colors={[
               'transparent',
-              'rgba(75, 98, 155, 0.03)',
-              'rgba(75, 98, 155, 0.098)',
-              'rgba(75, 98, 155, 0.038)',
+              'rgba(75, 98, 155, 0.018)',
+              'rgba(75, 98, 155, 0.055)',
+              'rgba(75, 98, 155, 0.02)',
             ]}
             locations={[0, 0.38, 0.72, 1]}
             start={{ x: 1, y: 0.95 }}
@@ -105,12 +104,12 @@ export function AmbientBackground({ fixedChrome = false }: { fixedChrome?: boole
           />
         </Animated.View>
 
-        {/* Top-center wash — pulled deeper so the lighter band reaches the capture composer (below header). */}
+        {/* Top wash — barely lifts composer; capped well below pre-parity mobile (0.118). */}
         <LinearGradient
-          colors={['rgba(58, 70, 105, 0.118)', 'rgba(58, 70, 105, 0.028)', 'transparent']}
-          locations={[0, 0.32, 1]}
+          colors={['rgba(58, 70, 105, 0.03)', 'rgba(58, 70, 105, 0.008)', 'transparent']}
+          locations={[0, 0.28, 1]}
           start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 0.64 }}
+          end={{ x: 0.5, y: 0.58 }}
           style={StyleSheet.absoluteFill}
           pointerEvents="none"
         />
