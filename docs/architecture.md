@@ -28,8 +28,9 @@ screens/      Capture and settings flows
 storage/      SQLite entry repository
 sync/         Background Firestore push/pull
 docs/         Public documentation
-docs/internal/ Maintainer and implementation docs
 ```
+
+Maintainer-only specs and release checklists stay local (not in the public tree).
 
 ## Capture and sync
 
@@ -38,7 +39,3 @@ The UI saves entries locally first. Sync runs in the background and never blocks
 ## Updates
 
 Production builds check the App Store for updates. An in-app update screen may appear when a newer version is available (Firebase Remote Config policy).
-
-## More detail
-
-Implementation notes, sync wire contract, product spec, and contributor conventions live in [`docs/internal/`](internal/README.md) (not linked from the main README).

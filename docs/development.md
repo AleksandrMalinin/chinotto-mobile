@@ -32,10 +32,8 @@ Jest covers storage, sync helpers, and key UI flows.
 
 iOS releases ship via App Store / TestFlight (EAS or native `ios/` project in this repo).
 
-When bumping marketing version or build number for store submission, follow [`docs/internal/release/ios-app-store-version-bump.md`](internal/release/ios-app-store-version-bump.md) — `app.json` alone does not update `ios/Chinotto/Info.plist`.
+When bumping marketing version or build number for store submission, update `app.json` and `ios/Chinotto/Info.plist` together (`CFBundleShortVersionString` and `CFBundleVersion`).
 
 ## Contributing
 
 - Product scope and agent contract: [`AGENTS.md`](../AGENTS.md)
-- Commit format: [`docs/internal/commit-convention.md`](internal/commit-convention.md)
-- Detailed architecture and product spec: [`docs/internal/`](internal/README.md)

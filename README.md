@@ -24,6 +24,9 @@ Optional sync (with Apple ID) keeps your thoughts with you across devices.
 - Capture thoughts instantly
 - One continuous stream instead of documents and folders
 - Full-text search
+- Move through your history — month scrubber and timeline map
+- Quiet recall when an older thought still matters
+- Related thoughts surface in context on the stream
 - Share in from other apps (iOS)
 - iOS Home Widget — quick capture and recent thoughts
 - Voice capture
