@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentRef, type RefObject } from 'react';
 
-import { track, type SyncModalSurface } from '../analytics/analytics';
+import { providerDisplayName } from '../auth/syncIdentity';
+import { isMobileSyncPlatform } from '../auth/syncPlatform';
+import { track } from '../analytics/analytics';
+import { useAccountLinking } from '../components/useAccountLinking';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -318,10 +321,13 @@ export function CaptureScreen({
   const [settingsRoute, setSettingsRoute] = useState<SettingsRoute | null>(null);
   const [accountDeletionOpen, setAccountDeletionOpen] = useState(false);
   const [firebaseAccountLabel, setFirebaseAccountLabel] = useState<string | null>(null);
+  const [linkedProviderLabels, setLinkedProviderLabels] = useState<string[]>([]);
+  const [firebaseUserSignedIn, setFirebaseUserSignedIn] = useState(false);
+  const accountLinking = useAccountLinking();
   const [appIconVariantId, setAppIconVariantId] = useState<AppIconVariantId>('default');
   const [hapticsEnabled, setHapticsEnabledState] = useState(true);
   const [authRestorePhase, setAuthRestorePhase] = useState<AuthRestorePhase>(() =>
-    isFirebaseSyncConfigured() && Platform.OS === 'ios' ? 'restoring' : 'signed_out'
+    isMobileSyncPlatform() ? 'restoring' : 'signed_out'
   );
   const [uploadPending, setUploadPending] = useState(false);
   const [uploadStuck, setUploadStuck] = useState(false);
@@ -1040,7 +1046,7 @@ export function CaptureScreen({
   }, []);
 
   useEffect(() => {
-    if (!isFirebaseSyncConfigured() || Platform.OS !== 'ios') {
+    if (!isMobileSyncPlatform()) {
       return;
     }
 
@@ -1076,8 +1082,20 @@ export function CaptureScreen({
       }
 
       setFirebaseAccountLabel(
-        user && !user.isAnonymous ? (user.email?.trim() ? user.email.trim() : 'Apple ID') : null
+        user && !user.isAnonymous
+          ? user.email?.trim()
+            ? user.email.trim()
+            : user.providerData[0]
+              ? providerDisplayName(user.providerData[0].providerId)
+              : 'Cloud account'
+          : null
       );
+      setLinkedProviderLabels(
+        user && !user.isAnonymous
+          ? user.providerData.map((p) => providerDisplayName(p.providerId))
+          : []
+      );
+      setFirebaseUserSignedIn(Boolean(user && !user.isAnonymous));
       setAuthRestorePhase(nextPhase);
       void mirrorChinottoSyncAccessToFirestore();
     });
@@ -1091,7 +1109,7 @@ export function CaptureScreen({
    * Require `signed_in` so we do not rely on ordering vs {@link App} post-hydration mirror alone.
    */
   useEffect(() => {
-    if (!isFirebaseSyncConfigured() || Platform.OS !== 'ios') {
+    if (!isMobileSyncPlatform()) {
       return;
     }
     if (!subscriptionHydrated || authRestorePhase !== 'signed_in') {
@@ -1101,7 +1119,7 @@ export function CaptureScreen({
   }, [subscriptionHydrated, authRestorePhase]);
 
   const refreshUploadPending = useCallback(async () => {
-    if (!isFirebaseSyncConfigured() || Platform.OS !== 'ios' || authRestorePhase !== 'signed_in') {
+    if (!isMobileSyncPlatform() || authRestorePhase !== 'signed_in') {
       return;
     }
     try {
@@ -1113,7 +1131,7 @@ export function CaptureScreen({
   }, [authRestorePhase]);
 
   useEffect(() => {
-    if (!isFirebaseSyncConfigured() || Platform.OS !== 'ios') {
+    if (!isMobileSyncPlatform()) {
       return;
     }
     if (authRestorePhase !== 'signed_in') {
@@ -1188,7 +1206,7 @@ export function CaptureScreen({
 
   const runEnableSyncShimmerProbe = useCallback(() => {
     void (async () => {
-      if (!isFirebaseSyncConfigured() || Platform.OS !== 'ios') {
+      if (!isMobileSyncPlatform()) {
         return;
       }
       const [ctaTapped, signals, totalThoughtCount] = await Promise.all([
@@ -1235,7 +1253,7 @@ export function CaptureScreen({
    * sync UI is open — see `getSyncHighlightEligibility`.
    */
   useEffect(() => {
-    if (!isFirebaseSyncConfigured() || Platform.OS !== 'ios') {
+    if (!isMobileSyncPlatform()) {
       return;
     }
     if (!allowCaptureFocus) {
@@ -1801,7 +1819,7 @@ export function CaptureScreen({
     [jumpToMonth],
   );
 
-  const showCaptureSyncHeader = Platform.OS === 'ios' && isFirebaseSyncConfigured();
+  const showCaptureSyncHeader = isMobileSyncPlatform();
 
   return (
     <View style={styles.shell}>
@@ -2105,11 +2123,23 @@ export function CaptureScreen({
           }
           onOpenDevMenu={__DEV__ && Platform.OS === 'ios' ? openDevMenuFromSettings : undefined}
           accountSectionVisible={
-            Platform.OS === 'ios' &&
-            isFirebaseSyncConfigured() &&
+            isMobileSyncPlatform() &&
             (__DEV__ || authRestorePhase === 'signed_in')
           }
-          accountIdentityLabel={firebaseAccountLabel ?? 'Apple ID'}
+          accountIdentityLabel={firebaseAccountLabel ?? 'Cloud account'}
+          linkedProviderLabels={linkedProviderLabels}
+          canLinkApple={
+            firebaseUserSignedIn &&
+            Platform.OS === 'ios' &&
+            !linkedProviderLabels.includes('Apple')
+          }
+          canLinkGoogle={
+            firebaseUserSignedIn && !linkedProviderLabels.includes('Google')
+          }
+          onLinkApple={() => void accountLinking.onLinkApple()}
+          onLinkGoogle={() => void accountLinking.onLinkGoogle()}
+          accountLinkBusy={accountLinking.busy}
+          accountLinkError={accountLinking.error}
           onOpenDeleteAccount={() => setAccountDeletionOpen(true)}
         />
       ) : null}

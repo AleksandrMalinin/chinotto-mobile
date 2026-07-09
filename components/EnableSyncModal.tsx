@@ -13,6 +13,8 @@ import {
 } from 'react-native';
 import Purchases, { type CustomerInfo, type PurchasesOfferings } from 'react-native-purchases';
 
+import { isFirebaseSyncConfigured } from '../sync/firebaseConfig';
+import { isAndroidSyncPlatform } from '../auth/syncPlatform';
 import { getPaywallDebugInfo, isPaywallEnabled } from '../monetization/paywallConfig';
 import { getCachedHasSyncEntitlement, getSyncEntitlementSourcesDebug } from '../monetization/subscriptionState';
 import {
@@ -165,6 +167,7 @@ export function EnableSyncModal({
     handlePlusContinue,
     handleRestorePurchases,
     handleApple,
+    handleGoogle,
     handleStopSyncing,
   } = useEnableSyncController({
     visible,
@@ -283,9 +286,7 @@ export function EnableSyncModal({
     });
   }, []);
 
-  if (Platform.OS !== 'ios') {
-    return null;
-  }
+  const useGooglePrimary = isAndroidSyncPlatform();
 
   const showEnableFlow = authPhase === 'signed_out';
   const showSubscriptionWait =
@@ -353,6 +354,10 @@ export function EnableSyncModal({
         default: {},
       }) ?? {}
     : {};
+
+  if (!isFirebaseSyncConfigured()) {
+    return null;
+  }
 
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={handleClose}>
@@ -663,7 +668,9 @@ export function EnableSyncModal({
           ) : !postSyncSuccess && showEnableFlow ? (
             <>
               <Text style={[styles.body, { color: fgDim, fontFamily: fonts.regular }]}>
-                Use Apple to connect your devices.
+                {useGooglePrimary
+                  ? 'Use Google to connect your devices.'
+                  : 'Use Apple to connect your devices.'}
               </Text>
               <Text style={[styles.note, { color: muted, fontFamily: fonts.regular }]}>
                 Chinotto does not create its own account.
@@ -679,9 +686,9 @@ export function EnableSyncModal({
               ) : null}
 
               <Pressable
-                testID="enable-sync-continue-with-apple"
+                testID={useGooglePrimary ? 'enable-sync-continue-with-google' : 'enable-sync-continue-with-apple'}
                 accessibilityRole="button"
-                accessibilityLabel="Continue with Apple"
+                accessibilityLabel={useGooglePrimary ? 'Continue with Google' : 'Continue with Apple'}
                 disabled={interactionLocked}
                 style={({ pressed }) => [
                   styles.appleButton,
@@ -690,13 +697,13 @@ export function EnableSyncModal({
                     opacity: busy ? 0.5 : pressed ? 0.88 : 1,
                   },
                 ]}
-                onPress={() => void handleApple()}
+                onPress={() => void (useGooglePrimary ? handleGoogle() : handleApple())}
               >
                 {busy ? (
                   <ActivityIndicator color={bgElevated} />
                 ) : (
                   <Text style={[styles.appleLabel, { color: bgElevated, fontFamily: fonts.medium }]}>
-                    Continue with Apple
+                    {useGooglePrimary ? 'Continue with Google' : 'Continue with Apple'}
                   </Text>
                 )}
               </Pressable>

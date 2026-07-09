@@ -22,6 +22,13 @@ type SettingsScreenProps = {
   /** Settings → Account (Delete Account). Production: signed-in only; `__DEV__`: always when Firebase is configured (iOS). */
   accountSectionVisible?: boolean;
   accountIdentityLabel?: string;
+  linkedProviderLabels?: string[];
+  canLinkApple?: boolean;
+  canLinkGoogle?: boolean;
+  onLinkApple?: () => void;
+  onLinkGoogle?: () => void;
+  accountLinkBusy?: boolean;
+  accountLinkError?: string | null;
   onOpenDeleteAccount?: () => void;
   onOpenDevMenu?: () => void;
 };
@@ -38,6 +45,13 @@ export function SettingsScreen({
   syncStatusLabel,
   accountSectionVisible = false,
   accountIdentityLabel = 'Apple ID',
+  linkedProviderLabels = [],
+  canLinkApple = false,
+  canLinkGoogle = false,
+  onLinkApple,
+  onLinkGoogle,
+  accountLinkBusy = false,
+  accountLinkError = null,
   onOpenDeleteAccount,
   onOpenDevMenu,
 }: SettingsScreenProps) {
@@ -116,7 +130,7 @@ export function SettingsScreen({
                   <SettingsRow
                     variant="navigation"
                     label={syncStatusLabel === 'Off' ? 'Enable sync' : 'Manage'}
-                    description="Same Apple ID in the desktop app."
+                    description="Use the same linked account in the desktop app."
                     valueLabel={syncStatusLabel}
                     onPress={onOpenSync}
                   />
@@ -193,6 +207,32 @@ export function SettingsScreen({
               {accountSectionVisible && onOpenDeleteAccount ? (
                 <SettingsSection title="Account">
                   <SettingsRow variant="info" label={accountIdentityLabel} description="Cloud account" />
+                  {linkedProviderLabels.length > 0 ? (
+                    <SettingsRow
+                      variant="info"
+                      label="Connected sign-in"
+                      description={linkedProviderLabels.join(', ')}
+                    />
+                  ) : null}
+                  {canLinkGoogle && onLinkGoogle ? (
+                    <SettingsRow
+                      variant="navigation"
+                      label={accountLinkBusy ? 'Linking Google…' : 'Link Google'}
+                      description="Use one cloud profile across Android and desktop."
+                      onPress={accountLinkBusy ? undefined : onLinkGoogle}
+                    />
+                  ) : null}
+                  {canLinkApple && onLinkApple ? (
+                    <SettingsRow
+                      variant="navigation"
+                      label={accountLinkBusy ? 'Linking Apple…' : 'Link Apple'}
+                      description="Use one cloud profile across iPhone and desktop."
+                      onPress={accountLinkBusy ? undefined : onLinkApple}
+                    />
+                  ) : null}
+                  {accountLinkError ? (
+                    <SettingsRow variant="info" label={accountLinkError} description="Account linking" />
+                  ) : null}
                   <SettingsRow
                     testID="settings-delete-account"
                     variant="destructive"

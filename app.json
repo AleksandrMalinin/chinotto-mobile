@@ -40,7 +40,21 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.chinotto.mobile"
+      "package": "com.chinotto.mobile",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "getchinotto.app",
+              "pathPrefix": "/sync"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -77,6 +91,7 @@
         }
       ],
       "@react-native-firebase/app",
+      "@react-native-google-signin/google-signin",
       "expo-apple-authentication",
       "expo-sqlite",
       [

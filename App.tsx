@@ -9,7 +9,7 @@ import {
   setOptIn,
   setUmami,
 } from './analytics/analytics';
-import { AnalyticsOptInModal } from './components/AnalyticsOptInModal';
+import { isMobileSyncPlatform } from './auth/syncPlatform';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -419,7 +419,7 @@ export default function App() {
       await bootstrapRevenueCat();
       await loadSubscriptionState();
       /** After RC + AsyncStorage hydration, `hasSyncAccess()` is accurate for mirror (paywall on). */
-      if (Platform.OS === 'ios' && isFirebaseSyncConfigured()) {
+      if (isMobileSyncPlatform()) {
         void mirrorChinottoSyncAccessToFirestore();
       }
       setSubscriptionLoaded(true);
@@ -454,7 +454,7 @@ export default function App() {
   }, []);
 
   useSyncDeepLink({
-    enabled: Platform.OS === 'ios' && isFirebaseSyncConfigured(),
+    enabled: isMobileSyncPlatform(),
     phase,
     dbReady,
     subscriptionLoaded,

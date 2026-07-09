@@ -21,6 +21,16 @@ jest.mock('../../sync/firebaseAuth', () => ({
   getOrInitAuth: jest.fn(() => ({ mockAuth: true })),
 }));
 
+jest.mock('../../sync/firebaseConfig', () => ({
+  isFirebaseSyncConfigured: jest.fn(() => true),
+}));
+
+jest.mock('../../auth/syncPlatform', () => ({
+  isAndroidSyncPlatform: jest.fn(() => false),
+  isIosSyncPlatform: jest.fn(() => true),
+  isMobileSyncPlatform: jest.fn(() => true),
+}));
+
 jest.mock('../../sync/syncEngine', () => ({
   processSyncQueue: jest.fn(() => Promise.resolve()),
 }));

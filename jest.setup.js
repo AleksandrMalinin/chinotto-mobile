@@ -242,6 +242,21 @@ jest.mock('@react-native-firebase/remote-config', () => ({
   })),
 }));
 
+jest.mock('@react-native-google-signin/google-signin', () => ({
+  GoogleSignin: {
+    configure: jest.fn(),
+    hasPlayServices: jest.fn(() => Promise.resolve(true)),
+    signIn: jest.fn(() =>
+      Promise.resolve({
+        data: { idToken: 'mock-google-id-token' },
+      })
+    ),
+  },
+  statusCodes: {
+    SIGN_IN_CANCELLED: 'SIGN_IN_CANCELLED',
+  },
+}));
+
 jest.mock('react-native-svg', () => {
   const React = require('react');
   const { View } = require('react-native');

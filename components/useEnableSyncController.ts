@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { AppleSyncIdentityError } from '../auth/appleFirebaseAuth';
 import { AppleUserCanceledError, enableAppleSyncWithFirebase } from '../auth/enableAppleSync';
+import { GoogleUserCanceledError, enableGoogleSyncWithFirebase } from '../auth/enableGoogleSync';
+import { SyncIdentityError } from '../auth/syncIdentity';
 import { isPaywallEnabled } from '../monetization/paywallConfig';
 import { openSyncPurchaseFlow } from '../monetization/syncPurchaseFlow';
 import { getCachedHasSyncEntitlement } from '../monetization/subscriptionState';
@@ -57,6 +59,7 @@ export function useEnableSyncController(params: {
   handlePlusContinue: () => Promise<void>;
   handleRestorePurchases: () => Promise<void>;
   handleApple: () => Promise<void>;
+  handleGoogle: () => Promise<void>;
   handleStopSyncing: () => Promise<void>;
 } {
   const {
@@ -274,7 +277,7 @@ export function useEnableSyncController(params: {
       if (err instanceof AppleUserCanceledError) {
         track({ event: 'sync_apple_mobile_sign_in_outcome', outcome: 'user_cancelled' });
         // Calm: no error banner for cancel
-      } else if (err instanceof AppleSyncIdentityError) {
+      } else if (err instanceof AppleSyncIdentityError || err instanceof SyncIdentityError) {
         track({ event: 'sync_apple_mobile_sign_in_outcome', outcome: 'error' });
         setErrorMessage(err.message);
       } else if (err instanceof Error) {
@@ -282,6 +285,35 @@ export function useEnableSyncController(params: {
         setErrorMessage(err.message);
       } else {
         track({ event: 'sync_apple_mobile_sign_in_outcome', outcome: 'error' });
+        setErrorMessage('Something went wrong. Try again.');
+      }
+    } finally {
+      setBusy(false);
+    }
+  }, [onEnabled]);
+
+  const handleGoogle = useCallback(async () => {
+    setErrorMessage(null);
+    setBusy(true);
+    try {
+      await enableGoogleSyncWithFirebase();
+      await processSyncQueue(resolvePushEntryForSync());
+      await flushSyncTombstoneOutbox();
+      await mirrorChinottoSyncAccessToFirestore();
+      track({ event: 'sync_google_mobile_sign_in_outcome', outcome: 'success' });
+      onEnabled();
+      setPostSyncSuccess(true);
+    } catch (err: unknown) {
+      if (err instanceof GoogleUserCanceledError) {
+        track({ event: 'sync_google_mobile_sign_in_outcome', outcome: 'user_cancelled' });
+      } else if (err instanceof SyncIdentityError) {
+        track({ event: 'sync_google_mobile_sign_in_outcome', outcome: 'error' });
+        setErrorMessage(err.message);
+      } else if (err instanceof Error) {
+        track({ event: 'sync_google_mobile_sign_in_outcome', outcome: 'error' });
+        setErrorMessage(err.message);
+      } else {
+        track({ event: 'sync_google_mobile_sign_in_outcome', outcome: 'error' });
         setErrorMessage('Something went wrong. Try again.');
       }
     } finally {
@@ -321,6 +353,7 @@ export function useEnableSyncController(params: {
     handlePlusContinue,
     handleRestorePurchases,
     handleApple,
+    handleGoogle,
     handleStopSyncing,
   };
 }

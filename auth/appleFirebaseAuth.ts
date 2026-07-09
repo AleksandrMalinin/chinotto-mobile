@@ -1,10 +1,15 @@
 import type { Auth, AuthCredential, User } from 'firebase/auth';
 import { linkWithCredential, signInWithCredential } from 'firebase/auth';
 
+import { SyncIdentityError } from './syncIdentity';
+
 export type ApplyAppleCredentialResult =
   | { kind: 'linked' }
   | { kind: 'signed_in' }
   | { kind: 'already_apple' };
+
+/** @deprecated Use SyncIdentityError */
+export { SyncIdentityError as AppleSyncIdentityError } from './syncIdentity';
 
 /**
  * Links Apple to the current anonymous user, signs in fresh, or no-ops if Apple is already linked.
@@ -31,18 +36,9 @@ export async function applyAppleCredentialToFirebase(
     return { kind: 'already_apple' };
   }
 
-  throw new AppleSyncIdentityError(
-    'signed_in_non_apple',
+  throw new SyncIdentityError(
+    'signed_in_other_provider',
     'Another sign-in is already active. Sign-in with Apple is not available for this session.'
   );
 }
 
-export class AppleSyncIdentityError extends Error {
-  constructor(
-    public readonly code: 'signed_in_non_apple' | 'credential_in_use',
-    message: string
-  ) {
-    super(message);
-    this.name = 'AppleSyncIdentityError';
-  }
-}

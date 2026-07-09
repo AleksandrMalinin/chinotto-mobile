@@ -1,9 +1,9 @@
 import { isFirebaseSyncConfigured } from '../sync/firebaseConfig';
 import { getOrInitAuth } from '../sync/firebaseAuth';
 import {
-  AppleSyncIdentityError,
-  applyAppleCredentialToFirebase,
+  SyncIdentityError,
 } from './appleFirebaseAuth';
+import { applyAppleCredentialToFirebase } from './appleFirebaseAuth';
 import { createFirebaseAppleCredential } from './appleSignInCredential';
 
 export { AppleUserCanceledError } from './appleSignInCredential';
@@ -26,7 +26,7 @@ export async function enableAppleSyncWithFirebase(): Promise<void> {
   } catch (e: unknown) {
     const code = e && typeof e === 'object' && 'code' in e ? String((e as { code: string }).code) : '';
     if (code === 'auth/credential-already-in-use') {
-      throw new AppleSyncIdentityError(
+      throw new SyncIdentityError(
         'credential_in_use',
         'This Apple ID already has cloud data under another Firebase sign-in. This device keeps working locally. For one library everywhere, use the same Sign in with Apple on each device; otherwise cloud data can stay split between accounts.'
       );
