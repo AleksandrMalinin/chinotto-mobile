@@ -3,9 +3,10 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { EntryTheme, ThemeCount } from '../types/entryTheme';
 import { classifyEntryTheme } from '../utils/classifyEntryTheme';
-import { MAX_USER_THEMES, SYSTEM_THEME_LINKS, type UserTheme } from '../utils/entryThemes';
+import { MAX_USER_THEMES, SYSTEM_THEME_LINKS, THEME_RECALL_MIN_CONFIDENCE, type UserTheme } from '../utils/entryThemes';
 import { getDatabase } from './db';
 import { runSerializedDb } from './runSerializedDb';
+import { isThemesEnabled } from './themeSettings';
 
 export { ensureThemeSchema } from './themeSchema';
 
@@ -153,6 +154,9 @@ export async function setEntryTheme(
 }
 
 export async function classifyEntryThemeForEntry(entryId: string, text: string): Promise<void> {
+  if (!(await isThemesEnabled())) {
+    return;
+  }
   await runSerializedDb(async () => {
     const db = await getDatabase();
     const lockedRow = await db.getFirstAsync<{ locked: number }>(
@@ -190,7 +194,10 @@ export async function listThemeCounts(): Promise<ThemeCount[]> {
   return runSerializedDb(async () => {
     const db = await getDatabase();
     const rows = await db.getAllAsync<{ theme_id: string; count: number }>(
-      `SELECT theme_id, COUNT(*) AS count FROM entry_themes GROUP BY theme_id`
+      `SELECT theme_id, COUNT(*) AS count FROM entry_themes
+       WHERE locked = 1 OR confidence >= ?
+       GROUP BY theme_id`,
+      THEME_RECALL_MIN_CONFIDENCE
     );
     return rows.map((row) => ({ themeId: row.theme_id, count: row.count }));
   });

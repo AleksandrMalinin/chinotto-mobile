@@ -29,6 +29,14 @@ describe('classifyEntryTheme', () => {
     });
   });
 
+  it('returns links for bare www URL token', () => {
+    expect(classifyEntryTheme('Check www.example.com/page')).toEqual({
+      themeId: 'links',
+      confidence: 1,
+      source: 'url',
+    });
+  });
+
   it('returns null for plain text', () => {
     expect(classifyEntryTheme('just a thought')).toBeNull();
   });

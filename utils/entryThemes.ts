@@ -1,3 +1,6 @@
+/** Minimum confidence for theme recall (search chips and theme-only browse). */
+export const THEME_RECALL_MIN_CONFIDENCE = 0.7;
+
 /** Minimum themed entries before a search chip appears. */
 export const THEME_CHIP_MIN_COUNT = 5;
 

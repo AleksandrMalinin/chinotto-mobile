@@ -2,6 +2,7 @@ import { randomUUID } from 'expo-crypto';
 
 import type { Entry } from '../types/entry';
 import type { MonthKey, MonthSummary } from '../types/temporal';
+import { THEME_RECALL_MIN_CONFIDENCE } from '../utils/entryThemes';
 import { isFirebaseSyncConfigured } from '../sync/firebaseConfig';
 import { addFirestoreIngestSuppressionWithDb } from '../sync/ingestSuppression';
 import { insertPendingSyncItem, removePendingSyncItemsForEntry } from '../sync/syncQueue';
@@ -332,10 +333,12 @@ export async function searchEntriesForRecall(
         `SELECT e.id, e.text, e.created_at AS createdAt
          FROM entries e
          INNER JOIN entry_themes et ON et.entry_id = e.id
+           AND (et.locked = 1 OR et.confidence >= ?)
          WHERE et.theme_id = ?
            AND (? = '' OR instr(lower(e.text), lower(?)) > 0)
          ORDER BY e.created_at DESC, e.id DESC
          LIMIT ?`,
+        THEME_RECALL_MIN_CONFIDENCE,
         themeId,
         q,
         q,
