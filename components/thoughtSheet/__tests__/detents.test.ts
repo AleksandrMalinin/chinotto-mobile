@@ -5,8 +5,9 @@ import {
   shouldDismissThoughtSheet,
   shouldExpandThoughtSheet,
   thoughtSheetCompactScrollMaxHeight,
-  thoughtSheetEnterOffsetFromAnchor,
   thoughtSheetExpandedHeight,
+  thoughtSheetExpandedHeightWithKeyboard,
+  thoughtSheetEnterOffsetFromAnchor,
 } from '../detents';
 
 const insets = { top: 47, left: 0, right: 0, bottom: 34 };
@@ -14,6 +15,15 @@ const insets = { top: 47, left: 0, right: 0, bottom: 34 };
 describe('thoughtSheet detents', () => {
   it('computes expanded height cap from window size', () => {
     expect(thoughtSheetExpandedHeight(844, insets)).toBe(Math.min(Math.round(844 * 0.92), 844 - 47 - 24));
+  });
+
+  it('shrinks expanded height when the keyboard is visible', () => {
+    expect(thoughtSheetExpandedHeightWithKeyboard(844, insets, 0)).toBe(
+      thoughtSheetExpandedHeight(844, insets),
+    );
+    expect(thoughtSheetExpandedHeightWithKeyboard(844, insets, 320)).toBeLessThan(
+      thoughtSheetExpandedHeight(844, insets),
+    );
   });
 
   it('uses content-aware scroll caps in compact mode', () => {

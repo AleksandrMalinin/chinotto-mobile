@@ -42,6 +42,7 @@ import {
   shouldExpandThoughtSheet,
   thoughtSheetCompactScrollMaxHeight,
   thoughtSheetExpandedHeight,
+  thoughtSheetExpandedHeightWithKeyboard,
   type ThoughtSheetOpenAnchor,
 } from './thoughtSheet/detents';
 import { useSheetDragDismiss } from './thoughtSheet/useSheetDragDismiss';
@@ -107,6 +108,11 @@ export function EntryThoughtSheet({
   const scrollGestureRef = useRef<NativeViewGestureHandlerType>(null);
   const dragKeyboardDismissedRef = useRef(false);
   const expandedHeight = thoughtSheetExpandedHeight(windowHeight, insets);
+  const expandedSheetHeight = thoughtSheetExpandedHeightWithKeyboard(
+    windowHeight,
+    insets,
+    keyboardInset,
+  );
   const dismissTravel = Math.round(windowHeight);
   const lastBodyTapAtRef = useRef(0);
 
@@ -140,7 +146,6 @@ export function EntryThoughtSheet({
   const isExpanded = phase === 'expanded';
   const comfortableReading = !isExpanded && draft.length >= 380;
   const scrollMaxHeight = thoughtSheetCompactScrollMaxHeight(windowHeight, comfortableReading);
-  const expandedEditorMaxHeight = Math.min(expandedHeight * 0.72, 560);
   const showEditor = isExpanded && isEditing;
 
   const { scrimOpacity, contentOpacity, contentTranslateY } = useSheetEnterAnimation(
@@ -546,13 +551,16 @@ export function EntryThoughtSheet({
               testID="entry-thought-sheet"
               style={[
                 styles.sheet,
+                isExpanded ? styles.sheetExpanded : null,
                 {
                   backgroundColor: colors.bgElevated,
                   borderColor: colors.border,
                   borderTopLeftRadius: radius.lg,
                   borderTopRightRadius: radius.lg,
                   paddingBottom: Math.max(insets.bottom, spacing.md),
-                  maxHeight: isExpanded ? expandedHeight : '88%',
+                  height: isExpanded ? expandedSheetHeight : undefined,
+                  maxHeight: isExpanded ? expandedSheetHeight : '88%',
+                  marginBottom: isExpanded ? keyboardInset : 0,
                   opacity: contentOpacity,
                   transform: [{ translateY: sheetTranslateY }],
                 },
@@ -629,8 +637,7 @@ export function EntryThoughtSheet({
                     {
                       paddingHorizontal: contentInset,
                       paddingTop: spacing.sm,
-                      paddingBottom: spacing.lg + keyboardInset,
-                      maxHeight: expandedEditorMaxHeight,
+                      paddingBottom: spacing.lg,
                     },
                   ]}
                 >
@@ -745,6 +752,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
     overflow: 'hidden',
   },
+  sheetExpanded: {
+    flexDirection: 'column',
+  },
   dragStrip: {
     width: '100%',
   },
@@ -793,12 +803,14 @@ const styles = StyleSheet.create({
   scroll: {},
   editorWrap: {
     width: '100%',
+    flex: 1,
+    minHeight: 0,
   },
   bodyText: {
     padding: 0,
   },
   expandedEditor: {
-    flexGrow: 1,
-    minHeight: 160,
+    flex: 1,
+    minHeight: 120,
   },
 });

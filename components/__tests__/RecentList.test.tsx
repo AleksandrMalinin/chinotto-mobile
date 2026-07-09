@@ -30,6 +30,14 @@ describe('RecentList', () => {
     expect(getByText('hello')).toBeTruthy();
   });
 
+  it('shows trail link dot when entry id is in trailLinkedIds', () => {
+    const e = entryToday('api refactor notes');
+    const { getByTestId } = render(
+      <RecentList entries={[e]} visible trailLinkedIds={new Set([e.id])} />,
+    );
+    expect(getByTestId(`stream-trail-mark-${e.id}`)).toBeTruthy();
+  });
+
   it('renders nothing when not visible', () => {
     const { queryByTestId } = render(<RecentList entries={[entryToday('hello')]} visible={false} />);
 

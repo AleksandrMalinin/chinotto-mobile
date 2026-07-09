@@ -15,10 +15,8 @@ export type DevMenuOptions = {
   onResetSyncCaptureQA?: () => void | Promise<void>;
   /** Show the shipped `UpdateScreen` in soft or forced mode (wired from `App`). */
   onPreviewAppUpdateModal?: (mode: 'soft' | 'forced') => void;
-  /** Replay the one-time Echo edge peek animation immediately. */
-  onPreviewEchoEdgePeek?: () => void | Promise<void>;
-  /** Clear AsyncStorage flag so auto peek can fire again on next eligibility. */
-  onResetEchoEdgePeek?: () => void | Promise<void>;
+  /** Clear one-time spatial gesture hints (thread peel + temporal map). */
+  onResetSpatialGestureHints?: () => void | Promise<void>;
 };
 
 /**
@@ -66,16 +64,10 @@ export function showDevMenu(options: DevMenuOptions): void {
       onPress: () => preview('forced'),
     });
   }
-  if (options.onPreviewEchoEdgePeek != null) {
+  if (options.onResetSpatialGestureHints != null) {
     buttons.push({
-      text: 'Preview Echo edge peek',
-      onPress: () => void options.onPreviewEchoEdgePeek?.(),
-    });
-  }
-  if (options.onResetEchoEdgePeek != null) {
-    buttons.push({
-      text: 'Reset Echo edge peek flag',
-      onPress: () => void options.onResetEchoEdgePeek?.(),
+      text: 'Reset spatial gesture hints',
+      onPress: () => void options.onResetSpatialGestureHints?.(),
     });
   }
   buttons.push({ text: 'Cancel', style: 'cancel' });

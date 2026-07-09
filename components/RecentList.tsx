@@ -120,11 +120,22 @@ export type RecentListProps = {
   threadPeelEnabled?: boolean;
   /** Entry pool for thread peel neighbor lookup (loaded stream rows). */
   threadPeelSourceEntries?: readonly Entry[];
+  /** Quiet stream dot — entries with keyword trail connections (desktop entry-row-trail-mark). */
+  trailLinkedIds?: ReadonlySet<string>;
   /** Long-press a day section label — temporal map entry (semantic zoom handoff). */
   onSectionLabelLongPress?: (monthKey: MonthKey) => void;
+  /** Fired when swipe-right reveals thread peel on a row. */
+  onThreadPeelRevealed?: () => void;
 };
 
 const DELETE_ACTION_WIDTH = 76;
+const STREAM_TRAIL_MARK_SIZE = 4;
+
+/** Mid outer gutter (`screenContentGutter`), nudged toward stream text. */
+function streamTrailMarkLeft(gutter: number): number {
+  const markRadius = STREAM_TRAIL_MARK_SIZE / 2;
+  return Math.round(gutter * 0.65) - markRadius + 2;
+}
 
 function measureInWindowPromise(view: View | null): Promise<StreamFocusWindowBox | null> {
   if (!view) return Promise.resolve(null);
@@ -193,6 +204,8 @@ type StreamRowProps = {
   onEntryDelete?: (entry: Entry) => void;
   threadPeelEnabled?: boolean;
   threadPeelNeighbors?: readonly Entry[];
+  hasTrailLink?: boolean;
+  onThreadPeelRevealed?: () => void;
 };
 
 type EntryBodyPreviewProps = {
@@ -253,6 +266,8 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
   onEntryDelete,
   threadPeelEnabled = false,
   threadPeelNeighbors = [],
+  hasTrailLink = false,
+  onThreadPeelRevealed,
 }: StreamRowProps) {
   const pressShade = useRef(new Animated.Value(0)).current;
   const t = useAppTheme();
@@ -339,17 +354,24 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
     [onEntryPress],
   );
 
+  const showThreadPeel = threadPeelEnabled && threadPeelNeighbors.length > 0;
+  const showSwipeChrome = onEntryDelete != null || showThreadPeel;
+
   const onSwipeableOpen = useCallback(
     (direction: 'left' | 'right') => {
       if (direction === 'right') {
         requestEntryDelete();
+        return;
+      }
+      if (direction === 'left' && showThreadPeel) {
+        onThreadPeelRevealed?.();
       }
     },
-    [requestEntryDelete],
+    [onThreadPeelRevealed, requestEntryDelete, showThreadPeel],
   );
 
-  const showThreadPeel = threadPeelEnabled && threadPeelNeighbors.length > 0;
-  const showSwipeChrome = onEntryDelete != null || showThreadPeel;
+  const previewLineHeight = showNewest ? 26 : body.lineHeight;
+  const previewFontSize = showNewest ? 18 : body.fontSize;
 
   const rowContent = (
     <View
@@ -369,10 +391,11 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
       />
       <Pressable
         accessible={true}
-        accessibilityLabel={`${item.text}, ${formatEntryTime(item.createdAt)}`}
+        accessibilityLabel={`${item.text}, ${formatEntryTime(item.createdAt)}${hasTrailLink ? ', has trail connections' : ''}`}
         accessibilityHint={
           [
             onEntryPress != null ? 'Double tap to open thought' : null,
+            hasTrailLink ? 'Connected to related thoughts in your stream' : null,
             threadPeelEnabled && threadPeelNeighbors.length > 0
               ? 'Swipe right for related thoughts'
               : null,
@@ -405,6 +428,21 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
               { paddingHorizontal: streamGutter + screenContentInnerPad },
             ]}
           >
+            {hasTrailLink ? (
+              <View
+                testID={`stream-trail-mark-${item.id}`}
+                pointerEvents="none"
+                style={[
+                  styles.trailMarkGutter,
+                  {
+                    left: streamTrailMarkLeft(streamGutter),
+                    top: (previewLineHeight - STREAM_TRAIL_MARK_SIZE) / 2,
+                  },
+                ]}
+              >
+                <View style={styles.trailMark} />
+              </View>
+            ) : null}
             <EntryBodyPreview
               lineDisplay={lineDisplay}
               searchHighlightQuery={searchHighlightQuery}
@@ -423,8 +461,8 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
                   fontFamily: showNewest ? fonts.medium : body.fontFamily,
                   // Newest thought echoes the composer (18px) — the thought you just wrote
                   // visually rhymes with the input it came from.
-                  fontSize: showNewest ? 18 : body.fontSize,
-                  lineHeight: showNewest ? 26 : body.lineHeight,
+                  fontSize: previewFontSize,
+                  lineHeight: previewLineHeight,
                   letterSpacing: showNewest ? 0.17 : 0.16,
                 },
               ]}
@@ -452,7 +490,6 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
         showThreadPeel
           ? () => (
               <StreamThreadPeelActions
-                anchor={item}
                 neighbors={threadPeelNeighbors}
                 onSelect={onThreadNeighborPress}
                 onClose={closePeel}
@@ -491,7 +528,7 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
             )
           : undefined
       }
-      onSwipeableOpen={onEntryDelete != null ? onSwipeableOpen : undefined}
+      onSwipeableOpen={showSwipeChrome ? onSwipeableOpen : undefined}
     >
       {rowContent}
     </Swipeable>
@@ -740,7 +777,9 @@ function RecentListInner({
   streamScrollVelocityY = 0,
   threadPeelEnabled = false,
   threadPeelSourceEntries = [],
+  trailLinkedIds,
   onSectionLabelLongPress,
+  onThreadPeelRevealed,
 }: RecentListProps) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const streamGutter = screenContentGutter(windowWidth);
@@ -1196,6 +1235,8 @@ function RecentListInner({
               onEntryDelete={onEntryDelete}
               threadPeelEnabled={threadPeelEnabled}
               threadPeelNeighbors={threadPeelByEntryId?.get(item.entry.id) ?? []}
+              hasTrailLink={trailLinkedIds?.has(item.entry.id) ?? false}
+              onThreadPeelRevealed={onThreadPeelRevealed}
             />
           </View>
         );
@@ -1290,6 +1331,19 @@ const styles = StyleSheet.create({
     width: '100%',
     flexDirection: 'row',
     alignItems: 'baseline',
+    position: 'relative',
+  },
+  trailMarkGutter: {
+    position: 'absolute',
+    width: STREAM_TRAIL_MARK_SIZE,
+    height: STREAM_TRAIL_MARK_SIZE,
+    zIndex: 1,
+  },
+  trailMark: {
+    width: STREAM_TRAIL_MARK_SIZE,
+    height: STREAM_TRAIL_MARK_SIZE,
+    borderRadius: 2,
+    backgroundColor: 'rgba(34, 200, 220, 0.55)',
   },
   line: {},
   deleteTrack: {

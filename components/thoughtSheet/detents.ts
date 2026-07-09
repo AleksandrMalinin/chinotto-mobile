@@ -5,6 +5,20 @@ export function thoughtSheetExpandedHeight(windowHeight: number, insets: EdgeIns
   return Math.min(Math.round(windowHeight * 0.92), windowHeight - insets.top - 24);
 }
 
+/** Expanded sheet height above the keyboard — lifts via shell marginBottom in EntryThoughtSheet. */
+export function thoughtSheetExpandedHeightWithKeyboard(
+  windowHeight: number,
+  insets: EdgeInsets,
+  keyboardInset: number,
+): number {
+  const cap = thoughtSheetExpandedHeight(windowHeight, insets);
+  if (keyboardInset <= 0) {
+    return cap;
+  }
+  const aboveKeyboard = windowHeight - keyboardInset - insets.top - 12;
+  return Math.max(240, Math.min(cap, aboveKeyboard));
+}
+
 /** Scroll cap in compact (content-sized) read mode — matches original EntryReadSheet. */
 export function thoughtSheetCompactScrollMaxHeight(
   windowHeight: number,

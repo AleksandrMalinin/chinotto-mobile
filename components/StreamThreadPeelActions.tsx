@@ -4,9 +4,8 @@ import { STREAM_THREAD_PEEL_ACTION_WIDTH } from '../constants/streamThreadPeel';
 import type { Entry } from '../types/entry';
 import { fonts, useAppTheme } from '../theme';
 import { streamPreviewFirstLine } from '../utils/streamPreviewFirstLine';
-import { relativeTrailWhen } from '../utils/thoughtTrail';
 
-const MAX_PREVIEW = 48;
+const MAX_PREVIEW = 34;
 
 function truncate(text: string, max: number): string {
   if (text.length <= max) {
@@ -16,15 +15,21 @@ function truncate(text: string, max: number): string {
 }
 
 type Props = {
-  anchor: Entry;
   neighbors: readonly Entry[];
   onSelect: (entry: Entry) => void;
   onClose?: () => void;
 };
 
-export function StreamThreadPeelActions({ anchor, neighbors, onSelect, onClose }: Props) {
+/** One related thought beside the row — open sheet for the full trail. */
+export function StreamThreadPeelActions({ neighbors, onSelect, onClose }: Props) {
   const t = useAppTheme();
   const { colors } = t;
+  const neighbor = neighbors[0];
+  if (neighbor == null) {
+    return null;
+  }
+
+  const preview = truncate(streamPreviewFirstLine(neighbor.text), MAX_PREVIEW);
 
   return (
     <View
@@ -39,51 +44,44 @@ export function StreamThreadPeelActions({ anchor, neighbors, onSelect, onClose }
         },
       ]}
     >
-      {neighbors.map((neighbor) => {
-        const preview = truncate(streamPreviewFirstLine(neighbor.text), MAX_PREVIEW);
-        const when = relativeTrailWhen(anchor.createdAt, neighbor.createdAt);
-        return (
-          <Pressable
-            key={neighbor.id}
-            testID={`stream-thread-peel-${neighbor.id}`}
-            accessibilityRole="button"
-            accessibilityLabel={`${when}: ${preview}`}
-            onPress={() => {
-              onClose?.();
-              onSelect(neighbor);
-            }}
-            style={({ pressed }) => [
-              styles.row,
-              { opacity: pressed ? 0.78 : 1 },
-            ]}
-          >
-            <Text
-              style={[
-                styles.when,
-                {
-                  color: colors.metaFg,
-                  fontFamily: fonts.regular,
-                },
-              ]}
-              numberOfLines={1}
-            >
-              {when}
-            </Text>
-            <Text
-              style={[
-                styles.preview,
-                {
-                  color: colors.fgDim,
-                  fontFamily: fonts.regular,
-                },
-              ]}
-              numberOfLines={2}
-            >
-              {preview}
-            </Text>
-          </Pressable>
-        );
-      })}
+      <Pressable
+        testID={`stream-thread-peel-${neighbor.id}`}
+        accessibilityRole="button"
+        accessibilityLabel={`Related thought: ${preview}`}
+        onPress={() => {
+          onClose?.();
+          onSelect(neighbor);
+        }}
+        style={({ pressed }) => [
+          styles.row,
+          { opacity: pressed ? 0.78 : 1 },
+        ]}
+      >
+        <Text
+          style={[
+            styles.label,
+            {
+              color: colors.metaFg,
+              fontFamily: fonts.regular,
+            },
+          ]}
+          numberOfLines={1}
+        >
+          Related
+        </Text>
+        <Text
+          style={[
+            styles.preview,
+            {
+              color: colors.fgDim,
+              fontFamily: fonts.regular,
+            },
+          ]}
+          numberOfLines={1}
+        >
+          {preview}
+        </Text>
+      </Pressable>
     </View>
   );
 }
@@ -94,20 +92,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 8,
     paddingHorizontal: 10,
-    gap: 10,
   },
   row: {
-    gap: 2,
+    gap: 3,
   },
-  when: {
+  label: {
     fontSize: 10,
-    lineHeight: 13,
-    letterSpacing: 0.12,
-    opacity: 0.85,
+    lineHeight: 12,
+    letterSpacing: 0.14,
+    opacity: 0.72,
   },
   preview: {
     fontSize: 12,
-    lineHeight: 16,
-    letterSpacing: 0.12,
+    lineHeight: 15,
+    letterSpacing: 0.1,
   },
 });
