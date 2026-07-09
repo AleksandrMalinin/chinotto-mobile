@@ -24,6 +24,13 @@ jest.mock('../../components/ChinottoLogo', () => {
   };
 });
 
+jest.mock('../../storage/themeRepository', () => ({
+  listUserThemes: jest.fn(() => Promise.resolve([])),
+  createUserTheme: jest.fn(),
+  updateUserTheme: jest.fn(),
+  deleteUserTheme: jest.fn(),
+}));
+
 function renderSettings(
   props?: Partial<ComponentProps<typeof SettingsScreen>>,
   chrome: Partial<AdaptiveChromeContextValue> = {},

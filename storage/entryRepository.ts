@@ -2,11 +2,13 @@ import { randomUUID } from 'expo-crypto';
 
 import type { Entry } from '../types/entry';
 import type { MonthKey, MonthSummary } from '../types/temporal';
+import { THEME_RECALL_MIN_CONFIDENCE } from '../utils/entryThemes';
 import { isFirebaseSyncConfigured } from '../sync/firebaseConfig';
 import { addFirestoreIngestSuppressionWithDb } from '../sync/ingestSuppression';
 import { insertPendingSyncItem, removePendingSyncItemsForEntry } from '../sync/syncQueue';
 import { enqueueSyncTombstoneWithDb } from '../sync/tombstoneOutbox';
 import { deleteEntryEngagement, recordEntryEdited } from './entryEngagementRepository';
+import { classifyEntryThemeForEntry } from './themeRepository';
 import { getDatabase } from './db';
 import { runSerializedDb } from './runSerializedDb';
 
@@ -35,6 +37,8 @@ export async function saveEntry(text: string): Promise<Entry> {
     });
   });
 
+  await classifyEntryThemeForEntry(entry.id, entry.text);
+
   return entry;
 }
 
@@ -47,7 +51,7 @@ export async function updateEntryText(entryId: string, text: string): Promise<En
     throw new Error('Cannot save empty entry');
   }
 
-  const updated = await runSerializedDb(async () => {
+  const updated = await runSerializedDb<Entry>(async () => {
     const db = await getDatabase();
     let next: Entry | null = null;
     await db.withTransactionAsync(async () => {
@@ -71,6 +75,7 @@ export async function updateEntryText(entryId: string, text: string): Promise<En
     }
     return next;
   });
+  await classifyEntryThemeForEntry(updated.id, updated.text);
   await recordEntryEdited(updated.id);
   return updated;
 }
@@ -89,6 +94,7 @@ export async function deleteEntry(entryId: string): Promise<void> {
       }
       await db.runAsync('DELETE FROM entries WHERE id = ?', entryId);
       await db.runAsync('DELETE FROM entry_engagement WHERE entry_id = ?', entryId);
+      await db.runAsync('DELETE FROM entry_themes WHERE entry_id = ?', entryId);
       await removePendingSyncItemsForEntry(db, entryId);
       if (configured) {
         await addFirestoreIngestSuppressionWithDb(db, entryId);
@@ -115,6 +121,7 @@ export async function applyRemoteTombstoneDeletes(entryIds: string[]): Promise<n
           removed += 1;
         }
         await db.runAsync('DELETE FROM entry_engagement WHERE entry_id = ?', id);
+        await db.runAsync('DELETE FROM entry_themes WHERE entry_id = ?', id);
         await db.runAsync('DELETE FROM firestore_ingest_suppressed_ids WHERE id = ?', id);
       }
     });
@@ -312,14 +319,36 @@ export type SearchEntriesRecallResult = {
  */
 export async function searchEntriesForRecall(
   needle: string,
-  limit: number = SEARCH_DEFAULT_LIMIT
+  limit: number = SEARCH_DEFAULT_LIMIT,
+  themeId: string | null = null
 ): Promise<SearchEntriesRecallResult> {
   const q = needle.trim();
-  if (!q) {
+  if (!q && themeId == null) {
     return { entries: [], truncated: false };
   }
   return runSerializedDb(async () => {
     const db = await getDatabase();
+    if (themeId != null) {
+      const rows = await db.getAllAsync<Entry>(
+        `SELECT e.id, e.text, e.created_at AS createdAt
+         FROM entries e
+         INNER JOIN entry_themes et ON et.entry_id = e.id
+           AND (et.locked = 1 OR et.confidence >= ?)
+         WHERE et.theme_id = ?
+           AND (? = '' OR instr(lower(e.text), lower(?)) > 0)
+         ORDER BY e.created_at DESC, e.id DESC
+         LIMIT ?`,
+        THEME_RECALL_MIN_CONFIDENCE,
+        themeId,
+        q,
+        q,
+        limit + 1
+      );
+      if (rows.length > limit) {
+        return { entries: rows.slice(0, limit), truncated: true };
+      }
+      return { entries: rows, truncated: false };
+    }
     const rows = await db.getAllAsync<Entry>(
       `SELECT id, text, created_at AS createdAt
        FROM entries

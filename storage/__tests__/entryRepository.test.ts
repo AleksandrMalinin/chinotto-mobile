@@ -46,6 +46,10 @@ jest.mock('../../sync/ingestSuppression', () => ({
   addFirestoreIngestSuppressionWithDb: jest.fn().mockResolvedValue(undefined),
 }));
 
+jest.mock('../themeRepository', () => ({
+  classifyEntryThemeForEntry: jest.fn().mockResolvedValue(undefined),
+}));
+
 const mockGetDatabase = jest.mocked(getDatabase);
 const mockRandomUUID = jest.mocked(randomUUID);
 const mockInsertPendingSyncItem = jest.mocked(insertPendingSyncItem);

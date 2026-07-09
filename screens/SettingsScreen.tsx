@@ -6,6 +6,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChinottoLogo, chinottoLogoLeadingOutset } from '../components/ChinottoLogo';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { SettingsSection } from '../components/settings/SettingsSection';
+import { UserThemesEditor } from '../components/settings/UserThemesEditor';
 import { AdaptiveChromeContext, fonts, screenContentGutter, spacing, useAppTheme } from '../theme';
 
 type SettingsScreenProps = {
@@ -24,6 +25,9 @@ type SettingsScreenProps = {
   accountIdentityLabel?: string;
   onOpenDeleteAccount?: () => void;
   onOpenDevMenu?: () => void;
+  themesEnabled?: boolean;
+  onThemesEnabledChange?: (enabled: boolean) => void;
+  onUserThemesChange?: () => void;
 };
 
 export function SettingsScreen({
@@ -40,6 +44,9 @@ export function SettingsScreen({
   accountIdentityLabel = 'Apple ID',
   onOpenDeleteAccount,
   onOpenDevMenu,
+  themesEnabled = true,
+  onThemesEnabledChange,
+  onUserThemesChange,
 }: SettingsScreenProps) {
   const { displayChrome, setDisplayChrome } = useContext(AdaptiveChromeContext);
   const t = useAppTheme();
@@ -157,6 +164,20 @@ export function SettingsScreen({
                     onPress={onOpenAppIcon}
                     isLast
                   />
+                ) : null}
+              </SettingsSection>
+
+              <SettingsSection title="Themes">
+                <SettingsRow
+                  variant="switch"
+                  label="Enable themes"
+                  description="Recall labels in entry detail. Links are automatic."
+                  value={themesEnabled}
+                  onValueChange={(next) => onThemesEnabledChange?.(next)}
+                  isLast={!themesEnabled}
+                />
+                {themesEnabled && onUserThemesChange != null ? (
+                  <UserThemesEditor onThemesChange={onUserThemesChange} />
                 ) : null}
               </SettingsSection>
 

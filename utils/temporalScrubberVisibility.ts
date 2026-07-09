@@ -37,3 +37,17 @@ export function shouldPeekTemporalScrubber(streamScrollY: number, scrollVelocity
   }
   return scrollVelocityY >= TEMPORAL_NAV_SCROLL_VELOCITY_PEEK;
 }
+
+/** Rack chrome: eligible, past capture, and peek gate (scroll depth or velocity). */
+export function isTemporalScrubberVisible(params: {
+  eligible: boolean;
+  atCapture: boolean;
+  streamScrollY: number;
+  scrollVelocityY: number;
+}): boolean {
+  return (
+    params.eligible &&
+    !params.atCapture &&
+    shouldPeekTemporalScrubber(params.streamScrollY, params.scrollVelocityY)
+  );
+}

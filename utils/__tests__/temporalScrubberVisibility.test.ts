@@ -1,5 +1,6 @@
 import {
   isTemporalScrubberEligible,
+  isTemporalScrubberVisible,
   shouldPeekTemporalScrubber,
 } from '../temporalScrubberVisibility';
 import {
@@ -89,5 +90,40 @@ describe('temporalScrubberVisibility', () => {
     expect(shouldPeekTemporalScrubber(24, -TEMPORAL_NAV_SCROLL_VELOCITY_PEEK)).toBe(false);
     expect(shouldPeekTemporalScrubber(TEMPORAL_NAV_MIN_SCROLL_Y, 0)).toBe(true);
     expect(shouldPeekTemporalScrubber(48, TEMPORAL_NAV_SCROLL_VELOCITY_PEEK)).toBe(true);
+  });
+
+  it('isTemporalScrubberVisible hides at capture even when peek would pass', () => {
+    expect(
+      isTemporalScrubberVisible({
+        eligible: true,
+        atCapture: true,
+        streamScrollY: TEMPORAL_NAV_MIN_SCROLL_Y,
+        scrollVelocityY: 0,
+      }),
+    ).toBe(false);
+    expect(
+      isTemporalScrubberVisible({
+        eligible: true,
+        atCapture: false,
+        streamScrollY: TEMPORAL_NAV_MIN_SCROLL_Y,
+        scrollVelocityY: 0,
+      }),
+    ).toBe(true);
+    expect(
+      isTemporalScrubberVisible({
+        eligible: false,
+        atCapture: false,
+        streamScrollY: TEMPORAL_NAV_MIN_SCROLL_Y,
+        scrollVelocityY: 0,
+      }),
+    ).toBe(false);
+    expect(
+      isTemporalScrubberVisible({
+        eligible: true,
+        atCapture: false,
+        streamScrollY: 0,
+        scrollVelocityY: 0,
+      }),
+    ).toBe(false);
   });
 });
