@@ -26,6 +26,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Swipeable, { type Swipeable as SwipeableRef } from 'react-native-gesture-handler/Swipeable';
 
 import type { Entry } from '../types/entry';
+import type { MonthKey } from '../types/temporal';
 import {
   chinottoHeadlineTextGradient,
   fonts,
@@ -50,6 +51,7 @@ import {
 } from '../constants/streamFocus';
 import { confirmDeleteThought } from '../utils/confirmDeleteThought';
 import { streamScrollContentYForRow } from '../utils/streamScrollToEntry';
+import { monthKeyFromIso } from '../utils/streamMonthIndex';
 import { buildThreadPeelNeighbors } from '../utils/streamThreadPeel';
 import { STREAM_THREAD_PEEL_ACTION_WIDTH } from '../constants/streamThreadPeel';
 import { StreamFlowPanel } from './StreamFlowPanel';
@@ -119,7 +121,7 @@ export type RecentListProps = {
   /** Entry pool for thread peel neighbor lookup (loaded stream rows). */
   threadPeelSourceEntries?: readonly Entry[];
   /** Long-press a day section label — temporal map entry (semantic zoom handoff). */
-  onSectionLabelLongPress?: () => void;
+  onSectionLabelLongPress?: (monthKey: MonthKey) => void;
 };
 
 const DELETE_ACTION_WIDTH = 76;
@@ -840,16 +842,18 @@ function RecentListInner({
   }, [threadPeelEnabled, threadPeelSourceEntries, entries]);
   const flatItems = useMemo(() => {
     const out: Array<
-      | { kind: 'header'; label: string; sectionIndex: number; key: string }
+      | { kind: 'header'; label: string; sectionIndex: number; monthKey: MonthKey; key: string }
       | { kind: 'entry'; entry: Entry; flatIndex: number; key: string }
     > = [];
     let globalFlatIndex = 0;
     for (let s = 0; s < groups.length; s++) {
       const section = groups[s];
+      const sectionMonthKey = monthKeyFromIso(section.items[0]!.createdAt);
       out.push({
         kind: 'header',
         label: section.label,
         sectionIndex: s,
+        monthKey: sectionMonthKey,
         key: `h-${section.label}-${s}`,
       });
       for (const row of section.items) {
@@ -1157,7 +1161,7 @@ function RecentListInner({
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`${item.label}. Long press for timeline`}
-                  onLongPress={onSectionLabelLongPress}
+                  onLongPress={() => onSectionLabelLongPress(item.monthKey)}
                   delayLongPress={400}
                 >
                   {labelNode}

@@ -371,6 +371,9 @@ export function CaptureScreen({
   /** True at capture — rack stays off until user scrolls into the stream again. */
   const [temporalRackAtCapture, setTemporalRackAtCapture] = useState(true);
   const [temporalMapVisible, setTemporalMapVisible] = useState(false);
+  const [temporalMapHighlightMonthKey, setTemporalMapHighlightMonthKey] = useState<MonthKey | null>(
+    null,
+  );
   const [scrollToEntryId, setScrollToEntryId] = useState<string | null>(null);
   /** Pins rack + map highlight until stream scroll/active entry catches up after a jump. */
   const [temporalCommittedMonthKey, setTemporalCommittedMonthKey] = useState<MonthKey | null>(null);
@@ -1900,21 +1903,28 @@ export function CaptureScreen({
     }
   }, [streamActiveEntry, scrollToEntryId, temporalCommittedMonthKey]);
 
-  const onTemporalActiveMonthPress = useCallback(() => {
-    playTemporalBoundaryHaptic();
-    setTemporalMapVisible(true);
-    void getMonthSummaries()
-      .then(setMonthSummaries)
-      .catch(() => {});
-  }, [playTemporalBoundaryHaptic]);
+  const openTemporalMap = useCallback(
+    (highlightMonthKey: MonthKey | null) => {
+      playTemporalBoundaryHaptic();
+      setTemporalMapHighlightMonthKey(highlightMonthKey);
+      setTemporalMapVisible(true);
+      void getMonthSummaries()
+        .then(setMonthSummaries)
+        .catch(() => {});
+    },
+    [playTemporalBoundaryHaptic],
+  );
 
-  const onStreamSectionLabelLongPress = useCallback(() => {
-    playTemporalBoundaryHaptic();
-    setTemporalMapVisible(true);
-    void getMonthSummaries()
-      .then(setMonthSummaries)
-      .catch(() => {});
-  }, [playTemporalBoundaryHaptic]);
+  const onTemporalActiveMonthPress = useCallback(() => {
+    openTemporalMap(temporalChromeMonthKey);
+  }, [openTemporalMap, temporalChromeMonthKey]);
+
+  const onStreamSectionLabelLongPress = useCallback(
+    (monthKey: MonthKey) => {
+      openTemporalMap(monthKey);
+    },
+    [openTemporalMap],
+  );
 
   const scrollToStreamNow = useCallback(() => {
     streamScrollViewRef.current?.scrollTo({ y: 0, animated: true });
@@ -2387,7 +2397,7 @@ export function CaptureScreen({
       <TemporalMapSheet
         visible={temporalMapVisible}
         months={monthSummaries}
-        highlightedMonthKey={temporalChromeMonthKey}
+        highlightedMonthKey={temporalMapHighlightMonthKey ?? temporalChromeMonthKey}
         onClose={() => setTemporalMapVisible(false)}
         onSelectMonth={onTemporalMapSelectMonth}
         hapticsEnabled={hapticsEnabled}
