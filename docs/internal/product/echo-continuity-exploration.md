@@ -2,20 +2,22 @@
 
 Product design record for Echo as a **calm cognitive continuity environment** (not a feed, archive, or AI surface). Implementation status and code pointers live in [`spatial-navigation.md`](spatial-navigation.md).
 
-**Shipped UI direction:** **A — Threshold Echo** (one presence + ghost traces, no Echo-page scroll).  
+**2026-07 update:** Horizontal `StreamEchoPager` and alternate vessels (threshold, palimpsest, field, filament) were **removed**. Production Echo is **home depth recall** — one [`EchoRecallCardVessel`](../components/echo/EchoRecallCardVessel.tsx) under the composer via [`HomeDepthRecall`](../components/HomeDepthRecall.tsx). Selection and continuity prefs unchanged.
+
+**Shipped UI direction (historical):** **A — Threshold Echo** on pager — superseded by home depth strip.  
 **Dogfood shortlist (Phase 1):** **1I Threshold**, **1H Palimpsest**, **1F Orbit-without-diagram** — B and F deferred behind calm metrics.
 
 **Lead dogfood direction (team):** **B Palimpsest** — one full card + age rims, peel without stack clutter; strongest continuity read so far. Threshold stays production default until ship criteria met.
 
 ---
 
-## Phase 0 baseline
+## Phase 0 baseline (historical — pager removed 2026-07)
 
 | Layer | Implementation |
 |-------|----------------|
-| Navigation | [`StreamEchoPager`](../components/echo/StreamEchoPager.tsx) — swipe right from stream |
+| Navigation | ~~`StreamEchoPager`~~ → home depth strip under composer |
 | Selection | [`selectEchoCandidates`](../utils/selectEchoCandidates.ts) — gravity + drift + continuity signals |
-| Surface | [`EchoThresholdVessel`](../components/echo/EchoThresholdVessel.tsx) via [`EchoLayer`](../components/echo/EchoLayer.tsx) |
+| Surface | [`EchoRecallCardVessel`](../components/echo/EchoRecallCardVessel.tsx) via [`HomeDepthRecall`](../components/HomeDepthRecall.tsx) |
 | Gates | [`constants/echoLayer.ts`](../constants/echoLayer.ts), [`echoLayerVisibility`](../utils/echoLayerVisibility.ts) |
 
 ---
