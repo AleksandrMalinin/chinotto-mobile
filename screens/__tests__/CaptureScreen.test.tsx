@@ -64,6 +64,18 @@ jest.mock('../../storage/settingsPrefs', () => ({
   getHapticsEnabled: jest.fn(() => Promise.resolve(true)),
 }));
 
+jest.mock('../../storage/themeSettings', () => ({
+  isThemesEnabled: jest.fn(() => Promise.resolve(true)),
+  setThemesEnabled: jest.fn(() => Promise.resolve()),
+}));
+
+jest.mock('../../storage/themeRepository', () => ({
+  listUserThemes: jest.fn(() => Promise.resolve([])),
+  listThemeCounts: jest.fn(() => Promise.resolve([])),
+  getEntryTheme: jest.fn(() => Promise.resolve(null)),
+  setEntryTheme: jest.fn(() => Promise.resolve()),
+}));
+
 jest.mock('../../storage/firstLaunchCapturePrefs', () => ({
   getFirstLaunchEmptyCaptureRevealDone: jest.fn(() => Promise.resolve(true)),
   getFirstLaunchComposerHasFocused: jest.fn(() => Promise.resolve(true)),
@@ -693,7 +705,8 @@ describe('CaptureScreen', () => {
       await waitFor(() => {
         expect(jest.mocked(entryRepository.searchEntriesForRecall)).toHaveBeenCalledWith(
           'needle',
-          expect.any(Number)
+          expect.any(Number),
+          null
         );
       });
     } finally {

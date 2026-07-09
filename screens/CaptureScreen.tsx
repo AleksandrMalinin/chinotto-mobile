@@ -41,6 +41,7 @@ import { EnableSyncModal } from '../components/EnableSyncModal';
 import { EntryThoughtSheet } from '../components/EntryThoughtSheet';
 import { RecentList } from '../components/RecentList';
 import { StreamBackToNowPill } from '../components/StreamBackToNowPill';
+import { SearchThemeChips } from '../components/SearchThemeChips';
 import { StreamSearchField } from '../components/StreamSearchField';
 import { StreamSearchGlyph } from '../components/stream/StreamSearchGlyph';
 import { TemporalMapSheet } from '../components/temporal/TemporalMapSheet';
@@ -64,6 +65,7 @@ import {
 } from '../src/services/icons/appIcon';
 import { getAppIconVariant, type AppIconVariantId } from '../src/services/icons/iconVariants';
 import type { Entry } from '../types/entry';
+import type { ThemeCount } from '../types/entryTheme';
 import { mergeDemoStreamWithEntries, isDemoStreamEntryId } from '../dev/demoStreamEntries';
 import { resetPaywallForPurchaseTesting } from '../dev/resetPaywallForPurchaseTesting';
 import { showDevMenu } from '../dev/showDevMenu';
@@ -128,6 +130,9 @@ import {
   resetSyncHeaderShimmerPrefsForDev,
 } from '../storage/syncHeaderShimmerPrefs';
 import { getHapticsEnabled } from '../storage/settingsPrefs';
+import { isThemesEnabled, setThemesEnabled } from '../storage/themeSettings';
+import { listThemeCounts, listUserThemes } from '../storage/themeRepository';
+import type { UserTheme } from '../utils/entryThemes';
 import { isFirebaseSyncConfigured } from '../sync/firebaseConfig';
 import { syncRecentThoughtsToWidget } from '../widgets/widgetThoughtsBridge';
 import { getOrInitAuth } from '../sync/firebaseAuth';
@@ -316,6 +321,10 @@ export function CaptureScreen({
   /** 0–1 while pulling down at stream top to reveal search (hidden by default). */
   const [searchPullProgress, setSearchPullProgress] = useState(0);
   const [searchFocused, setSearchFocused] = useState(false);
+  const [searchThemeFilter, setSearchThemeFilter] = useState<string | null>(null);
+  const [themeCounts, setThemeCounts] = useState<ThemeCount[]>([]);
+  const [userThemes, setUserThemes] = useState<UserTheme[]>([]);
+  const [themesEnabled, setThemesEnabledState] = useState(true);
   const [settingsRoute, setSettingsRoute] = useState<SettingsRoute | null>(null);
   const [accountDeletionOpen, setAccountDeletionOpen] = useState(false);
   const [firebaseAccountLabel, setFirebaseAccountLabel] = useState<string | null>(null);
@@ -428,6 +437,8 @@ export function CaptureScreen({
   monthSummariesRef.current = monthSummaries;
   hasMoreRef.current = hasMore;
   searchQueryRef.current = searchQuery;
+  const searchThemeFilterRef = useRef<string | null>(null);
+  searchThemeFilterRef.current = searchThemeFilter;
   const searchTrimmed = searchQuery.trim();
   searchActiveRef.current = searchTrimmed.length > 0;
   recallSearchActiveRef.current =
@@ -443,7 +454,32 @@ export function CaptureScreen({
 
   useEffect(() => {
     void getHapticsEnabled().then(setHapticsEnabledState);
+    void isThemesEnabled().then(setThemesEnabledState);
   }, []);
+
+  const loadUserThemes = useCallback(() => {
+    void listUserThemes()
+      .then(setUserThemes)
+      .catch(() => setUserThemes([]));
+  }, []);
+
+  const loadThemeCounts = useCallback(() => {
+    if (!themesEnabled) {
+      setThemeCounts([]);
+      return;
+    }
+    void listThemeCounts()
+      .then(setThemeCounts)
+      .catch(() => setThemeCounts([]));
+  }, [themesEnabled]);
+
+  useEffect(() => {
+    loadUserThemes();
+  }, [loadUserThemes]);
+
+  useEffect(() => {
+    loadThemeCounts();
+  }, [loadThemeCounts, entries.length]);
 
   useEffect(() => {
     if (!ENABLE_APP_ICON_SWITCHER) {
@@ -696,8 +732,18 @@ export function CaptureScreen({
 
   const runSearch = useCallback(async (q: string) => {
     const trimmed = q.trim();
+    const themeId = searchThemeFilterRef.current;
+    if (!trimmed && themeId == null) {
+      setSearchResults([]);
+      setSearchTruncated(false);
+      return;
+    }
     try {
-      const { entries: rows, truncated } = await searchEntriesForRecall(q, SEARCH_MAX_RESULTS);
+      const { entries: rows, truncated } = await searchEntriesForRecall(
+        trimmed,
+        SEARCH_MAX_RESULTS,
+        themeId,
+      );
       setSearchResults(rows);
       setSearchTruncated(truncated);
       if (!searchSignalLoggedRef.current && trimmed.length > 0) {
@@ -713,21 +759,19 @@ export function CaptureScreen({
   }, []);
 
   useEffect(() => {
-    const trimmed = searchQuery.trim();
-    if (!trimmed) {
-      setSearchResults([]);
-      setSearchTruncated(false);
+    if (!searchExpanded) {
       return;
     }
     const id = setTimeout(() => {
-      void runSearch(trimmed);
+      void runSearch(searchQuery);
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(id);
-  }, [searchQuery, runSearch]);
+  }, [searchQuery, searchThemeFilter, searchExpanded, runSearch]);
 
   useEffect(() => {
     const q = searchQueryRef.current.trim();
-    if (!q) {
+    const themeId = searchThemeFilterRef.current;
+    if (!q && themeId == null) {
       return;
     }
     void runSearch(q);
@@ -1877,6 +1921,14 @@ export function CaptureScreen({
                     onPressClose={collapseSearch}
                     resultLabel={searchResultLabel}
                   />
+                  {themesEnabled ? (
+                    <SearchThemeChips
+                      userThemes={userThemes}
+                      counts={themeCounts}
+                      selectedThemeId={searchThemeFilter}
+                      onSelectTheme={setSearchThemeFilter}
+                    />
+                  ) : null}
                 </View>
               ) : (
                 <View style={styles.composerInputRow}>
@@ -2117,6 +2169,20 @@ export function CaptureScreen({
           }
           accountIdentityLabel={firebaseAccountLabel ?? 'Apple ID'}
           onOpenDeleteAccount={() => setAccountDeletionOpen(true)}
+          themesEnabled={themesEnabled}
+          onThemesEnabledChange={(next) => {
+            void setThemesEnabled(next).then(() => {
+              setThemesEnabledState(next);
+              if (!next) {
+                setSearchThemeFilter(null);
+              }
+              loadThemeCounts();
+            });
+          }}
+          onUserThemesChange={() => {
+            loadUserThemes();
+            loadThemeCounts();
+          }}
         />
       ) : null}
       <Modal
@@ -2220,6 +2286,9 @@ export function CaptureScreen({
         }
         hapticsEnabled={hapticsEnabled}
         hapticOnPresent={readEntryHapticOnPresent}
+        themesEnabled={themesEnabled}
+        userThemes={userThemes}
+        onThemeAssigned={loadThemeCounts}
       />
       <TemporalMapSheet
         visible={temporalMapVisible}
