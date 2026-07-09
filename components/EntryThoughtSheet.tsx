@@ -29,7 +29,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useEntryContinuation } from '../hooks/useEntryContinuation';
 import { getAllEntries } from '../storage/entryRepository';
+import { getEntryTheme, setEntryTheme } from '../storage/themeRepository';
+import type { EntryTheme } from '../types/entryTheme';
 import type { Entry } from '../types/entry';
+import {
+  ENTRY_THEME_CLEAR_LABEL,
+  recallThemeOptions,
+  entryThemeTriggerLabel,
+  SYSTEM_THEME_LINKS,
+  themeLabel,
+  type UserTheme,
+} from '../utils/entryThemes';
 import { ThoughtTrailRail } from './ThoughtTrailRail';
 import { fonts, screenContentGutter, useAppTheme } from '../theme';
 import { displayHostForUrl, extractHttpUrlsFromText } from '../utils/extractHttpUrlsFromText';
@@ -73,6 +83,9 @@ export type EntryThoughtSheetProps = {
   enterProfile?: SheetEnterProfile;
   /** Open expanded in edit mode — Echo resume. */
   resumeOnOpen?: boolean;
+  themesEnabled?: boolean;
+  userThemes?: UserTheme[];
+  onThemeAssigned?: () => void;
 };
 
 type SheetPhase = 'compact' | 'expanded';
@@ -87,6 +100,9 @@ export function EntryThoughtSheet({
   hapticOnPresent = false,
   enterProfile = 'stream',
   resumeOnOpen = false,
+  themesEnabled = true,
+  userThemes = [],
+  onThemeAssigned,
 }: EntryThoughtSheetProps) {
   const t = useAppTheme();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
@@ -99,6 +115,9 @@ export function EntryThoughtSheet({
   const [trailLater, setTrailLater] = useState<Entry[]>([]);
   const [phase, setPhase] = useState<SheetPhase>('compact');
   const [keyboardInset, setKeyboardInset] = useState(0);
+  const [entryTheme, setEntryThemeState] = useState<EntryTheme | null>(null);
+  const [themePickerOpen, setThemePickerOpen] = useState(false);
+  const [themeSaving, setThemeSaving] = useState(false);
   const scrollRef = useRef<GestureScrollView>(null);
   const inputRef = useRef<TextInput>(null);
   const closingRef = useRef(false);
@@ -142,6 +161,61 @@ export function EntryThoughtSheet({
       cancelled = true;
     };
   }, [visible, entry]);
+
+  useEffect(() => {
+    if (!visible || entry == null || !themesEnabled) {
+      setEntryThemeState(null);
+      setThemePickerOpen(false);
+      return;
+    }
+    let cancelled = false;
+    void getEntryTheme(entry.id).then((row) => {
+      if (!cancelled) {
+        setEntryThemeState(row);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, entry?.id, themesEnabled]);
+
+  const themeSegments = useMemo(
+    () => [
+      { themeId: SYSTEM_THEME_LINKS, label: 'Links' },
+      ...recallThemeOptions(userThemes).map((theme) => ({
+        themeId: theme.id,
+        label: theme.label,
+      })),
+      { themeId: null as string | null, label: ENTRY_THEME_CLEAR_LABEL },
+    ],
+    [userThemes],
+  );
+
+  const assignedThemeLabel = entryThemeTriggerLabel(entryTheme?.themeId, userThemes);
+  const hasAssignedTheme = entryTheme?.themeId != null;
+
+  const activateTheme = useCallback(
+    async (nextThemeId: string | null) => {
+      if (entry == null) {
+        return;
+      }
+      if (nextThemeId === (entryTheme?.themeId ?? null)) {
+        setThemePickerOpen(false);
+        return;
+      }
+      setThemeSaving(true);
+      try {
+        await setEntryTheme(entry.id, nextThemeId, true);
+        const row = await getEntryTheme(entry.id);
+        setEntryThemeState(row);
+        setThemePickerOpen(false);
+        onThemeAssigned?.();
+      } finally {
+        setThemeSaving(false);
+      }
+    },
+    [entry, entryTheme?.themeId, onThemeAssigned],
+  );
 
   const isExpanded = phase === 'expanded';
   const comfortableReading = !isExpanded && draft.length >= 380;
@@ -506,6 +580,80 @@ export function EntryThoughtSheet({
             {linkHost}
           </Text>
         ) : null}
+        {themesEnabled ? (
+          <View style={{ marginTop: spacing.sm }}>
+            {themePickerOpen ? (
+              <View
+                style={styles.themePickerRow}
+                accessibilityRole="radiogroup"
+                accessibilityLabel="Choose theme"
+              >
+                {themeSegments.map((segment) => {
+                  const active =
+                    (entryTheme?.themeId ?? null) === segment.themeId;
+                  return (
+                    <Pressable
+                      key={segment.themeId ?? 'none'}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: active, disabled: themeSaving }}
+                      disabled={themeSaving}
+                      onPress={() => void activateTheme(segment.themeId)}
+                      style={({ pressed }) => [
+                        styles.themeChip,
+                        {
+                          borderColor: active ? colors.accent : colors.border,
+                          backgroundColor: active ? colors.accentSubtle : 'transparent',
+                          opacity: pressed ? 0.82 : 1,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={{
+                          color: active ? colors.accent : colors.metaFg,
+                          fontFamily: fonts.regular,
+                          fontSize: 12,
+                          lineHeight: 16,
+                        }}
+                      >
+                        {segment.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                  hasAssignedTheme
+                    ? `Theme: ${assignedThemeLabel}. Tap to change.`
+                    : 'Add theme. Tap to choose.'
+                }
+                onPress={() => setThemePickerOpen(true)}
+                style={({ pressed }) => [
+                  styles.themeChip,
+                  styles.themeTrigger,
+                  {
+                    borderColor: hasAssignedTheme ? colors.accent : colors.border,
+                    backgroundColor: hasAssignedTheme ? colors.accentSubtle : 'rgba(255,255,255,0.03)',
+                    opacity: pressed ? 0.82 : 1,
+                  },
+                ]}
+              >
+                <Text
+                  style={{
+                    color: hasAssignedTheme ? colors.accent : colors.metaFg,
+                    fontFamily: fonts.regular,
+                    fontSize: 12,
+                    lineHeight: 16,
+                  }}
+                >
+                  {assignedThemeLabel}
+                </Text>
+              </Pressable>
+            )}
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -812,5 +960,19 @@ const styles = StyleSheet.create({
   expandedEditor: {
     flex: 1,
     minHeight: 120,
+  },
+  themePickerRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  themeChip: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  themeTrigger: {
+    alignSelf: 'flex-start',
   },
 });

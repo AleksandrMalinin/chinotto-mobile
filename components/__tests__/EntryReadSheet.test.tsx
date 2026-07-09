@@ -15,6 +15,11 @@ jest.mock('../../storage/entryRepository', () => ({
   getAllEntries: jest.fn(() => Promise.resolve([])),
 }));
 
+jest.mock('../../storage/themeRepository', () => ({
+  getEntryTheme: jest.fn(() => Promise.resolve(null)),
+  setEntryTheme: jest.fn(() => Promise.resolve()),
+}));
+
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
   __esModule: true,
   default: () => ({ width: 390, height: 844, scale: 2, fontScale: 1 }),
