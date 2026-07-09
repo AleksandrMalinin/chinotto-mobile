@@ -28,10 +28,13 @@ import type {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useEntryContinuation } from '../hooks/useEntryContinuation';
+import { getAllEntries } from '../storage/entryRepository';
 import type { Entry } from '../types/entry';
+import { ThoughtTrailRail } from './ThoughtTrailRail';
 import { fonts, screenContentGutter, useAppTheme } from '../theme';
 import { displayHostForUrl, extractHttpUrlsFromText } from '../utils/extractHttpUrlsFromText';
 import { formatEntryTime } from '../utils/groupEntriesByDate';
+import { buildThoughtTrailNeighbors } from '../utils/thoughtTrail';
 import {
   shouldCollapseExpandedThoughtSheet,
   shouldDismissExpandedThoughtSheet,
@@ -61,11 +64,14 @@ export type EntryThoughtSheetProps = {
   openAnchor?: ThoughtSheetOpenAnchor | null;
   onClose: () => void;
   onEntryUpdated?: (entry: Entry) => void;
+  onTrailEntrySelect?: (entry: Entry) => void;
   hapticsEnabled?: boolean;
   /** Light impact when the sheet presents (e.g. stream recall open). */
   hapticOnPresent?: boolean;
   /** Slower enter from Echo — lift into awareness, not route push. */
   enterProfile?: SheetEnterProfile;
+  /** Open expanded in edit mode — Echo resume. */
+  resumeOnOpen?: boolean;
 };
 
 type SheetPhase = 'compact' | 'expanded';
@@ -75,9 +81,11 @@ export function EntryThoughtSheet({
   entry,
   onClose,
   onEntryUpdated,
+  onTrailEntrySelect,
   hapticsEnabled = true,
   hapticOnPresent = false,
   enterProfile = 'stream',
+  resumeOnOpen = false,
 }: EntryThoughtSheetProps) {
   const t = useAppTheme();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
@@ -86,6 +94,8 @@ export function EntryThoughtSheet({
   const contentInset = screenContentGutter(windowWidth);
   const { body, meta, capture } = typography;
   const [copied, setCopied] = useState(false);
+  const [trailEarlier, setTrailEarlier] = useState<Entry[]>([]);
+  const [trailLater, setTrailLater] = useState<Entry[]>([]);
   const [phase, setPhase] = useState<SheetPhase>('compact');
   const [keyboardInset, setKeyboardInset] = useState(0);
   const scrollRef = useRef<GestureScrollView>(null);
@@ -106,6 +116,26 @@ export function EntryThoughtSheet({
     entry,
     onSaved: onEntryUpdated,
   });
+
+  useEffect(() => {
+    if (!visible || !entry) {
+      setTrailEarlier([]);
+      setTrailLater([]);
+      return;
+    }
+    let cancelled = false;
+    void getAllEntries().then((all) => {
+      if (cancelled) {
+        return;
+      }
+      const neighbors = buildThoughtTrailNeighbors(entry, all);
+      setTrailEarlier(neighbors.earlier);
+      setTrailLater(neighbors.later);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, entry]);
 
   const isExpanded = phase === 'expanded';
   const comfortableReading = !isExpanded && draft.length >= 380;
@@ -192,6 +222,16 @@ export function EntryThoughtSheet({
       inputRef.current?.focus();
     });
   }, [beginEditing, playSheetHaptic, resetDrag]);
+
+  useEffect(() => {
+    if (!visible || entry == null || !resumeOnOpen) {
+      return;
+    }
+    const frame = requestAnimationFrame(() => {
+      expandSheet();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [visible, entry?.id, resumeOnOpen, expandSheet]);
 
   const collapseSheet = useCallback(() => {
     if (phaseRef.current === 'compact') {
@@ -664,6 +704,14 @@ export function EntryThoughtSheet({
                         {draft}
                       </Text>
                     </Pressable>
+                    {entry ? (
+                      <ThoughtTrailRail
+                        current={entry}
+                        earlier={trailEarlier}
+                        later={trailLater}
+                        onSelect={(next) => onTrailEntrySelect?.(next)}
+                      />
+                    ) : null}
                   </GestureScrollView>
                 </NativeViewGestureHandler>
               )}

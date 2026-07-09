@@ -123,6 +123,7 @@ jest.mock('../../storage/entryRepository', () => ({
   getEntryById: jest.fn(() => Promise.resolve(null)),
   searchEntriesForRecall: jest.fn(() => Promise.resolve({ entries: [], truncated: false })),
   deleteEntry: jest.fn(() => Promise.resolve()),
+  getAllEntries: jest.fn(() => Promise.resolve([])),
 }));
 
 /** Empty stream mounts `StreamFlowPanel`; real panel schedules long animations — unsafe for Jest teardown. */

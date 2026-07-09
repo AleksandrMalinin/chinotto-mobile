@@ -12,6 +12,7 @@ jest.mock('expo-clipboard', () => ({
 
 jest.mock('../../storage/entryRepository', () => ({
   updateEntryText: jest.fn(() => Promise.resolve()),
+  getAllEntries: jest.fn(() => Promise.resolve([])),
 }));
 
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
