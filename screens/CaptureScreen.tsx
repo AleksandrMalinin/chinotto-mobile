@@ -50,7 +50,7 @@ import type { ThoughtSheetOpenAnchor } from '../components/thoughtSheet/detents'
 import type { SheetEnterProfile } from '../components/thoughtSheet/useSheetEnterAnimation';
 import { openAfterKeyboardHidden } from '../components/thoughtSheet/openAfterKeyboardHidden';
 import { SyncHeaderStatus, type SyncHeaderAuthPhase } from '../components/SyncHeaderStatus';
-import { VoiceMicButton, VOICE_MIC_CLUSTER_OVERFLOW_PAD_TOP } from '../components/VoiceCaptureControl';
+import { VoiceMicButton, VOICE_MIC_CLUSTER_OVERFLOW_PAD_TOP, VOICE_MIC_CLUSTER_WIDTH } from '../components/VoiceCaptureControl';
 import { AppIconScreen } from './AppIconScreen';
 import { DeleteAccountScreen } from './DeleteAccountScreen';
 import { ManifestoScreen } from './ManifestoScreen';
@@ -163,7 +163,6 @@ import { ensureEchoCandidatesForDev } from '../utils/ensureEchoCandidatesForDev'
 import type { EchoCandidate } from '../utils/selectEchoCandidates';
 import {
   COMPOSER_ACTION_CLUSTER_LEADING_GAP,
-  COMPOSER_ACTION_CLUSTER_WIDTH,
   composerActionClusterExpanded,
 } from '../utils/composerActionCluster';
 import {
@@ -1422,23 +1421,29 @@ export function CaptureScreen({
     [hapticsEnabled],
   );
 
-  const onVoiceCaptureError = useCallback((code: string) => {
-    if (code !== 'permission_denied') {
+  const onVoiceCaptureError = useCallback((code: string, message?: string) => {
+    if (code === 'permission_denied') {
+      Alert.alert(
+        'Microphone access is off',
+        'Enable microphone and speech recognition in iOS Settings to use voice capture.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          {
+            text: 'Open Settings',
+            onPress: () => {
+              void Linking.openSettings().catch(() => {});
+            },
+          },
+        ],
+      );
       return;
     }
-    Alert.alert(
-      'Microphone access is off',
-      'Enable microphone and speech recognition in iOS Settings to use voice capture.',
-      [
-        { text: 'Not now', style: 'cancel' },
-        {
-          text: 'Open Settings',
-          onPress: () => {
-            void Linking.openSettings().catch(() => {});
-          },
-        },
-      ],
-    );
+    if (code === 'recognizer_unavailable' || code === 'start_failed') {
+      Alert.alert(
+        'Voice capture unavailable',
+        message ?? 'Speech recognition could not start. Try again in a moment.',
+      );
+    }
   }, []);
 
   const {
@@ -1446,7 +1451,7 @@ export function CaptureScreen({
     start: startVoiceCaptureSession,
     stop: stopVoiceCaptureSession,
     supported: voiceCaptureNativeReady,
-  } = useVoiceCapture({
+  } = useVoiceCapture('capture', {
     onTranscriptPartial: onVoiceTranscriptPartial,
     onTranscriptFinal: onVoiceTranscriptFinal,
     onError: onVoiceCaptureError,
@@ -1556,7 +1561,7 @@ export function CaptureScreen({
 
   const composerActionClusterWidth = composerActionClusterPresence.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, COMPOSER_ACTION_CLUSTER_WIDTH],
+    outputRange: [0, VOICE_MIC_CLUSTER_WIDTH],
   });
   const composerActionClusterLeadingGap = composerActionClusterPresence.interpolate({
     inputRange: [0, 1],
@@ -2362,7 +2367,8 @@ const styles = StyleSheet.create({
   composerActionCluster: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    overflow: 'hidden',
+    justifyContent: 'center',
+    overflow: 'visible',
   },
   streamPullSearchHint: {
     alignItems: 'center',

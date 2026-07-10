@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 
+import { voiceCaptureSupported } from './NativeVoiceCapture';
 import {
-  startVoiceCapture,
-  stopVoiceCapture,
-  subscribeVoiceCapture,
-  voiceCaptureSupported,
-  type VoiceCapturePhase,
-} from './NativeVoiceCapture';
+  getVoiceCaptureActiveOwner,
+  getVoiceCapturePhase,
+  registerVoiceCaptureOwner,
+  startVoiceCaptureForOwner,
+  stopVoiceCaptureForOwner,
+  subscribe,
+  type VoiceCaptureOwner,
+} from './voiceCaptureSession';
 
 export type UseVoiceCaptureOptions = {
   /** Live transcript while listening (full best string per callback, not deltas). */
@@ -15,80 +18,46 @@ export type UseVoiceCaptureOptions = {
   onError?: (code: string, message?: string) => void;
 };
 
+function selectPhaseForOwner(owner: VoiceCaptureOwner): 'idle' | 'listening' {
+  if (getVoiceCaptureActiveOwner() !== owner) {
+    return 'idle';
+  }
+  return getVoiceCapturePhase();
+}
+
 /**
- * Short on-device speech capture (iOS). Subscribes once; safe to pass new callbacks via ref.
+ * Short on-device speech capture (iOS). One native session; events route to the active owner only.
  */
-export function useVoiceCapture(options: UseVoiceCaptureOptions) {
-  const [phase, setPhase] = useState<VoiceCapturePhase>('idle');
+export function useVoiceCapture(owner: VoiceCaptureOwner, options: UseVoiceCaptureOptions) {
   const optionsRef = useRef(options);
-  const startInFlightRef = useRef(false);
-  const startWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   optionsRef.current = options;
 
-  useEffect(() => {
-    const clearStartGuard = () => {
-      startInFlightRef.current = false;
-      if (startWatchdogRef.current) {
-        clearTimeout(startWatchdogRef.current);
-        startWatchdogRef.current = null;
-      }
-    };
-
-    return subscribeVoiceCapture({
-      onStateChange: (next) => {
-        setPhase(next);
-        if (next === 'idle') {
-          clearStartGuard();
-        }
-      },
-      onTranscriptPartial: (t) => optionsRef.current.onTranscriptPartial?.(t),
-      onTranscriptFinal: (text, reason) => optionsRef.current.onTranscriptFinal(text, reason),
-      onError: (code, message) => {
-        clearStartGuard();
-        optionsRef.current.onError?.(code, message);
-        setPhase('idle');
-      },
-    });
-  }, []);
-
-  useEffect(
-    () => () => {
-      if (startWatchdogRef.current) {
-        clearTimeout(startWatchdogRef.current);
-        startWatchdogRef.current = null;
-      }
-    },
-    [],
+  const phase = useSyncExternalStore(
+    subscribe,
+    () => selectPhaseForOwner(owner),
+    () => selectPhaseForOwner(owner),
   );
 
+  useEffect(() => {
+    return registerVoiceCaptureOwner(owner, {
+      onTranscriptPartial: (text) => optionsRef.current.onTranscriptPartial?.(text),
+      onTranscriptFinal: (text, reason) => optionsRef.current.onTranscriptFinal(text, reason),
+      onError: (code, message) => optionsRef.current.onError?.(code, message),
+    });
+  }, [owner]);
+
   const start = useCallback(async () => {
-    if (!voiceCaptureSupported) return;
-    if (phase === 'listening' || startInFlightRef.current) return;
-
-    startInFlightRef.current = true;
-    startWatchdogRef.current = setTimeout(() => {
-      startInFlightRef.current = false;
-      setPhase((current) => (current === 'listening' ? current : 'idle'));
-      startWatchdogRef.current = null;
-    }, 15000);
-
     try {
-      await startVoiceCapture();
+      await startVoiceCaptureForOwner(owner, { continuous: true });
     } catch (error) {
-      startInFlightRef.current = false;
-      if (startWatchdogRef.current) {
-        clearTimeout(startWatchdogRef.current);
-        startWatchdogRef.current = null;
-      }
       const message = error instanceof Error ? error.message : String(error);
       optionsRef.current.onError?.('start_failed', message);
-      setPhase('idle');
     }
-  }, [phase]);
+  }, [owner]);
 
   const stop = useCallback(() => {
-    stopVoiceCapture();
-  }, []);
+    stopVoiceCaptureForOwner(owner);
+  }, [owner]);
 
   return { phase, start, stop, supported: voiceCaptureSupported };
 }

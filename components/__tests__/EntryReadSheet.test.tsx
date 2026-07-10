@@ -20,6 +20,18 @@ jest.mock('../../storage/themeRepository', () => ({
   setEntryTheme: jest.fn(() => Promise.resolve()),
 }));
 
+const mockToggleSheetVoice = jest.fn();
+const mockStopSheetVoice = jest.fn();
+
+jest.mock('../../src/features/voiceCapture/useVoiceDraftEdit', () => ({
+  useVoiceDraftEdit: jest.fn(() => ({
+    phase: 'idle',
+    supported: true,
+    toggleVoice: mockToggleSheetVoice,
+    stopVoice: mockStopSheetVoice,
+  })),
+}));
+
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
   __esModule: true,
   default: () => ({ width: 390, height: 844, scale: 2, fontScale: 1 }),
@@ -39,6 +51,17 @@ const sampleEntry = {
 describe('EntryThoughtSheet', () => {
   beforeEach(() => {
     jest.mocked(Clipboard.setStringAsync).mockClear();
+    mockToggleSheetVoice.mockClear();
+    mockStopSheetVoice.mockClear();
+    const { useVoiceDraftEdit } = require('../../src/features/voiceCapture/useVoiceDraftEdit') as {
+      useVoiceDraftEdit: jest.Mock;
+    };
+    useVoiceDraftEdit.mockReturnValue({
+      phase: 'idle',
+      supported: true,
+      toggleVoice: mockToggleSheetVoice,
+      stopVoice: mockStopSheetVoice,
+    });
     jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined as never);
     jest.spyOn(Animated, 'spring').mockImplementation(() => ({ start: jest.fn() }) as never);
     jest.spyOn(Animated, 'timing').mockImplementation(
@@ -47,6 +70,13 @@ describe('EntryThoughtSheet', () => {
           start: (callback?: (result: { finished: boolean }) => void) => {
             callback?.({ finished: true });
           },
+        }) as never,
+    );
+    jest.spyOn(Animated, 'loop').mockImplementation(
+      () =>
+        ({
+          start: jest.fn(),
+          stop: jest.fn(),
         }) as never,
     );
   });
@@ -246,5 +276,43 @@ describe('EntryThoughtSheet', () => {
     fireEvent.press(body);
     expect(getByTestId('entry-thought-input')).toBeTruthy();
     expect(queryByTestId('entry-read-body')).toBeNull();
+  });
+
+  it('shows sheet voice mic in edit mode', () => {
+    const { getByTestId, getByRole } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <EntryThoughtSheet visible entry={sampleEntry} onClose={jest.fn()} />
+      </SafeAreaProvider>,
+    );
+
+    const body = getByTestId('entry-read-body');
+    fireEvent.press(body);
+    fireEvent.press(body);
+    expect(getByRole('button', { name: 'Speak thought' })).toBeTruthy();
+  });
+
+  it('shows listening bar while sheet voice is active', () => {
+    const { useVoiceDraftEdit } = require('../../src/features/voiceCapture/useVoiceDraftEdit') as {
+      useVoiceDraftEdit: jest.Mock;
+    };
+    useVoiceDraftEdit.mockReturnValue({
+      phase: 'listening',
+      supported: true,
+      toggleVoice: mockToggleSheetVoice,
+      stopVoice: mockStopSheetVoice,
+    });
+
+    const { getByTestId, getByText } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <EntryThoughtSheet visible entry={sampleEntry} onClose={jest.fn()} />
+      </SafeAreaProvider>,
+    );
+
+    const body = getByTestId('entry-read-body');
+    fireEvent.press(body);
+    fireEvent.press(body);
+
+    expect(getByTestId('voice-listening-bar')).toBeTruthy();
+    expect(getByText('Tap mic when done')).toBeTruthy();
   });
 });
