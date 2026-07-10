@@ -33,6 +33,18 @@ jest.mock('../../sync/tombstoneFlush', () => ({
   flushSyncTombstoneOutbox: jest.fn(() => Promise.resolve()),
 }));
 
+jest.mock('../../sync/userThemeFlush', () => ({
+  flushSyncUserThemeOutbox: jest.fn(() => Promise.resolve()),
+}));
+
+jest.mock('../../sync/themeSyncBackfill', () => ({
+  backfillLocalThemesToRemote: jest.fn(() => Promise.resolve()),
+}));
+
+jest.mock('../../sync/firestoreSyncAccessMirror', () => ({
+  mirrorChinottoSyncAccessToFirestore: jest.fn(() => Promise.resolve()),
+}));
+
 jest.mock('../../auth/enableAppleSync', () => ({
   enableAppleSyncWithFirebase: jest.fn(() => Promise.resolve()),
   AppleUserCanceledError: class AppleUserCanceledError extends Error {
@@ -215,7 +227,9 @@ describe('EnableSyncModal', () => {
       />
     );
 
-    fireEvent.press(getByLabelText('Continue with Apple'));
+    await flushPaywallPrefetch();
+
+    fireEvent.press(getByTestId('enable-sync-continue-with-apple'));
 
     await waitFor(() => {
       expect(enableAppleSyncWithFirebase).toHaveBeenCalled();
@@ -234,40 +248,37 @@ describe('EnableSyncModal', () => {
 
   it('copies desktop URL and shows Copied when Continue on desktop is pressed', async () => {
     const onEnabled = jest.fn();
-    jest.useFakeTimers();
-    try {
-      const { getByLabelText, getByText, queryByText } = render(
-        <EnableSyncModal
-          visible
-          onClose={jest.fn()}
-          onEnabled={onEnabled}
-          authPhase="signed_out"
-          {...baseProps}
-        />
-      );
+    const { getByLabelText, getByText, getByTestId, queryByText } = render(
+      <EnableSyncModal
+        visible
+        onClose={jest.fn()}
+        onEnabled={onEnabled}
+        authPhase="signed_out"
+        {...baseProps}
+      />
+    );
 
-      fireEvent.press(getByLabelText('Continue with Apple'));
+    await flushPaywallPrefetch();
+    fireEvent.press(getByTestId('enable-sync-continue-with-apple'));
 
-      await waitFor(() => {
-        expect(onEnabled).toHaveBeenCalled();
-      });
+    await waitFor(() => {
+      expect(onEnabled).toHaveBeenCalled();
+    });
 
-      fireEvent.press(getByLabelText('Continue on desktop, copies link to clipboard'));
+    fireEvent.press(getByLabelText('Continue on desktop, copies link to clipboard'));
 
-      await waitFor(() => {
-        expect(mockClipboardSetString).toHaveBeenCalledWith(CHINOTTO_DESKTOP_WEB_URL);
-      });
+    await waitFor(() => {
+      expect(mockClipboardSetString).toHaveBeenCalledWith(CHINOTTO_DESKTOP_WEB_URL);
+    });
 
-      expect(getByText('Copied')).toBeTruthy();
+    expect(getByText('Copied')).toBeTruthy();
 
-      act(() => {
-        jest.advanceTimersByTime(2100);
-      });
-
-      expect(queryByText('Copied')).toBeNull();
-    } finally {
-      jest.useRealTimers();
-    }
+    await waitFor(
+      () => {
+        expect(queryByText('Copied')).toBeNull();
+      },
+      { timeout: 2500 }
+    );
   });
 
   it('shows a short wait when paywall is on but subscription state is not hydrated yet', () => {
@@ -348,7 +359,7 @@ describe('EnableSyncModal', () => {
       return { kind: 'purchased' as const, productIdentifier: 'chinotto.pro.yearly' };
     });
 
-    const { getByLabelText, getByText } = render(
+    const { getByLabelText, getByText, getByTestId } = render(
       <EnableSyncModal
         visible
         onClose={jest.fn()}
@@ -372,7 +383,9 @@ describe('EnableSyncModal', () => {
       expect(getByLabelText('Continue with Apple')).toBeTruthy();
     });
 
-    fireEvent.press(getByLabelText('Continue with Apple'));
+    await flushPaywallPrefetch();
+
+    fireEvent.press(getByTestId('enable-sync-continue-with-apple'));
 
     await waitFor(() => {
       expect(enableAppleSyncWithFirebase).toHaveBeenCalled();

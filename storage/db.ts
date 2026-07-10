@@ -30,6 +30,17 @@ export function initDatabase(): Promise<SQLiteDatabase> {
         id TEXT PRIMARY KEY NOT NULL,
         suppressed_at TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS firestore_ingest_suppressed_theme_ids (
+        id TEXT PRIMARY KEY NOT NULL,
+        suppressed_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS sync_user_theme_outbox (
+        theme_id TEXT PRIMARY KEY NOT NULL,
+        op TEXT NOT NULL CHECK (op IN ('upsert', 'tombstone')),
+        label TEXT,
+        sort_order INTEGER,
+        enqueued_at TEXT NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS entry_engagement (
         entry_id TEXT PRIMARY KEY NOT NULL,
         open_count INTEGER NOT NULL DEFAULT 0,

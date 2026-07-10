@@ -92,6 +92,7 @@ describe('firebasePushEntry', () => {
         createdAt: entry.createdAt,
         updatedAt: { _serverTimestamp: true },
         deletedAt: { _deleteField: true },
+        theme: null,
       },
       { merge: true }
     );

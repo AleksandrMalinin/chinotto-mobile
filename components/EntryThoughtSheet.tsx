@@ -3,6 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
+  Alert,
   Keyboard,
   Linking,
   Modal,
@@ -41,6 +42,7 @@ import {
   type UserTheme,
 } from '../utils/entryThemes';
 import { ThoughtTrailRail } from './ThoughtTrailRail';
+import { SheetEditVoiceDock } from './SheetEditVoiceDock';
 import { fonts, screenContentGutter, useAppTheme } from '../theme';
 import { displayHostForUrl, extractHttpUrlsFromText } from '../utils/extractHttpUrlsFromText';
 import { formatEntryTime } from '../utils/groupEntriesByDate';
@@ -55,6 +57,7 @@ import {
   thoughtSheetExpandedHeightWithKeyboard,
   type ThoughtSheetOpenAnchor,
 } from './thoughtSheet/detents';
+import { useVoiceDraftEdit } from '../src/features/voiceCapture/useVoiceDraftEdit';
 import { useSheetDragDismiss } from './thoughtSheet/useSheetDragDismiss';
 import {
   useSheetEnterAnimation,
@@ -63,6 +66,11 @@ import {
 import {
   thoughtSheetBackdropA11yLabel,
 } from './thoughtSheet/backdropAction';
+
+/** Read body — matches stream newest row; edit stays capture (18). */
+const SHEET_READ_FONT_SIZE = 16;
+const SHEET_READ_LINE_HEIGHT = 22;
+const SHEET_READ_LINE_HEIGHT_COMFORTABLE = 24;
 
 /**
  * SHEET SHELL LAYOUT (do not break — see .cursor/rules/entry-thought-sheet-layout.mdc):
@@ -222,6 +230,44 @@ export function EntryThoughtSheet({
   const scrollMaxHeight = thoughtSheetCompactScrollMaxHeight(windowHeight, comfortableReading);
   const showEditor = isExpanded && isEditing;
 
+  const onSheetVoiceError = useCallback((code: string, message?: string) => {
+    if (code === 'permission_denied') {
+      Alert.alert(
+        'Microphone access is off',
+        'Enable microphone and speech recognition in iOS Settings to dictate into this thought.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          {
+            text: 'Open Settings',
+            onPress: () => {
+              void Linking.openSettings().catch(() => {});
+            },
+          },
+        ],
+      );
+      return;
+    }
+    if (code === 'recognizer_unavailable' || code === 'start_failed') {
+      Alert.alert(
+        'Voice capture unavailable',
+        message ?? 'Speech recognition could not start. Try again in a moment.',
+      );
+    }
+  }, []);
+
+  const {
+    phase: sheetVoicePhase,
+    supported: sheetVoiceSupported,
+    toggleVoice: toggleSheetVoice,
+    stopVoice: stopSheetVoice,
+  } = useVoiceDraftEdit({
+    draft,
+    setDraft,
+    enabled: visible && showEditor,
+    hapticsEnabled,
+    onError: onSheetVoiceError,
+  });
+
   const { scrimOpacity, contentOpacity, contentTranslateY } = useSheetEnterAnimation(
     visible,
     entry?.id,
@@ -258,6 +304,7 @@ export function EntryThoughtSheet({
       return;
     }
     closingRef.current = true;
+    stopSheetVoice();
     Keyboard.dismiss();
     setKeyboardInset(0);
     void resetForClose().finally(() => {
@@ -266,7 +313,7 @@ export function EntryThoughtSheet({
       phaseRef.current = 'compact';
       onClose();
     });
-  }, [onClose, resetForClose]);
+  }, [onClose, resetForClose, stopSheetVoice]);
 
   const {
     dragY,
@@ -316,6 +363,7 @@ export function EntryThoughtSheet({
     if (phaseRef.current === 'compact') {
       return;
     }
+    stopSheetVoice();
     Keyboard.dismiss();
     void flushSave();
     endEditing();
@@ -324,7 +372,7 @@ export function EntryThoughtSheet({
     setPhase('compact');
     phaseRef.current = 'compact';
     springBack();
-  }, [endEditing, flushSave, playSheetHaptic, springBack]);
+  }, [endEditing, flushSave, playSheetHaptic, springBack, stopSheetVoice]);
 
   const onSheetPanStateChange = useCallback(
     (event: { nativeEvent: { oldState: number; state: number; translationY: number; velocityY: number } }) => {
@@ -801,18 +849,27 @@ export function EntryThoughtSheet({
                     autoCapitalize="sentences"
                     keyboardAppearance={t.isDark ? 'dark' : 'light'}
                     textAlignVertical="top"
+                    editable={sheetVoicePhase !== 'listening'}
                     style={[
                       styles.bodyText,
                       styles.expandedEditor,
                       {
                         color: colors.entryBody,
-                        fontFamily: capture.fontFamily,
+                        fontFamily: body.fontFamily,
                         fontSize: capture.fontSize,
                         lineHeight: capture.lineHeight + 2,
                         letterSpacing: capture.letterSpacing,
+                        opacity: sheetVoicePhase === 'listening' ? 0.92 : 1,
                       },
                     ]}
                   />
+                  {sheetVoiceSupported ? (
+                    <SheetEditVoiceDock
+                      phase={sheetVoicePhase}
+                      theme={t}
+                      onPress={toggleSheetVoice}
+                    />
+                  ) : null}
                 </View>
               ) : (
                 <NativeViewGestureHandler
@@ -850,9 +907,11 @@ export function EntryThoughtSheet({
                           {
                             color: colors.entryBody,
                             fontFamily: body.fontFamily,
-                            fontSize: 17,
-                            lineHeight: comfortableReading ? 28 : 26,
-                            letterSpacing: 0.15,
+                            fontSize: SHEET_READ_FONT_SIZE,
+                            lineHeight: comfortableReading
+                              ? SHEET_READ_LINE_HEIGHT_COMFORTABLE
+                              : SHEET_READ_LINE_HEIGHT,
+                            letterSpacing: 0.14,
                           },
                         ]}
                       >

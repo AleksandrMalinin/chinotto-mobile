@@ -76,6 +76,14 @@ jest.mock('../../storage/themeRepository', () => ({
   setEntryTheme: jest.fn(() => Promise.resolve()),
 }));
 
+jest.mock('../../sync/userThemeFlush', () => ({
+  flushSyncUserThemeOutbox: jest.fn(() => Promise.resolve()),
+}));
+
+jest.mock('../../sync/themeSyncBackfill', () => ({
+  backfillLocalThemesToRemote: jest.fn(() => Promise.resolve()),
+}));
+
 jest.mock('../../storage/firstLaunchCapturePrefs', () => ({
   getFirstLaunchEmptyCaptureRevealDone: jest.fn(() => Promise.resolve(true)),
   getFirstLaunchComposerHasFocused: jest.fn(() => Promise.resolve(true)),

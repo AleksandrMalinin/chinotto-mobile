@@ -24,11 +24,20 @@ const emitter = NativeVoiceCapture
 
 export const voiceCaptureSupported = Platform.OS === 'ios' && NativeVoiceCapture != null;
 
-export function startVoiceCapture(options?: { locale?: string }) {
+export type VoiceCaptureStartOptions = {
+  locale?: string;
+  /** GPT-style: listen until manual stop (default). `false` = legacy ~10s burst + silence auto-stop. */
+  continuous?: boolean;
+};
+
+export function startVoiceCapture(options?: VoiceCaptureStartOptions) {
   if (!NativeVoiceCapture) {
     return Promise.reject(new Error('Voice capture is not available on this platform.'));
   }
-  return NativeVoiceCapture.start(options ?? {});
+  return NativeVoiceCapture.start({
+    continuous: options?.continuous ?? true,
+    ...(options?.locale ? { locale: options.locale } : {}),
+  });
 }
 
 export function stopVoiceCapture() {

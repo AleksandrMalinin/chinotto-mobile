@@ -2,6 +2,7 @@ import type { Entry } from '../types/entry';
 import { isSyncAccessBlocked } from '../monetization/syncAccessPolicy';
 import { getPendingSyncItems, markSynced } from './syncQueue';
 import { flushSyncTombstoneOutbox } from './tombstoneFlush';
+import { flushSyncUserThemeOutbox } from './userThemeFlush';
 
 export type PushEntryFn = (entry: Entry) => Promise<void>;
 
@@ -57,6 +58,7 @@ export function startBackgroundSync(options?: {
     void (async () => {
       await processSyncQueue(pushEntry);
       await flushSyncTombstoneOutbox();
+      await flushSyncUserThemeOutbox();
     })();
   };
 

@@ -4,14 +4,14 @@ import {
 } from '../composerActionCluster';
 
 describe('composerActionClusterExpanded', () => {
-  it('shows the cluster on an empty capture field', () => {
+  it('keeps the voice mic visible on an empty field', () => {
     expect(composerActionClusterExpanded('', 'idle')).toBe(true);
     expect(composerActionClusterExpanded('   ', 'idle')).toBe(true);
   });
 
-  it('hides the cluster while the user is typing', () => {
-    expect(composerActionClusterExpanded('a', 'idle')).toBe(false);
-    expect(composerActionClusterExpanded('  jot  ', 'idle')).toBe(false);
+  it('keeps the voice mic visible while the user is typing', () => {
+    expect(composerActionClusterExpanded('a', 'idle')).toBe(true);
+    expect(composerActionClusterExpanded('  jot  ', 'idle')).toBe(true);
   });
 
   it('keeps the cluster visible while voice capture is active', () => {
@@ -21,7 +21,7 @@ describe('composerActionClusterExpanded', () => {
 });
 
 describe('COMPOSER_ACTION_CLUSTER_WIDTH', () => {
-  it('reserves the voice mic only', () => {
-    expect(COMPOSER_ACTION_CLUSTER_WIDTH).toBe(42);
+  it('reserves the voice mic plus glow overflow padding', () => {
+    expect(COMPOSER_ACTION_CLUSTER_WIDTH).toBe(60);
   });
 });
