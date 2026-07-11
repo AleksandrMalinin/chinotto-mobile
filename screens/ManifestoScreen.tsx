@@ -66,7 +66,7 @@ export function ManifestoScreen({ onClose }: ManifestoScreenProps) {
             keyboardShouldPersistTaps="handled"
           >
             <Text style={[styles.title, { color: t.colors.fg }]}>Philosophy</Text>
-            <Text style={[styles.kicker, { color: t.colors.metaFg }]}>Capture first. Revisit later.</Text>
+            <Text style={[styles.kicker, { color: t.colors.metaFg }]}>Capture first. Continue later.</Text>
 
             <View style={styles.body}>
               {MANIFESTO_PARAGRAPHS.map((paragraph, idx) => (
