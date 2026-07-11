@@ -5,7 +5,7 @@
 # Chinotto
 
 *Capture first.  
-Revisit later.*
+Continue later.*
 
 Chinotto Mobile is a minimal companion to Chinotto desktop — built for capturing thoughts the moment they appear.
 
