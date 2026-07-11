@@ -13,7 +13,7 @@ Capture them instantly — without projects, folders, or workspaces.
 Structure can come later — when you revisit on desktop.
 
 Local-first. Works fully offline.  
-Optional sync (with Apple ID) keeps your thoughts with you across devices.
+Optional sync with Chinotto desktop — entries and recall themes (Chinotto Pro on mobile).
 
 ## Download (iOS)
 
@@ -27,10 +27,11 @@ Optional sync (with Apple ID) keeps your thoughts with you across devices.
 - Move through your history — month scrubber and timeline map
 - Quiet recall when an older thought still matters
 - Related thoughts surface in context on the stream
+- Recall themes — optional labels to filter and revisit threads of thought
 - Share in from other apps (iOS)
 - iOS Home Widget — quick capture and recent thoughts
 - Voice capture
-- Optional sync with Chinotto desktop
+- Optional sync with Chinotto desktop (entries and recall themes)
 
 ## Data ownership
 
