@@ -1,22 +1,21 @@
 import type { EdgeInsets } from 'react-native-safe-area-context';
 
-/** Full-height sheet when the user swipes up to continue a thought. */
-export function thoughtSheetExpandedHeight(windowHeight: number, insets: EdgeInsets): number {
-  return Math.min(Math.round(windowHeight * 0.92), windowHeight - insets.top - 24);
+/** Full-screen continue mode — not a partial sheet detent. */
+export function thoughtSheetExpandedHeight(windowHeight: number, _insets: EdgeInsets): number {
+  return windowHeight;
 }
 
-/** Expanded sheet height above the keyboard — lifts via shell marginBottom in EntryThoughtSheet. */
+/** Continue mode height above the keyboard — lifts via shell marginBottom in EntryThoughtSheet. */
 export function thoughtSheetExpandedHeightWithKeyboard(
   windowHeight: number,
-  insets: EdgeInsets,
+  _insets: EdgeInsets,
   keyboardInset: number,
 ): number {
-  const cap = thoughtSheetExpandedHeight(windowHeight, insets);
   if (keyboardInset <= 0) {
-    return cap;
+    return windowHeight;
   }
-  const aboveKeyboard = windowHeight - keyboardInset - insets.top - 12;
-  return Math.max(240, Math.min(cap, aboveKeyboard));
+  const aboveKeyboard = windowHeight - keyboardInset;
+  return Math.max(240, aboveKeyboard);
 }
 
 /** Scroll cap in compact (content-sized) read mode — matches original EntryReadSheet. */

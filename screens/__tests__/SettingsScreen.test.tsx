@@ -64,6 +64,12 @@ function renderSettings(
 }
 
 describe('SettingsScreen', () => {
+  it('shows app version without a beta badge', async () => {
+    renderSettings();
+    expect(await screen.findByText('1.0.test')).toBeTruthy();
+    expect(screen.queryByText('β')).toBeNull();
+  });
+
   it('lists Appearance with contrast options', async () => {
     renderSettings();
 

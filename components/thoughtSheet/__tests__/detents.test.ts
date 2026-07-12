@@ -13,17 +13,13 @@ import {
 const insets = { top: 47, left: 0, right: 0, bottom: 34 };
 
 describe('thoughtSheet detents', () => {
-  it('computes expanded height cap from window size', () => {
-    expect(thoughtSheetExpandedHeight(844, insets)).toBe(Math.min(Math.round(844 * 0.92), 844 - 47 - 24));
+  it('computes full-screen continue height from window size', () => {
+    expect(thoughtSheetExpandedHeight(844, insets)).toBe(844);
   });
 
-  it('shrinks expanded height when the keyboard is visible', () => {
-    expect(thoughtSheetExpandedHeightWithKeyboard(844, insets, 0)).toBe(
-      thoughtSheetExpandedHeight(844, insets),
-    );
-    expect(thoughtSheetExpandedHeightWithKeyboard(844, insets, 320)).toBeLessThan(
-      thoughtSheetExpandedHeight(844, insets),
-    );
+  it('shrinks continue height when the keyboard is visible', () => {
+    expect(thoughtSheetExpandedHeightWithKeyboard(844, insets, 0)).toBe(844);
+    expect(thoughtSheetExpandedHeightWithKeyboard(844, insets, 320)).toBe(524);
   });
 
   it('uses content-aware scroll caps in compact mode', () => {

@@ -67,10 +67,12 @@ import {
   thoughtSheetBackdropA11yLabel,
 } from './thoughtSheet/backdropAction';
 
-/** Read body — matches stream newest row; edit stays capture (18). */
+/** Read body — matches stream newest row. Continue/edit uses smaller type for room. */
 const SHEET_READ_FONT_SIZE = 16;
 const SHEET_READ_LINE_HEIGHT = 22;
 const SHEET_READ_LINE_HEIGHT_COMFORTABLE = 24;
+const SHEET_EDIT_FONT_SIZE = 15;
+const SHEET_EDIT_LINE_HEIGHT = 22;
 
 /**
  * SHEET SHELL LAYOUT (do not break — see .cursor/rules/entry-thought-sheet-layout.mdc):
@@ -117,7 +119,7 @@ export function EntryThoughtSheet({
   const insets = useSafeAreaInsets();
   const { colors, typography, spacing, radius } = t;
   const contentInset = screenContentGutter(windowWidth);
-  const { body, meta, capture } = typography;
+  const { body, meta } = typography;
   const [copied, setCopied] = useState(false);
   const [trailEarlier, setTrailEarlier] = useState<Entry[]>([]);
   const [trailLater, setTrailLater] = useState<Entry[]>([]);
@@ -134,7 +136,6 @@ export function EntryThoughtSheet({
   const panRef = useRef<PanGestureHandlerType>(null);
   const scrollGestureRef = useRef<NativeViewGestureHandlerType>(null);
   const dragKeyboardDismissedRef = useRef(false);
-  const expandedHeight = thoughtSheetExpandedHeight(windowHeight, insets);
   const expandedSheetHeight = thoughtSheetExpandedHeightWithKeyboard(
     windowHeight,
     insets,
@@ -273,7 +274,7 @@ export function EntryThoughtSheet({
     entry?.id,
     enterProfile,
   );
-  const scrimColor = isExpanded ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.48)';
+  const scrimColor = isExpanded ? colors.bgElevated : 'rgba(0,0,0,0.48)';
 
   const httpUrls = useMemo(
     () => extractHttpUrlsFromText(isExpanded ? draft : (entry?.text ?? '')),
@@ -539,12 +540,16 @@ export function EntryThoughtSheet({
 
   const dragStrip = (
     <View style={styles.dragStrip}>
-      <View style={styles.grabberZone}>
+      <View style={isExpanded ? styles.grabberZoneExpanded : styles.grabberZone}>
         <View
-          testID="entry-thought-grabber"
+          testID={isExpanded ? 'entry-thought-grabber-expanded' : 'entry-thought-grabber'}
           style={[styles.grabber, { backgroundColor: colors.muted }]}
           accessibilityRole="adjustable"
-          accessibilityLabel="Drag up to continue this thought, drag down to dismiss"
+          accessibilityLabel={
+            isExpanded
+              ? 'Swipe down to return to your stream'
+              : 'Drag up to continue this thought, drag down to dismiss'
+          }
         />
       </View>
       <View style={{ paddingHorizontal: contentInset }}>
@@ -728,15 +733,16 @@ export function EntryThoughtSheet({
             ]}
           />
           <Pressable
-            style={styles.dismissRegion}
+            style={[styles.dismissRegion, isExpanded ? styles.dismissRegionHidden : null]}
             onPress={handleBackdropPress}
             accessibilityRole="button"
             accessibilityLabel={backdropA11yLabel}
+            pointerEvents={isExpanded ? 'none' : 'auto'}
           />
 
           <PanGestureHandler
             ref={panRef}
-            style={styles.sheetPanHost}
+            style={[styles.sheetPanHost, isExpanded ? styles.sheetPanHostExpanded : null]}
             simultaneousHandlers={scrollGestureRef}
             activeOffsetY={[-12, 12]}
             failOffsetX={[-24, 24]}
@@ -751,9 +757,12 @@ export function EntryThoughtSheet({
                 {
                   backgroundColor: colors.bgElevated,
                   borderColor: colors.border,
-                  borderTopLeftRadius: radius.lg,
-                  borderTopRightRadius: radius.lg,
+                  borderTopLeftRadius: isExpanded ? 0 : radius.lg,
+                  borderTopRightRadius: isExpanded ? 0 : radius.lg,
+                  borderWidth: isExpanded ? 0 : StyleSheet.hairlineWidth,
+                  paddingTop: isExpanded ? insets.top : 0,
                   paddingBottom: Math.max(insets.bottom, spacing.md),
+                  flex: isExpanded ? 1 : undefined,
                   height: isExpanded ? expandedSheetHeight : undefined,
                   maxHeight: isExpanded ? expandedSheetHeight : '88%',
                   marginBottom: isExpanded ? keyboardInset : 0,
@@ -856,9 +865,9 @@ export function EntryThoughtSheet({
                       {
                         color: colors.entryBody,
                         fontFamily: body.fontFamily,
-                        fontSize: capture.fontSize,
-                        lineHeight: capture.lineHeight + 2,
-                        letterSpacing: capture.letterSpacing,
+                        fontSize: SHEET_EDIT_FONT_SIZE,
+                        lineHeight: SHEET_EDIT_LINE_HEIGHT,
+                        letterSpacing: 0.14,
                         opacity: sheetVoicePhase === 'listening' ? 0.92 : 1,
                       },
                     ]}
@@ -950,8 +959,15 @@ const styles = StyleSheet.create({
   dismissRegion: {
     flex: 1,
   },
+  dismissRegionHidden: {
+    flex: 0,
+    height: 0,
+  },
   sheetPanHost: {
     width: '100%',
+  },
+  sheetPanHostExpanded: {
+    flex: 1,
   },
   sheet: {
     width: '100%',
@@ -970,6 +986,12 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 10,
     minHeight: 44,
+    justifyContent: 'center',
+  },
+  grabberZoneExpanded: {
+    alignItems: 'center',
+    paddingTop: 6,
+    paddingBottom: 8,
     justifyContent: 'center',
   },
   grabber: {

@@ -230,7 +230,6 @@ export function SettingsScreen({
                   <Text style={[styles.versionLabel, { color: t.colors.metaFg }]}>Version</Text>
                   <View style={styles.versionValueWrap}>
                     <Text style={[styles.versionValue, { color: t.colors.fgDim }]}>{appVersion}</Text>
-                    <Text style={[styles.versionBeta, { color: t.colors.metaFg }]}>β</Text>
                   </View>
                 </View>
               </View>
@@ -328,14 +327,6 @@ const styles = StyleSheet.create({
   versionValueWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-  },
-  versionBeta: {
-    fontFamily: fonts.medium,
-    fontSize: 12,
-    lineHeight: 16,
-    letterSpacing: 0.2,
-    opacity: 0.85,
   },
   studioSignatureInline: {
     marginTop: 12,

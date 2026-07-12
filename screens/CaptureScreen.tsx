@@ -7,7 +7,6 @@ import * as Haptics from 'expo-haptics';
 import {
   Alert,
   Animated,
-  AppState,
   DevSettings,
   Easing,
   InteractionManager,
@@ -34,6 +33,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AmbientBackground } from '../components/AmbientBackground';
 import { CaptureContinuationHint } from '../components/CaptureContinuationHint';
 import { HomeDepthRecall } from '../components/HomeDepthRecall';
+import { useEchoResurface } from '../hooks/useEchoResurface';
 import { SpatialGestureHint } from '../components/SpatialGestureHint';
 import { CaptureInput } from '../components/CaptureInput';
 import { ChinottoLogo, chinottoLogoLeadingOutset } from '../components/ChinottoLogo';
@@ -75,7 +75,7 @@ import {
   STREAM_LOAD_MORE_LOOKAHEAD_PX,
   STREAM_SCROLL_STATE_THROTTLE_MS,
 } from '../constants/streamFocus';
-import { ECHO_LAYER_ACTIVE, ECHO_RECALL_DIM_IN_MS, ECHO_RECALL_DIM_OUT_DELAY_MS, ECHO_RECALL_DIM_OUT_MS, ECHO_RECALL_SHEET_DIM, RESURFACE_SHOW_PROBABILITY } from '../constants/echoLayer';
+import { ECHO_LAYER_ACTIVE, ECHO_RECALL_DIM_IN_MS, ECHO_RECALL_DIM_OUT_DELAY_MS, ECHO_RECALL_DIM_OUT_MS, ECHO_RECALL_SHEET_DIM } from '../constants/echoLayer';
 import {
   TEMPORAL_NAV_ENABLED,
   TEMPORAL_NAV_MIN_SCROLL_Y,
@@ -98,15 +98,11 @@ import {
   setThreadPeelHintDismissed as persistThreadPeelHintDismissed,
 } from '../storage/spatialGesturePrefs';
 import {
-  recordEchoCandidatesDisplayed,
-  setEchoLastBackgroundAt,
   setEchoSessionThread,
 } from '../storage/echoLayerPrefs';
 import {
   recordEntryOpened,
-  resolveEchoCandidates,
 } from '../storage/entryEngagementRepository';
-import { markAsShown } from '../storage/resurfaceSession';
 import {
   deleteEntry,
   getEntriesOlderThan,
@@ -343,8 +339,6 @@ export function CaptureScreen({
   const [streamViewportHeight, setStreamViewportHeight] = useState(0);
   const [streamLoadingMore, setStreamLoadingMore] = useState(false);
   const [totalEntryCount, setTotalEntryCount] = useState(0);
-  const [echoCandidates, setEchoCandidates] = useState<EchoCandidate[]>([]);
-  const [dismissedEchoIds, setDismissedEchoIds] = useState<ReadonlySet<string>>(() => new Set());
   const [captureContinuationHint, setCaptureContinuationHint] =
     useState<CaptureContinuationHintData | null>(null);
   /** Loaded from AsyncStorage — default hidden until prefs resolve. */
@@ -352,7 +346,6 @@ export function CaptureScreen({
   const [temporalMapHintDismissed, setTemporalMapHintDismissed] = useState(true);
   const echoCandidatesRef = useRef<EchoCandidate[]>([]);
   const homeDepthCandidateRef = useRef<EchoCandidate | null>(null);
-  const triedEchoRecallRef = useRef(false);
   const [streamActiveEntry, setStreamActiveEntry] = useState<Entry | null>(null);
   const [monthSummaries, setMonthSummaries] = useState<MonthSummary[]>([]);
   const [temporalRackScrubbing, setTemporalRackScrubbing] = useState(false);
@@ -807,52 +800,6 @@ export function CaptureScreen({
         }
       });
   }, [entries.length]);
-
-  useEffect(() => {
-    if (!ECHO_LAYER_ACTIVE) {
-      setEchoCandidates([]);
-      return;
-    }
-    let cancelled = false;
-    void resolveEchoCandidates({
-      fallbackEntries: streamDisplayEntries,
-      preferStreamFallback: __DEV__ && streamDisplayEntries.length > 0,
-    })
-      .then((raw) => {
-        if (cancelled) {
-          return;
-        }
-        if (raw.length === 0) {
-          setEchoCandidates([]);
-          return;
-        }
-        if (!triedEchoRecallRef.current) {
-          triedEchoRecallRef.current = true;
-          if (!__DEV__ && Math.random() > RESURFACE_SHOW_PROBABILITY) {
-            setEchoCandidates([]);
-            return;
-          }
-        }
-        setEchoCandidates(raw);
-      })
-      .catch((err) => {
-        if (__DEV__) {
-          console.warn('resolveEchoCandidates failed', err);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [demoStreamMode, entries.length, totalEntryCount, streamDisplayEntries]);
-
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'background' || state === 'inactive') {
-        void setEchoLastBackgroundAt().catch(() => {});
-      }
-    });
-    return () => sub.remove();
-  }, []);
 
   useEffect(() => {
     void syncRecentThoughtsToWidget(entries);
@@ -1378,20 +1325,6 @@ export function CaptureScreen({
     openReadEntrySheet(entry, anchor ?? null);
   }, [openReadEntrySheet]);
 
-  const onEchoDismiss = useCallback(() => {
-    const id = homeDepthCandidateRef.current?.id;
-    if (id) {
-      void markAsShown(id);
-      void recordEchoCandidatesDisplayed([id]);
-      setDismissedEchoIds((prev) => {
-        const next = new Set(prev);
-        next.add(id);
-        return next;
-      });
-    }
-    setEchoCandidates([]);
-  }, []);
-
   const onEchoEntryPress = useCallback((entry: EchoCandidate, anchor?: ThoughtSheetOpenAnchor) => {
     if (analyticsEnabled) {
       track({ event: 'echo_entry_opened' });
@@ -1456,6 +1389,21 @@ export function CaptureScreen({
     onTranscriptFinal: onVoiceTranscriptFinal,
     onError: onVoiceCaptureError,
   });
+
+  const { echoCandidates, dismissEcho } = useEchoResurface({
+    streamDisplayEntries,
+    preferStreamFallback: __DEV__ && streamDisplayEntries.length > 0,
+    captureReady: allowCaptureFocus,
+    readSheetOpen: readEntry != null,
+    searchActive: recallSearchActive,
+    composerHasDraft: text.trim().length > 0,
+    voiceCaptureActive: voicePhase === 'listening',
+    entriesEpoch: entries.length + totalEntryCount,
+  });
+
+  const onEchoDismiss = useCallback(() => {
+    dismissEcho();
+  }, [dismissEcho]);
 
   const showVoiceCapture = voiceCaptureNativeReady;
 
@@ -1575,13 +1523,10 @@ export function CaptureScreen({
   /** Ring geometry: align **outer ring** with search field (gutter only); composer is inset +`screenContentInnerPad`. */
   const headerLogoAlignStyle = { marginLeft: -chinottoLogoLeadingOutset(headerLogoSize) };
 
-  const echoCandidatesForUi = useMemo(() => {
-    const seeded = ensureEchoCandidatesForDev(echoCandidates, streamDisplayEntries);
-    if (dismissedEchoIds.size === 0) {
-      return seeded;
-    }
-    return seeded.filter((candidate) => !dismissedEchoIds.has(candidate.id));
-  }, [dismissedEchoIds, echoCandidates, streamDisplayEntries]);
+  const echoCandidatesForUi = useMemo(
+    () => ensureEchoCandidatesForDev(echoCandidates, streamDisplayEntries),
+    [echoCandidates, streamDisplayEntries],
+  );
   const streamEntryIds = useMemo(
     () => streamDisplayEntries.map((entry) => entry.id),
     [streamDisplayEntries],

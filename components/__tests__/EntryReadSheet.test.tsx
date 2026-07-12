@@ -140,7 +140,7 @@ describe('EntryThoughtSheet', () => {
     });
   });
 
-  it('calls onClose when dismiss backdrop is pressed while expanded', async () => {
+  it('does not dismiss from backdrop tap in full-screen continue mode', async () => {
     const onClose = jest.fn();
     const { getByTestId, getByLabelText } = render(
       <SafeAreaProvider initialMetrics={safeAreaMetrics}>
@@ -152,9 +152,7 @@ describe('EntryThoughtSheet', () => {
     fireEvent.press(body);
     fireEvent.press(body);
     fireEvent.press(getByLabelText('Dismiss'));
-    await waitFor(() => {
-      expect(onClose).toHaveBeenCalledTimes(1);
-    });
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('does not show Open when text has no URL', () => {
@@ -264,7 +262,7 @@ describe('EntryThoughtSheet', () => {
     expect(queryByTestId('entry-thought-continue')).toBeNull();
   });
 
-  it('expands into edit mode on double tap of the body', () => {
+  it('expands into full-screen edit mode on double tap of the body', () => {
     const { getByTestId, queryByTestId } = render(
       <SafeAreaProvider initialMetrics={safeAreaMetrics}>
         <EntryThoughtSheet visible entry={sampleEntry} onClose={jest.fn()} />
@@ -276,6 +274,13 @@ describe('EntryThoughtSheet', () => {
     fireEvent.press(body);
     expect(getByTestId('entry-thought-input')).toBeTruthy();
     expect(queryByTestId('entry-read-body')).toBeNull();
+    expect(getByTestId('entry-thought-grabber-expanded')).toBeTruthy();
+    expect(queryByTestId('entry-thought-grabber')).toBeNull();
+
+    const sheet = getByTestId('entry-thought-sheet');
+    const flat = StyleSheet.flatten(sheet.props.style);
+    expect(flat.borderTopLeftRadius).toBe(0);
+    expect(flat.flex).toBe(1);
   });
 
   it('shows sheet voice mic in edit mode', () => {
