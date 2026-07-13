@@ -31,8 +31,10 @@ export const colorsDark = {
   metaFg: 'rgba(255,255,255,0.55)',
   /** Chinotto mark in top headers (slightly brighter/lavender than meta, still calm). */
   logoMark: 'rgba(198,206,255,0.9)',
-  /** Capture composer placeholder — slightly quieter than `metaFg`. */
-  capturePlaceholder: 'rgba(255,255,255,0.48)',
+  /** Capture composer placeholder — inviting but still quieter than typed text. */
+  capturePlaceholder: 'rgba(255,255,255,0.58)',
+  /** Empty capture hero line — reads as the primary affordance before typing. */
+  captureInvitation: 'rgba(255,255,255,0.72)',
   border: 'rgba(255,255,255,0.07)',
   borderFocus: 'rgba(138,148,200,0.36)',
   accentSubtle: 'rgba(128,138,188,0.08)',
@@ -91,6 +93,7 @@ export const colorsSunlight = {
   metaFg: 'rgba(255,255,255,0.78)',
   logoMark: 'rgba(214,220,255,0.94)',
   capturePlaceholder: 'rgba(255,255,255,0.72)',
+  captureInvitation: 'rgba(255,255,255,0.88)',
   border: 'rgba(255,255,255,0.26)',
   borderFocus: 'rgba(200,208,255,0.72)',
   accentSubtle: 'rgba(100,110,175,0.22)',
@@ -126,6 +129,7 @@ export const colorsLight = {
   metaFg: 'rgba(0,0,0,0.45)',
   logoMark: 'rgba(96,108,188,0.74)',
   capturePlaceholder: 'rgba(0,0,0,0.38)',
+  captureInvitation: 'rgba(0,0,0,0.52)',
   border: 'rgba(0,0,0,0.08)',
   borderFocus: 'rgba(100,110,180,0.42)',
   accentSubtle: 'rgba(100,110,180,0.08)',
@@ -234,11 +238,18 @@ export const duration = {
  * with custom fonts on Android.
  */
 export const typography = {
+  /** Empty capture — hero line before the first character. */
+  captureHero: {
+    fontFamily: fonts.medium,
+    fontSize: 22,
+    letterSpacing: -0.1,
+    lineHeight: 30,
+  },
   capture: {
     fontFamily: fonts.medium,
     fontSize: 18,
-    letterSpacing: 0.18,
-    lineHeight: 26,
+    letterSpacing: 0.14,
+    lineHeight: 30,
   },
   body: {
     fontFamily: fonts.regular,

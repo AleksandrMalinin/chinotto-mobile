@@ -2,7 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 
 import { track, type SyncModalSurface } from '../analytics/analytics';
 import { onAuthStateChanged } from 'firebase/auth';
-import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import {
   Alert,
@@ -34,8 +33,12 @@ import { AmbientBackground } from '../components/AmbientBackground';
 import { CaptureContinuationHint } from '../components/CaptureContinuationHint';
 import { HomeDepthRecall } from '../components/HomeDepthRecall';
 import { useEchoResurface } from '../hooks/useEchoResurface';
-import { SpatialGestureHint } from '../components/SpatialGestureHint';
+import { GestureDiscoverHint } from '../components/GestureDiscoverHint';
+import { InterfaceGuideModal } from '../components/InterfaceGuideModal';
+import { InterfaceGuideButton } from '../components/InterfaceGuideButton';
+import { EchoIntroModal } from '../components/echo/EchoIntroModal';
 import { CaptureInput } from '../components/CaptureInput';
+import { CaptureMicRail } from '../components/CaptureMicRail';
 import { ChinottoLogo, chinottoLogoLeadingOutset } from '../components/ChinottoLogo';
 import { EnableSyncModal } from '../components/EnableSyncModal';
 import { EntryThoughtSheet } from '../components/EntryThoughtSheet';
@@ -50,7 +53,10 @@ import type { ThoughtSheetOpenAnchor } from '../components/thoughtSheet/detents'
 import type { SheetEnterProfile } from '../components/thoughtSheet/useSheetEnterAnimation';
 import { openAfterKeyboardHidden } from '../components/thoughtSheet/openAfterKeyboardHidden';
 import { SyncHeaderStatus, type SyncHeaderAuthPhase } from '../components/SyncHeaderStatus';
-import { VoiceMicButton, VOICE_MIC_CLUSTER_OVERFLOW_PAD_TOP, VOICE_MIC_CLUSTER_WIDTH } from '../components/VoiceCaptureControl';
+import {
+  VoiceMicButton,
+  VOICE_MIC_CLUSTER_WIDTH,
+} from '../components/VoiceCaptureControl';
 import { AppIconScreen } from './AppIconScreen';
 import { DeleteAccountScreen } from './DeleteAccountScreen';
 import { ManifestoScreen } from './ManifestoScreen';
@@ -92,11 +98,20 @@ import {
 } from '../storage/firstLaunchCapturePrefs';
 import {
   clearSpatialGestureHints,
+  getDevGestureHintsPreviewEnabled,
   getTemporalMapHintDismissed,
-  getThreadPeelHintDismissed,
   setTemporalMapHintDismissed as persistTemporalMapHintDismissed,
-  setThreadPeelHintDismissed as persistThreadPeelHintDismissed,
+  toggleDevGestureHintsPreviewEnabled,
 } from '../storage/spatialGesturePrefs';
+import {
+  getDevFirstInstallStreamPreviewEnabled,
+  toggleDevFirstInstallStreamPreviewEnabled,
+} from '../storage/devFirstInstallPreviewPrefs';
+import {
+  clearEchoIntroSeen,
+  getEchoIntroSeen,
+  setEchoIntroSeen,
+} from '../storage/echoIntroPrefs';
 import {
   setEchoSessionThread,
 } from '../storage/echoLayerPrefs';
@@ -171,6 +186,7 @@ import { buildThoughtTrailLinkedIds } from '../utils/thoughtTrail';
 import {
   isTemporalScrubberEligible,
   isTemporalScrubberVisible,
+  shouldShowTemporalMapGestureHint,
 } from '../utils/temporalScrubberVisibility';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -272,11 +288,15 @@ export function CaptureScreen({
 }: CaptureScreenProps = {}) {
   const [text, setText] = useState('');
   const [entries, setEntries] = useState<Entry[]>([]);
+  const [devFirstInstallStreamPreview, setDevFirstInstallStreamPreview] = useState(false);
   const demoStreamMode = isDemoStreamMode();
-  const streamDisplayEntries = useMemo(
-    () => mergeDemoStreamWithEntries(entries, demoStreamMode),
-    [entries, demoStreamMode],
-  );
+  const firstInstallStreamPreviewActive = __DEV__ && devFirstInstallStreamPreview;
+  const streamDisplayEntries = useMemo(() => {
+    if (firstInstallStreamPreviewActive) {
+      return [];
+    }
+    return mergeDemoStreamWithEntries(entries, demoStreamMode);
+  }, [demoStreamMode, entries, firstInstallStreamPreviewActive]);
   const trailLinkedIds = useMemo(() => buildThoughtTrailLinkedIds(entries), [entries]);
   const [hasMore, setHasMore] = useState(true);
   const [syncModalVisibleInternal, setSyncModalVisibleInternal] = useState(false);
@@ -342,8 +362,12 @@ export function CaptureScreen({
   const [captureContinuationHint, setCaptureContinuationHint] =
     useState<CaptureContinuationHintData | null>(null);
   /** Loaded from AsyncStorage — default hidden until prefs resolve. */
-  const [threadPeelHintDismissed, setThreadPeelHintDismissed] = useState(true);
   const [temporalMapHintDismissed, setTemporalMapHintDismissed] = useState(true);
+  const [devGestureHintsPreview, setDevGestureHintsPreview] = useState(false);
+  const [devGestureHintSuppressed, setDevGestureHintSuppressed] = useState(false);
+  const [interfaceGuideVisible, setInterfaceGuideVisible] = useState(false);
+  const [echoIntroSeen, setEchoIntroSeenState] = useState(true);
+  const [echoIntroVisible, setEchoIntroVisible] = useState(false);
   const echoCandidatesRef = useRef<EchoCandidate[]>([]);
   const homeDepthCandidateRef = useRef<EchoCandidate | null>(null);
   const [streamActiveEntry, setStreamActiveEntry] = useState<Entry | null>(null);
@@ -410,6 +434,12 @@ export function CaptureScreen({
   const [firstLaunchRevealDone, setFirstLaunchRevealDone] = useState<boolean | null>(null);
   /** `null` until prefs load; when false, empty stream never auto-opens keyboard until user taps composer. */
   const [composerHasFocusedOnce, setComposerHasFocusedOnce] = useState<boolean | null>(null);
+  const effectiveFirstLaunchRevealDone = firstInstallStreamPreviewActive
+    ? false
+    : firstLaunchRevealDone;
+  const effectiveComposerHasFocusedOnce = firstInstallStreamPreviewActive
+    ? false
+    : composerHasFocusedOnce;
   /** __DEV__: incremented when dev menu clears first-launch flag so focus effect re-runs without app restart. */
   const [firstLaunchRevealDevResetNonce, setFirstLaunchRevealDevResetNonce] = useState(0);
   /** When true, splash handoff has not yet applied composer focus for this `allowCaptureFocus` session. */
@@ -837,12 +867,16 @@ export function CaptureScreen({
   }, []);
 
   useEffect(() => {
-    void Promise.all([getThreadPeelHintDismissed(), getTemporalMapHintDismissed()]).then(
-      ([peelDismissed, mapDismissed]) => {
-        setThreadPeelHintDismissed(peelDismissed);
-        setTemporalMapHintDismissed(mapDismissed);
-      },
-    );
+    void getTemporalMapHintDismissed().then((mapDismissed) => {
+      setTemporalMapHintDismissed(mapDismissed);
+    });
+    void getEchoIntroSeen().then((seen) => {
+      setEchoIntroSeenState(seen);
+    });
+    if (__DEV__) {
+      void getDevGestureHintsPreviewEnabled().then(setDevGestureHintsPreview);
+      void getDevFirstInstallStreamPreviewEnabled().then(setDevFirstInstallStreamPreview);
+    }
   }, []);
 
   useEffect(() => {
@@ -926,15 +960,19 @@ export function CaptureScreen({
     if (!thoughtEntryRequestId || thoughtEntryRequestId === lastThoughtRequestIdRef.current) {
       return;
     }
-    lastThoughtRequestIdRef.current = thoughtEntryRequestId;
+    if (!allowCaptureFocus) {
+      return;
+    }
+    const thoughtId = thoughtEntryRequestId;
+    lastThoughtRequestIdRef.current = thoughtId;
     void (async () => {
-      const entry = await getEntryById(thoughtEntryRequestId);
+      const entry = await getEntryById(thoughtId);
       if (!entry) {
         return;
       }
       openReadEntrySheet(entry, null);
     })();
-  }, [openReadEntrySheet, thoughtEntryRequestId]);
+  }, [allowCaptureFocus, openReadEntrySheet, thoughtEntryRequestId]);
 
   useEffect(() => {
     if (!allowCaptureFocus) {
@@ -945,7 +983,7 @@ export function CaptureScreen({
       splashFocusPendingRef.current = true;
       return;
     }
-    if (firstLaunchRevealDone === null) {
+    if (firstLaunchRevealDone === null && !firstInstallStreamPreviewActive) {
       return;
     }
     if (!splashFocusPendingRef.current) {
@@ -961,9 +999,9 @@ export function CaptureScreen({
 
     const shouldDeferEmptyKeyboard =
       streamDisplayEntries.length === 0 &&
-      (firstLaunchRevealDone !== true || !composerHasFocusedOnce);
+      (effectiveFirstLaunchRevealDone !== true || !effectiveComposerHasFocusedOnce);
 
-    if (firstLaunchRevealDone === true) {
+    if (effectiveFirstLaunchRevealDone === true) {
       if (shouldDeferEmptyKeyboard) {
         splashFocusPendingRef.current = false;
         return;
@@ -984,10 +1022,11 @@ export function CaptureScreen({
     splashFocusPendingRef.current = false;
   }, [
     allowCaptureFocus,
-    firstLaunchRevealDone,
-    composerHasFocusedOnce,
-    streamDisplayEntries.length,
+    effectiveComposerHasFocusedOnce,
+    effectiveFirstLaunchRevealDone,
+    firstInstallStreamPreviewActive,
     firstLaunchRevealDevResetNonce,
+    streamDisplayEntries.length,
   ]);
 
   /** Fires once when the stream has at least one entry → App waits 4s (`ANALYTICS_OPTIN_DELAY_MS` in App) then may show Umami sheet. */
@@ -1332,7 +1371,7 @@ export function CaptureScreen({
     void recordOpenedExistingThoughtForSyncHighlight().then(() => {
       setSyncHighlightTick((n) => n + 1);
     });
-    openReadEntrySheet(entry, anchor ?? null, { enterProfile: 'echo', resumeOnOpen: true });
+    openReadEntrySheet(entry, anchor ?? null, { enterProfile: 'echo', resumeOnOpen: false });
   }, [analyticsEnabled, openReadEntrySheet]);
 
   const onReadEntryUpdated = useCallback((updated: Entry) => {
@@ -1390,7 +1429,7 @@ export function CaptureScreen({
     onError: onVoiceCaptureError,
   });
 
-  const { echoCandidates, dismissEcho } = useEchoResurface({
+  const { echoCandidates, dismissedEchoIds, dismissEcho } = useEchoResurface({
     streamDisplayEntries,
     preferStreamFallback: __DEV__ && streamDisplayEntries.length > 0,
     captureReady: allowCaptureFocus,
@@ -1401,9 +1440,12 @@ export function CaptureScreen({
     entriesEpoch: entries.length + totalEntryCount,
   });
 
-  const onEchoDismiss = useCallback(() => {
-    dismissEcho();
-  }, [dismissEcho]);
+  const onEchoDismiss = useCallback(
+    (candidate: EchoCandidate) => {
+      dismissEcho(candidate.id);
+    },
+    [dismissEcho],
+  );
 
   const showVoiceCapture = voiceCaptureNativeReady;
 
@@ -1437,7 +1479,8 @@ export function CaptureScreen({
    * (first install stays tap-to-type; later opens can be capture-first).
    */
   const deferKeyboardForFirstLaunchReveal =
-    streamDisplayEntries.length === 0 && (firstLaunchRevealDone !== true || !composerHasFocusedOnce);
+    streamDisplayEntries.length === 0 &&
+    (effectiveFirstLaunchRevealDone !== true || !effectiveComposerHasFocusedOnce);
 
   const onCaptureComposerFocus = useCallback(() => {
     setSuppressComposerAutoFocus(false);
@@ -1489,11 +1532,14 @@ export function CaptureScreen({
   ]);
 
   /** Taller composer so capture reads clearly as the primary surface on device. */
-  const composerMinHeight = 76;
+  const composerMinHeight = 92;
   const composerMaxHeight = 120;
-  const capturePlaceholderColor = t.colors.capturePlaceholder;
   /** Empty field: show mic; typing: step aside; voice active: keep mic reachable. */
   const composerActionClusterOpen = composerActionClusterExpanded(text, voicePhase);
+  const captureComposerLineHeight =
+    text.trim().length === 0
+      ? t.typography.captureHero.lineHeight
+      : t.typography.capture.lineHeight;
   const showStreamPullSearchHint =
     streamDisplayEntries.length > 0 && !searchExpanded && searchPullProgress > 0;
   const headerLogoColor = t.colors.logoMark;
@@ -1520,12 +1566,14 @@ export function CaptureScreen({
     outputRange: [0, 0, 1],
   });
   const headerLogoSize = 42;
+  const headerGuideGlyphSize = 28;
   /** Ring geometry: align **outer ring** with search field (gutter only); composer is inset +`screenContentInnerPad`. */
   const headerLogoAlignStyle = { marginLeft: -chinottoLogoLeadingOutset(headerLogoSize) };
+  const headerGuideAlignStyle = { marginRight: -chinottoLogoLeadingOutset(headerLogoSize) };
 
   const echoCandidatesForUi = useMemo(
-    () => ensureEchoCandidatesForDev(echoCandidates, streamDisplayEntries),
-    [echoCandidates, streamDisplayEntries],
+    () => ensureEchoCandidatesForDev(echoCandidates, streamDisplayEntries, dismissedEchoIds),
+    [dismissedEchoIds, echoCandidates, streamDisplayEntries],
   );
   const streamEntryIds = useMemo(
     () => streamDisplayEntries.map((entry) => entry.id),
@@ -1549,6 +1597,13 @@ export function CaptureScreen({
   });
 
   useEffect(() => {
+    if (!showHomeDepthRecall || homeDepthCandidate == null || echoIntroSeen || echoIntroVisible) {
+      return;
+    }
+    setEchoIntroVisible(true);
+  }, [echoIntroSeen, echoIntroVisible, homeDepthCandidate, showHomeDepthRecall]);
+
+  useEffect(() => {
     echoCandidatesRef.current = echoCandidatesForUi;
   }, [echoCandidatesForUi]);
 
@@ -1567,8 +1622,51 @@ export function CaptureScreen({
 
   const resetSpatialGestureHintsForDev = useCallback(() => {
     void clearSpatialGestureHints().then(() => {
-      setThreadPeelHintDismissed(false);
       setTemporalMapHintDismissed(false);
+    });
+  }, []);
+
+  const resetEchoIntroForDev = useCallback(() => {
+    void clearEchoIntroSeen().then(() => {
+      setEchoIntroSeenState(false);
+      setEchoIntroVisible(true);
+    });
+  }, []);
+
+  const openInterfaceGuide = useCallback(() => {
+    setInterfaceGuideVisible(true);
+  }, []);
+
+  const dismissInterfaceGuide = useCallback(() => {
+    setInterfaceGuideVisible(false);
+  }, []);
+
+  const dismissEchoIntro = useCallback(() => {
+    setEchoIntroVisible(false);
+    setEchoIntroSeenState(true);
+    void setEchoIntroSeen();
+  }, []);
+
+  const toggleGestureHintsPreviewForDev = useCallback(() => {
+    void toggleDevGestureHintsPreviewEnabled().then((enabled) => {
+      setDevGestureHintsPreview(enabled);
+      setDevGestureHintSuppressed(false);
+      if (enabled) {
+        setTemporalMapHintDismissed(false);
+      }
+    });
+  }, []);
+
+  const toggleFirstInstallStreamPreviewForDev = useCallback(() => {
+    void toggleDevFirstInstallStreamPreviewEnabled().then((enabled) => {
+      setDevFirstInstallStreamPreview(enabled);
+      if (enabled) {
+        Keyboard.dismiss();
+        setSuppressComposerAutoFocus(true);
+        splashFocusPendingRef.current = false;
+      } else {
+        setSuppressComposerAutoFocus(false);
+      }
     });
   }, []);
 
@@ -1576,34 +1674,57 @@ export function CaptureScreen({
     if (!__DEV__ || Platform.OS !== 'ios') {
       return;
     }
-    showDevMenu({
-      onResetPaywallForPurchaseTesting: () => void resetPaywallForPurchaseTesting(),
-      onPreviewSyncEnabledSheet: () => {
-        setDevPostSyncPreviewNonce((n) => n + 1);
-        openSyncModal('dev_menu');
-      },
-      onResetAnalyticsPrompt: onResetAnalyticsPrompt,
-      onResetSyncCaptureQA: () => {
-        Keyboard.dismiss();
-        if (firstLaunchFocusTimerRef.current) {
-          clearTimeout(firstLaunchFocusTimerRef.current);
-          firstLaunchFocusTimerRef.current = null;
-        }
-        firstLaunchPrefsLoadGenerationRef.current += 1;
-        splashFocusPendingRef.current = true;
-        void (async () => {
-          await resetSyncHeaderShimmerPrefsForDev();
-          await clearFirstLaunchEmptyCaptureRevealDone();
-          setFirstLaunchRevealDone(false);
-          setComposerHasFocusedOnce(false);
-          setFirstLaunchRevealDevResetNonce((n) => n + 1);
-          DevSettings.reload();
-        })();
-      },
-      onPreviewAppUpdateModal: onDevPreviewAppUpdate,
-      onResetSpatialGestureHints: resetSpatialGestureHintsForDev,
-    });
-  }, [onDevPreviewAppUpdate, onResetAnalyticsPrompt, openSyncModal, resetSpatialGestureHintsForDev]);
+    void (async () => {
+      const [previewEnabled, firstInstallPreviewEnabled] = await Promise.all([
+        getDevGestureHintsPreviewEnabled(),
+        getDevFirstInstallStreamPreviewEnabled(),
+      ]);
+      setDevGestureHintsPreview(previewEnabled);
+      setDevFirstInstallStreamPreview(firstInstallPreviewEnabled);
+      showDevMenu({
+        onResetPaywallForPurchaseTesting: () => void resetPaywallForPurchaseTesting(),
+        onPreviewSyncEnabledSheet: () => {
+          setDevPostSyncPreviewNonce((n) => n + 1);
+          openSyncModal('dev_menu');
+        },
+        onResetAnalyticsPrompt: onResetAnalyticsPrompt,
+        onResetSyncCaptureQA: () => {
+          Keyboard.dismiss();
+          if (firstLaunchFocusTimerRef.current) {
+            clearTimeout(firstLaunchFocusTimerRef.current);
+            firstLaunchFocusTimerRef.current = null;
+          }
+          firstLaunchPrefsLoadGenerationRef.current += 1;
+          splashFocusPendingRef.current = true;
+          void (async () => {
+            await resetSyncHeaderShimmerPrefsForDev();
+            await clearFirstLaunchEmptyCaptureRevealDone();
+            setFirstLaunchRevealDone(false);
+            setComposerHasFocusedOnce(false);
+            setFirstLaunchRevealDevResetNonce((n) => n + 1);
+            DevSettings.reload();
+          })();
+        },
+        onPreviewAppUpdateModal: onDevPreviewAppUpdate,
+        onResetSpatialGestureHints: resetSpatialGestureHintsForDev,
+        onResetEchoIntro: resetEchoIntroForDev,
+        onPreviewInterfaceGuide: openInterfaceGuide,
+        onToggleGestureHintsPreview: toggleGestureHintsPreviewForDev,
+        gestureHintsPreviewEnabled: previewEnabled,
+        onToggleFirstInstallStreamPreview: toggleFirstInstallStreamPreviewForDev,
+        firstInstallStreamPreviewEnabled: firstInstallPreviewEnabled,
+      });
+    })();
+  }, [
+    onDevPreviewAppUpdate,
+    onResetAnalyticsPrompt,
+    openSyncModal,
+    resetSpatialGestureHintsForDev,
+    resetEchoIntroForDev,
+    openInterfaceGuide,
+    toggleGestureHintsPreviewForDev,
+    toggleFirstInstallStreamPreviewForDev,
+  ]);
 
   const temporalScrubberEligible = isTemporalScrubberEligible({
     active: TEMPORAL_NAV_ENABLED,
@@ -1626,34 +1747,28 @@ export function CaptureScreen({
     voicePhase !== 'listening' &&
     captureContinuationHint == null &&
     !showHomeDepthRecall;
-  const showThreadPeelGestureHint =
-    spatialGestureHintsBaseVisible &&
-    !threadPeelHintDismissed &&
-    searchTrimmed.length === 0 &&
-    trailLinkedIds.size >= 2;
-  const showTemporalMapGestureHint =
-    spatialGestureHintsBaseVisible &&
-    !temporalMapHintDismissed &&
-    temporalScrubberEligible;
-
-  const dismissThreadPeelGestureHint = useCallback(() => {
-    setThreadPeelHintDismissed(true);
-    void persistThreadPeelHintDismissed();
-  }, []);
-
-  const onThreadPeelRevealed = useCallback(() => {
-    setThreadPeelHintDismissed((dismissed) => {
-      if (!dismissed) {
-        void persistThreadPeelHintDismissed();
-      }
-      return true;
-    });
-  }, []);
+  const gestureHintDevPreviewActive = __DEV__ && devGestureHintsPreview;
+  const showTemporalMapGestureHint = shouldShowTemporalMapGestureHint({
+    devPreviewActive: gestureHintDevPreviewActive,
+    readSheetOpen: readEntry != null,
+    recallSearchActive,
+    devHintSuppressed: devGestureHintSuppressed,
+    baseVisible: spatialGestureHintsBaseVisible,
+    interfaceGuideVisible,
+    hintDismissed: temporalMapHintDismissed,
+    scrubberEligible: temporalScrubberEligible,
+    streamScrollY,
+    hasStreamEntries: streamDisplayEntries.length > 0,
+  });
 
   const dismissTemporalMapGestureHint = useCallback(() => {
+    if (gestureHintDevPreviewActive) {
+      setDevGestureHintSuppressed(true);
+      return;
+    }
     setTemporalMapHintDismissed(true);
     void persistTemporalMapHintDismissed();
-  }, []);
+  }, [gestureHintDevPreviewActive]);
 
   const referenceMonthKey = monthKeyFromIso(new Date().toISOString());
   const visibleMonthKey =
@@ -1853,8 +1968,13 @@ export function CaptureScreen({
                 />
               ) : null}
             </View>
+            <InterfaceGuideButton
+              onPress={openInterfaceGuide}
+              glyphSize={headerGuideGlyphSize}
+              alignStyle={headerGuideAlignStyle}
+            />
           </View>
-          <View style={{ paddingHorizontal: gutter, zIndex: searchRecallMode ? 2 : 0 }}>
+          <View style={{ paddingHorizontal: gutter, zIndex: searchRecallMode ? 2 : 0, marginBottom: spacing.sm }}>
             <Animated.View style={[styles.composerBlock, { opacity: composerOpacity }]}>
               {searchRecallMode ? (
                 <View testID="stream-search-mode">
@@ -1892,7 +2012,6 @@ export function CaptureScreen({
                       minHeight={composerMinHeight}
                       maxHeight={composerMaxHeight}
                       placeholder="Jot a thought…"
-                      placeholderTextColor={capturePlaceholderColor}
                       autoFocus={
                         allowCaptureFocus &&
                         !deferKeyboardForFirstLaunchReveal &&
@@ -1917,15 +2036,16 @@ export function CaptureScreen({
                         width: composerActionClusterWidth,
                         marginLeft: composerActionClusterLeadingGap,
                         opacity: composerActionClusterOpacity,
-                        paddingTop: VOICE_MIC_CLUSTER_OVERFLOW_PAD_TOP,
                       },
                     ]}
                   >
                     {showVoiceCapture ? (
-                      <VoiceMicButton
-                        phase={voicePhase}
-                        theme={t}
-                        onPress={() => {
+                      <CaptureMicRail captureLineHeight={captureComposerLineHeight}>
+                        <VoiceMicButton
+                          phase={voicePhase}
+                          theme={t}
+                          placement="inline"
+                          onPress={() => {
                           if (voicePhase === 'listening') {
                             stopVoiceCaptureSession();
                           } else {
@@ -1934,12 +2054,13 @@ export function CaptureScreen({
                           }
                         }}
                       />
+                      </CaptureMicRail>
                     ) : null}
                   </Animated.View>
                 </View>
               )}
             </Animated.View>
-            {showHomeDepthRecall && homeDepthCandidate ? (
+            {showHomeDepthRecall && homeDepthCandidate && echoIntroSeen ? (
               <HomeDepthRecall
                 candidate={homeDepthCandidate}
                 recallDim={echoRecallDim}
@@ -1960,18 +2081,10 @@ export function CaptureScreen({
                 onDismiss={() => setCaptureContinuationHint(null)}
               />
             ) : null}
-            {showThreadPeelGestureHint ? (
-              <SpatialGestureHint
-                testID="thread-peel-gesture-hint"
-                message="Swipe right on a dotted thought for a related entry."
-                visible
-                onDismiss={dismissThreadPeelGestureHint}
-              />
-            ) : null}
             {showTemporalMapGestureHint ? (
-              <SpatialGestureHint
+              <GestureDiscoverHint
                 testID="temporal-map-gesture-hint"
-                message="Hold a day label to open the timeline map."
+                message="Hold a date label for the timeline map"
                 visible
                 onDismiss={dismissTemporalMapGestureHint}
               />
@@ -2043,10 +2156,7 @@ export function CaptureScreen({
                     }
                     onEntryPress={onStreamEntryPress}
                     onEntryDelete={handleEntryDelete}
-                    threadPeelEnabled={searchTrimmed.length === 0}
-                    threadPeelSourceEntries={streamDisplayEntries}
                     trailLinkedIds={trailLinkedIds}
-                    onThreadPeelRevealed={onThreadPeelRevealed}
                     onSectionLabelLongPress={
                       searchTrimmed.length === 0 ? onStreamSectionLabelLongPress : undefined
                     }
@@ -2205,7 +2315,7 @@ export function CaptureScreen({
         border={t.colors.border}
       />
       <EntryThoughtSheet
-        visible={readEntry != null}
+        visible={readEntry != null && allowCaptureFocus}
         entry={readEntry}
         openAnchor={readEntryAnchor}
         onClose={() => {
@@ -2248,6 +2358,8 @@ export function CaptureScreen({
         onSelectMonth={onTemporalMapSelectMonth}
         hapticsEnabled={hapticsEnabled}
       />
+      <InterfaceGuideModal visible={interfaceGuideVisible} onDismiss={dismissInterfaceGuide} />
+      <EchoIntroModal visible={echoIntroVisible} onDismiss={dismissEchoIntro} />
     </View>
   );
 }
@@ -2275,6 +2387,7 @@ const styles = StyleSheet.create({
   headerBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     minHeight: 48,
   },
   headerLogoSlot: {
@@ -2296,9 +2409,9 @@ const styles = StyleSheet.create({
   /** No fill — only rhythm; capture reads against AmbientBackground. */
   composerBlock: {
     paddingHorizontal: screenContentInnerPad,
-    paddingTop: 14,
+    paddingTop: 20,
     /** Tighter than top — stream sits closer without compressing capture. */
-    paddingBottom: 6,
+    paddingBottom: 12,
   },
   composerInputRow: {
     flexDirection: 'row',

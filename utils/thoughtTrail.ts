@@ -28,7 +28,7 @@ export function entriesShareCapturePrefix(a: Entry, b: Entry): boolean {
   return left != null && left === right;
 }
 
-/** Shared rule for stream dots, peel neighbors, and sheet trail rail — keyword overlap only (desktop). */
+/** Shared rule for stream dots and sheet thread panel — keyword overlap only (desktop). */
 export function areThoughtTrailRelated(a: Entry, b: Entry): boolean {
   if (a.id === b.id) {
     return false;
@@ -48,7 +48,7 @@ function parseMs(iso: string): number {
   return Number.isFinite(ms) ? ms : 0;
 }
 
-/** Ranked related entries for peel + sheet rail (not a feed). */
+/** Ranked related entries for sheet thread panel (not a feed). */
 export function relatedThoughtTrailEntries(
   anchor: Entry,
   all: readonly Entry[],

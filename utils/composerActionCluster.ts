@@ -9,12 +9,14 @@ export const COMPOSER_ACTION_CLUSTER_LEADING_GAP = 6;
 export const COMPOSER_ACTION_CLUSTER_WIDTH = VOICE_MIC_CLUSTER_WIDTH;
 
 /**
- * Voice mic stays visible whenever voice capture is supported — speak into an empty field
- * or append to existing text (GPT-style); stop with a second tap on the mic.
+ * Empty field: show mic. Typing: step aside for the full row. Listening: keep mic reachable.
  */
 export function composerActionClusterExpanded(
-  _captureText: string,
-  _voicePhase: 'idle' | 'listening',
+  captureText: string,
+  voicePhase: 'idle' | 'listening',
 ): boolean {
-  return true;
+  if (voicePhase === 'listening') {
+    return true;
+  }
+  return captureText.trim().length === 0;
 }

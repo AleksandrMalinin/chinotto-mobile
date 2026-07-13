@@ -29,18 +29,30 @@ function devEchoCandidateOutsideRecentStream(
 export function ensureEchoCandidatesForDev(
   candidates: readonly EchoCandidate[],
   streamEntries: readonly Entry[],
+  suppressedIds?: ReadonlySet<string>,
 ): EchoCandidate[] {
-  if (candidates.length >= ECHO_LAYER_MIN_CANDIDATES) {
-    return [...candidates];
+  const isSuppressed = (id: string) => suppressedIds?.has(id) ?? false;
+  const filtered = candidates.filter((candidate) => !isSuppressed(candidate.id));
+
+  if (filtered.length >= ECHO_LAYER_MIN_CANDIDATES) {
+    return [...filtered];
   }
-  if (candidates.length > 0 && (!__DEV__ || process.env.NODE_ENV === 'test')) {
-    return [...candidates];
+  if (filtered.length > 0 && (!__DEV__ || process.env.NODE_ENV === 'test')) {
+    return [...filtered];
   }
   if (!__DEV__ || process.env.NODE_ENV === 'test') {
     return [];
   }
   if (streamEntries.length > 0) {
-    return [devEchoCandidateOutsideRecentStream(streamEntries)];
+    const injected = devEchoCandidateOutsideRecentStream(streamEntries);
+    if (isSuppressed(injected.id)) {
+      return [...filtered];
+    }
+    return [...filtered, injected];
   }
-  return [{ ...DEV_ECHO_SEED, createdAt: new Date().toISOString() }];
+  const seed = { ...DEV_ECHO_SEED, createdAt: new Date().toISOString() };
+  if (isSuppressed(seed.id)) {
+    return [...filtered];
+  }
+  return [...filtered, seed];
 }

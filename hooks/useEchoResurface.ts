@@ -38,6 +38,7 @@ export function useEchoResurface({
   entriesEpoch,
 }: UseEchoResurfaceOptions) {
   const [echoCandidates, setEchoCandidates] = useState<EchoCandidate[]>([]);
+  const [dismissedEchoIds, setDismissedEchoIds] = useState<ReadonlySet<string>>(() => new Set());
   const shownThisSessionRef = useRef(false);
   const triedResurfaceRef = useRef(false);
   const resurfaceInFlightRef = useRef(false);
@@ -208,11 +209,20 @@ export function useEchoResurface({
     clearOpenTimer,
   ]);
 
-  const dismissEcho = useCallback(() => {
-    setEchoCandidates([]);
+  const dismissEcho = useCallback((candidateId: string) => {
+    setEchoCandidates((prev) => prev.filter((candidate) => candidate.id !== candidateId));
+    setDismissedEchoIds((prev) => {
+      if (prev.has(candidateId)) {
+        return prev;
+      }
+      const next = new Set(prev);
+      next.add(candidateId);
+      return next;
+    });
+    void recordEchoCandidatesDisplayed([candidateId]);
   }, []);
 
-  return { echoCandidates, dismissEcho };
+  return { echoCandidates, dismissedEchoIds, dismissEcho };
 }
 
 function wasBackgroundOrInactive(state: AppStateStatus): boolean {

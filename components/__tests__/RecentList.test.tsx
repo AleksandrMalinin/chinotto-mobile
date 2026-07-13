@@ -38,6 +38,19 @@ describe('RecentList', () => {
     expect(getByTestId(`stream-trail-mark-${e.id}`)).toBeTruthy();
   });
 
+  it('does not render thread peel actions on stream rows', () => {
+    const e = entryToday('api refactor notes');
+    const { queryByTestId } = render(
+      <RecentList
+        entries={[e]}
+        visible
+        trailLinkedIds={new Set([e.id])}
+        onEntryDelete={jest.fn()}
+      />,
+    );
+    expect(queryByTestId('stream-thread-peel-actions')).toBeNull();
+  });
+
   it('renders nothing when not visible', () => {
     const { queryByTestId } = render(<RecentList entries={[entryToday('hello')]} visible={false} />);
 

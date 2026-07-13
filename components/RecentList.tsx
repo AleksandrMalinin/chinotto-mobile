@@ -50,12 +50,10 @@ import {
   STREAM_ROW_PRESS_OUT_MS,
 } from '../constants/streamFocus';
 import { confirmDeleteThought } from '../utils/confirmDeleteThought';
+import { resolveStreamLayoutInsets } from '../utils/streamLayoutInsets';
 import { streamScrollContentYForRow } from '../utils/streamScrollToEntry';
 import { monthKeyFromIso } from '../utils/streamMonthIndex';
-import { buildThreadPeelNeighbors } from '../utils/streamThreadPeel';
-import { STREAM_THREAD_PEEL_ACTION_WIDTH } from '../constants/streamThreadPeel';
 import { StreamFlowPanel } from './StreamFlowPanel';
-import { StreamThreadPeelActions } from './StreamThreadPeelActions';
 import type { ThoughtSheetOpenAnchor } from './thoughtSheet/detents';
 
 /**
@@ -116,20 +114,17 @@ export type RecentListProps = {
   streamLoadingMore?: boolean;
   /** Scroll velocity — snap focus opacity while the list is moving. */
   streamScrollVelocityY?: number;
-  /** Swipe right on a row to reveal keyword-related neighbors (not search / echo). */
-  threadPeelEnabled?: boolean;
-  /** Entry pool for thread peel neighbor lookup (loaded stream rows). */
-  threadPeelSourceEntries?: readonly Entry[];
   /** Quiet stream dot — entries with keyword trail connections (desktop entry-row-trail-mark). */
   trailLinkedIds?: ReadonlySet<string>;
   /** Long-press a day section label — temporal map entry (semantic zoom handoff). */
   onSectionLabelLongPress?: (monthKey: MonthKey) => void;
-  /** Fired when swipe-right reveals thread peel on a row. */
-  onThreadPeelRevealed?: () => void;
+  /** When set, scale stream gutters to match a layout wider than the device (guide preview). */
+  layoutWidth?: number;
 };
 
 const DELETE_ACTION_WIDTH = 76;
-const STREAM_TRAIL_MARK_SIZE = 4;
+const STREAM_TRAIL_MARK_SIZE = 6;
+const STREAM_TRAIL_MARK_GLOW = 10;
 /** Stream body — compact vs capture composer (18). Newest stays one step larger. */
 const STREAM_ENTRY_FONT_SIZE = 15;
 const STREAM_ENTRY_LINE_HEIGHT = 21;
@@ -206,12 +201,10 @@ type StreamRowProps = {
   searchHighlightQuery?: string;
   /** Matches `CaptureScreen` scroll `paddingHorizontal` so rows can full-bleed under press/trace. */
   streamGutter: number;
+  streamEntryInset: number;
   onEntryPress?: (entry: Entry, anchor?: ThoughtSheetOpenAnchor) => void;
   onEntryDelete?: (entry: Entry) => void;
-  threadPeelEnabled?: boolean;
-  threadPeelNeighbors?: readonly Entry[];
   hasTrailLink?: boolean;
-  onThreadPeelRevealed?: () => void;
 };
 
 type EntryBodyPreviewProps = {
@@ -268,12 +261,10 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
   streamFocusOpacitySnap = false,
   searchHighlightQuery,
   streamGutter,
+  streamEntryInset,
   onEntryPress,
   onEntryDelete,
-  threadPeelEnabled = false,
-  threadPeelNeighbors = [],
   hasTrailLink = false,
-  onThreadPeelRevealed,
 }: StreamRowProps) {
   const pressShade = useRef(new Animated.Value(0)).current;
   const t = useAppTheme();
@@ -349,31 +340,15 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
     onEntryPress?.(item, null);
   }, [item, onEntryPress]);
 
-  const closePeel = useCallback(() => {
-    swipeableRef.current?.close();
-  }, []);
-
-  const onThreadNeighborPress = useCallback(
-    (neighbor: Entry) => {
-      onEntryPress?.(neighbor, null);
-    },
-    [onEntryPress],
-  );
-
-  const showThreadPeel = threadPeelEnabled && threadPeelNeighbors.length > 0;
-  const showSwipeChrome = onEntryDelete != null || showThreadPeel;
+  const showSwipeChrome = onEntryDelete != null;
 
   const onSwipeableOpen = useCallback(
     (direction: 'left' | 'right') => {
       if (direction === 'right') {
         requestEntryDelete();
-        return;
-      }
-      if (direction === 'left' && showThreadPeel) {
-        onThreadPeelRevealed?.();
       }
     },
-    [onThreadPeelRevealed, requestEntryDelete, showThreadPeel],
+    [requestEntryDelete],
   );
 
   const previewLineHeight = showNewest ? STREAM_NEWEST_LINE_HEIGHT : STREAM_ENTRY_LINE_HEIGHT;
@@ -397,14 +372,11 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
       />
       <Pressable
         accessible={true}
-        accessibilityLabel={`${item.text}, ${formatEntryTime(item.createdAt)}${hasTrailLink ? ', has trail connections' : ''}`}
+        accessibilityLabel={`${item.text}, ${formatEntryTime(item.createdAt)}${hasTrailLink ? ', has related thoughts' : ''}`}
         accessibilityHint={
           [
             onEntryPress != null ? 'Double tap to open thought' : null,
-            hasTrailLink ? 'Connected to related thoughts in your stream' : null,
-            threadPeelEnabled && threadPeelNeighbors.length > 0
-              ? 'Swipe right for related thoughts'
-              : null,
+            hasTrailLink ? 'Has related thoughts — open to view thread' : null,
             onEntryDelete != null ? 'Swipe left, then tap Delete' : null,
           ]
             .filter(Boolean)
@@ -431,7 +403,7 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
           <View
             style={[
               styles.entryRow,
-              { paddingHorizontal: streamGutter + screenContentInnerPad },
+              { paddingHorizontal: streamEntryInset },
             ]}
           >
             {hasTrailLink ? (
@@ -442,11 +414,36 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
                   styles.trailMarkGutter,
                   {
                     left: streamTrailMarkLeft(streamGutter),
-                    top: (previewLineHeight - STREAM_TRAIL_MARK_SIZE) / 2,
+                    top: (previewLineHeight - STREAM_TRAIL_MARK_GLOW) / 2,
+                    width: STREAM_TRAIL_MARK_GLOW,
+                    height: STREAM_TRAIL_MARK_GLOW,
                   },
                 ]}
               >
-                <View style={styles.trailMark} />
+                <View
+                  style={[
+                    styles.trailMarkGlow,
+                    {
+                      backgroundColor: colors.accentSubtle,
+                      width: STREAM_TRAIL_MARK_GLOW,
+                      height: STREAM_TRAIL_MARK_GLOW,
+                      borderRadius: STREAM_TRAIL_MARK_GLOW / 2,
+                    },
+                  ]}
+                />
+                <View
+                  style={[
+                    styles.trailMark,
+                    {
+                      backgroundColor: colors.atmosphereSoft,
+                      width: STREAM_TRAIL_MARK_SIZE,
+                      height: STREAM_TRAIL_MARK_SIZE,
+                      borderRadius: STREAM_TRAIL_MARK_SIZE / 2,
+                      top: (STREAM_TRAIL_MARK_GLOW - STREAM_TRAIL_MARK_SIZE) / 2,
+                      left: (STREAM_TRAIL_MARK_GLOW - STREAM_TRAIL_MARK_SIZE) / 2,
+                    },
+                  ]}
+                />
               </View>
             ) : null}
             <EntryBodyPreview
@@ -489,18 +486,7 @@ const RecentStreamRow = memo(function RecentStreamRowInner({
       overshootLeft={false}
       /** Full-width reveal before commit — reduces accidental delete vs horizontal chrome. */
       rightThreshold={onEntryDelete != null ? DELETE_ACTION_WIDTH : 40}
-      leftThreshold={showThreadPeel ? STREAM_THREAD_PEEL_ACTION_WIDTH : 40}
-      renderLeftActions={
-        showThreadPeel
-          ? () => (
-              <StreamThreadPeelActions
-                neighbors={threadPeelNeighbors}
-                onSelect={onThreadNeighborPress}
-                onClose={closePeel}
-              />
-            )
-          : undefined
-      }
+      leftThreshold={40}
       renderRightActions={
         onEntryDelete != null
           ? () => (
@@ -779,14 +765,15 @@ function RecentListInner({
   onScrollToEntryComplete,
   streamLoadingMore = false,
   streamScrollVelocityY = 0,
-  threadPeelEnabled = false,
-  threadPeelSourceEntries = [],
   trailLinkedIds,
   onSectionLabelLongPress,
-  onThreadPeelRevealed,
+  layoutWidth,
 }: RecentListProps) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
-  const streamGutter = screenContentGutter(windowWidth);
+  const { streamGutter, streamEntryInset } = resolveStreamLayoutInsets(
+    layoutWidth ?? windowWidth,
+    windowWidth,
+  );
   const t = useAppTheme();
   const { colors, typography } = t;
   const { body, meta } = typography;
@@ -870,19 +857,6 @@ function RecentListInner({
   const groups = useMemo(() => groupEntriesByDate(entries), [entries]);
   const newestShownId = groups[0]?.items[0]?.id ?? null;
   const orderedIds = useMemo(() => groups.flatMap((g) => g.items.map((e) => e.id)), [groups]);
-  const threadPeelByEntryId = useMemo(() => {
-    if (!threadPeelEnabled || threadPeelSourceEntries.length === 0) {
-      return null;
-    }
-    const map = new Map<string, Entry[]>();
-    for (const entry of entries) {
-      const neighbors = buildThreadPeelNeighbors(entry, threadPeelSourceEntries);
-      if (neighbors.length > 0) {
-        map.set(entry.id, neighbors);
-      }
-    }
-    return map;
-  }, [threadPeelEnabled, threadPeelSourceEntries, entries]);
   const flatItems = useMemo(() => {
     const out: Array<
       | { kind: 'header'; label: string; sectionIndex: number; monthKey: MonthKey; key: string }
@@ -1235,12 +1209,10 @@ function RecentListInner({
               streamFocusOpacitySnap={focusSnapActive}
               searchHighlightQuery={searchHighlightQuery}
               streamGutter={streamGutter}
+              streamEntryInset={streamEntryInset}
               onEntryPress={onEntryPress}
               onEntryDelete={onEntryDelete}
-              threadPeelEnabled={threadPeelEnabled}
-              threadPeelNeighbors={threadPeelByEntryId?.get(item.entry.id) ?? []}
               hasTrailLink={trailLinkedIds?.has(item.entry.id) ?? false}
-              onThreadPeelRevealed={onThreadPeelRevealed}
             />
           </View>
         );
@@ -1339,15 +1311,15 @@ const styles = StyleSheet.create({
   },
   trailMarkGutter: {
     position: 'absolute',
-    width: STREAM_TRAIL_MARK_SIZE,
-    height: STREAM_TRAIL_MARK_SIZE,
     zIndex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  trailMarkGlow: {
+    position: 'absolute',
   },
   trailMark: {
-    width: STREAM_TRAIL_MARK_SIZE,
-    height: STREAM_TRAIL_MARK_SIZE,
-    borderRadius: 2,
-    backgroundColor: 'rgba(34, 200, 220, 0.55)',
+    position: 'absolute',
   },
   line: {},
   deleteTrack: {

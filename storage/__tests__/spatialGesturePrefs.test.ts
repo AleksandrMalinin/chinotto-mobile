@@ -2,21 +2,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
   clearSpatialGestureHints,
+  getDevGestureHintsPreviewEnabled,
   getTemporalMapHintDismissed,
-  getThreadPeelHintDismissed,
+  setDevGestureHintsPreviewEnabled,
   setTemporalMapHintDismissed,
-  setThreadPeelHintDismissed,
+  toggleDevGestureHintsPreviewEnabled,
 } from '../spatialGesturePrefs';
 
 describe('spatialGesturePrefs', () => {
   beforeEach(async () => {
     await AsyncStorage.clear();
-  });
-
-  it('tracks thread peel hint dismissal', async () => {
-    expect(await getThreadPeelHintDismissed()).toBe(false);
-    await setThreadPeelHintDismissed();
-    expect(await getThreadPeelHintDismissed()).toBe(true);
   });
 
   it('tracks temporal map hint dismissal', async () => {
@@ -25,11 +20,18 @@ describe('spatialGesturePrefs', () => {
     expect(await getTemporalMapHintDismissed()).toBe(true);
   });
 
-  it('clears both hints for dev QA', async () => {
-    await setThreadPeelHintDismissed();
+  it('clears temporal hint for dev QA', async () => {
     await setTemporalMapHintDismissed();
     await clearSpatialGestureHints();
-    expect(await getThreadPeelHintDismissed()).toBe(false);
     expect(await getTemporalMapHintDismissed()).toBe(false);
+  });
+
+  it('toggles dev gesture hints preview', async () => {
+    expect(await getDevGestureHintsPreviewEnabled()).toBe(false);
+    await setDevGestureHintsPreviewEnabled(true);
+    expect(await getDevGestureHintsPreviewEnabled()).toBe(true);
+    const next = await toggleDevGestureHintsPreviewEnabled();
+    expect(next).toBe(false);
+    expect(await getDevGestureHintsPreviewEnabled()).toBe(false);
   });
 });

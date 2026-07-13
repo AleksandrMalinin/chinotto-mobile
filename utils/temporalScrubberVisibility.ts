@@ -51,3 +51,30 @@ export function isTemporalScrubberVisible(params: {
     shouldPeekTemporalScrubber(params.streamScrollY, params.scrollVelocityY)
   );
 }
+
+export function shouldShowTemporalMapGestureHint(params: {
+  devPreviewActive: boolean;
+  readSheetOpen: boolean;
+  recallSearchActive: boolean;
+  devHintSuppressed: boolean;
+  baseVisible: boolean;
+  interfaceGuideVisible: boolean;
+  hintDismissed: boolean;
+  scrubberEligible: boolean;
+  streamScrollY: number;
+  hasStreamEntries: boolean;
+}): boolean {
+  if (!params.hasStreamEntries) {
+    return false;
+  }
+  if (params.devPreviewActive) {
+    return !params.readSheetOpen && !params.recallSearchActive && !params.devHintSuppressed;
+  }
+  return (
+    params.baseVisible &&
+    !params.interfaceGuideVisible &&
+    !params.hintDismissed &&
+    params.scrubberEligible &&
+    params.streamScrollY >= TEMPORAL_NAV_MIN_SCROLL_Y
+  );
+}

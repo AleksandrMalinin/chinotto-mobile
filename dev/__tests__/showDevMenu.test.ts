@@ -13,6 +13,8 @@ describe('showDevMenu', () => {
       onResetSyncCaptureQA: jest.fn(),
       onPreviewAppUpdateModal: jest.fn(),
       onResetSpatialGestureHints: jest.fn(),
+      onToggleGestureHintsPreview: jest.fn(),
+      gestureHintsPreviewEnabled: true,
     });
 
     const buttons = alertSpy.mock.calls[0][2] as { text: string }[];
@@ -23,6 +25,7 @@ describe('showDevMenu', () => {
     expect(buttons.some((b) => b.text === 'Preview app update (soft)')).toBe(true);
     expect(buttons.some((b) => b.text === 'Preview app update (forced)')).toBe(true);
     expect(buttons.some((b) => b.text === 'Reset spatial gesture hints')).toBe(true);
+    expect(buttons.some((b) => b.text === 'Gesture hints preview: On')).toBe(true);
     expect(buttons.some((b) => b.text.includes('Temporal scrubber'))).toBe(false);
     expect(buttons.some((b) => b.text.includes('Echo UI'))).toBe(false);
 

@@ -15,8 +15,18 @@ export type DevMenuOptions = {
   onResetSyncCaptureQA?: () => void | Promise<void>;
   /** Show the shipped `UpdateScreen` in soft or forced mode (wired from `App`). */
   onPreviewAppUpdateModal?: (mode: 'soft' | 'forced') => void;
-  /** Clear one-time spatial gesture hints (thread peel + temporal map). */
+  /** Clear one-time spatial gesture hints (temporal map). */
   onResetSpatialGestureHints?: () => void | Promise<void>;
+  /** Clear first-time Echo intro modal. */
+  onResetEchoIntro?: () => void | Promise<void>;
+  /** Open the interface guide modal. */
+  onPreviewInterfaceGuide?: () => void;
+  /** Toggle dev preview — force gesture hints on capture. */
+  onToggleGestureHintsPreview?: () => void | Promise<void>;
+  gestureHintsPreviewEnabled?: boolean;
+  /** Toggle dev preview — empty stream + first-install capture UX (DB untouched). */
+  onToggleFirstInstallStreamPreview?: () => void | Promise<void>;
+  firstInstallStreamPreviewEnabled?: boolean;
 };
 
 /**
@@ -68,6 +78,34 @@ export function showDevMenu(options: DevMenuOptions): void {
     buttons.push({
       text: 'Reset spatial gesture hints',
       onPress: () => void options.onResetSpatialGestureHints?.(),
+    });
+  }
+  if (options.onPreviewInterfaceGuide != null) {
+    buttons.push({
+      text: 'Preview interface guide',
+      onPress: options.onPreviewInterfaceGuide,
+    });
+  }
+  if (options.onResetEchoIntro != null) {
+    buttons.push({
+      text: 'Reset Echo intro',
+      onPress: () => void options.onResetEchoIntro?.(),
+    });
+  }
+  if (options.onToggleGestureHintsPreview != null) {
+    buttons.push({
+      text: options.gestureHintsPreviewEnabled
+        ? 'Gesture hints preview: On'
+        : 'Gesture hints preview: Off',
+      onPress: () => void options.onToggleGestureHintsPreview?.(),
+    });
+  }
+  if (options.onToggleFirstInstallStreamPreview != null) {
+    buttons.push({
+      text: options.firstInstallStreamPreviewEnabled
+        ? 'First install preview: On'
+        : 'First install preview: Off',
+      onPress: () => void options.onToggleFirstInstallStreamPreview?.(),
     });
   }
   buttons.push({ text: 'Cancel', style: 'cancel' });

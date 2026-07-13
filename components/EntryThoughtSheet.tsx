@@ -41,7 +41,7 @@ import {
   themeLabel,
   type UserTheme,
 } from '../utils/entryThemes';
-import { ThoughtTrailRail } from './ThoughtTrailRail';
+import { ThoughtThreadPanel } from './ThoughtThreadPanel';
 import { SheetEditVoiceDock } from './SheetEditVoiceDock';
 import { fonts, screenContentGutter, useAppTheme } from '../theme';
 import { displayHostForUrl, extractHttpUrlsFromText } from '../utils/extractHttpUrlsFromText';
@@ -572,6 +572,28 @@ export function EntryThoughtSheet({
             {formatEntryTime(entry.createdAt)}
           </Text>
           <View style={[styles.toolbarActions, isExpanded ? styles.toolbarActionsDim : null]}>
+            {!isExpanded ? (
+              <Pressable
+                testID="entry-thought-continue"
+                onPress={expandSheet}
+                accessibilityRole="button"
+                accessibilityLabel="Continue this thought"
+                hitSlop={10}
+                style={({ pressed }) => [styles.actionBtn, { opacity: pressed ? 0.65 : 1 }]}
+              >
+                <Text
+                  style={{
+                    color: colors.accent,
+                    fontFamily: fonts.medium,
+                    fontSize: 15,
+                    lineHeight: 20,
+                    letterSpacing: 0.2,
+                  }}
+                >
+                  Continue
+                </Text>
+              </Pressable>
+            ) : null}
             {firstHttpUrl != null ? (
               <Pressable
                 testID="entry-read-open-link"
@@ -928,7 +950,7 @@ export function EntryThoughtSheet({
                       </Text>
                     </Pressable>
                     {entry ? (
-                      <ThoughtTrailRail
+                      <ThoughtThreadPanel
                         current={entry}
                         earlier={trailEarlier}
                         later={trailLater}

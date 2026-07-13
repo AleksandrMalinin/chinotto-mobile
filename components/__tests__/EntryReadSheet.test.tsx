@@ -251,15 +251,28 @@ describe('EntryThoughtSheet', () => {
     expect(tree).not.toContain('KeyboardAvoidingView');
   });
 
-  it('shows a grabber affordance without a Continue label', () => {
-    const { getByTestId, queryByTestId } = render(
+  it('shows a grabber affordance and Continue in compact mode', () => {
+    const { getByTestId } = render(
       <SafeAreaProvider initialMetrics={safeAreaMetrics}>
         <EntryThoughtSheet visible entry={sampleEntry} onClose={jest.fn()} />
       </SafeAreaProvider>
     );
 
     expect(getByTestId('entry-thought-grabber')).toBeTruthy();
-    expect(queryByTestId('entry-thought-continue')).toBeNull();
+    expect(getByTestId('entry-thought-continue')).toBeTruthy();
+  });
+
+  it('expands into full-screen edit mode when Continue is pressed', () => {
+    const { getByTestId, queryByTestId } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <EntryThoughtSheet visible entry={sampleEntry} onClose={jest.fn()} />
+      </SafeAreaProvider>
+    );
+
+    fireEvent.press(getByTestId('entry-thought-continue'));
+    expect(getByTestId('entry-thought-input')).toBeTruthy();
+    expect(queryByTestId('entry-read-body')).toBeNull();
+    expect(getByTestId('entry-thought-grabber-expanded')).toBeTruthy();
   });
 
   it('expands into full-screen edit mode on double tap of the body', () => {
@@ -294,6 +307,38 @@ describe('EntryThoughtSheet', () => {
     fireEvent.press(body);
     fireEvent.press(body);
     expect(getByRole('button', { name: 'Speak thought' })).toBeTruthy();
+  });
+
+  it('shows thread panel when related neighbors exist', async () => {
+    const { getAllEntries } = require('../../storage/entryRepository') as {
+      getAllEntries: jest.Mock;
+    };
+    const entry = {
+      id: 'e1',
+      text: 'api refactor error handling',
+      createdAt: '2025-06-15T14:30:00.000Z',
+    };
+    getAllEntries.mockResolvedValueOnce([
+      {
+        id: 'e0',
+        text: 'api refactor draft notes',
+        createdAt: '2025-06-10T10:00:00.000Z',
+      },
+      entry,
+      {
+        id: 'e2',
+        text: 'error handling release plan',
+        createdAt: '2025-06-20T10:00:00.000Z',
+      },
+    ]);
+
+    const { findByTestId } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <EntryThoughtSheet visible entry={entry} onClose={jest.fn()} />
+      </SafeAreaProvider>,
+    );
+
+    expect(await findByTestId('thought-thread-panel')).toBeTruthy();
   });
 
   it('shows listening bar while sheet voice is active', () => {

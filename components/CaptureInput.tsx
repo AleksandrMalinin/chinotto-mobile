@@ -44,7 +44,11 @@ export const CaptureInput = forwardRef<TextInput, CaptureInputProps>(
       maxHeightProp ?? Math.min(windowHeight * 0.45, 340);
 
     const { colors, typography } = t;
-    const { capture } = typography;
+    const isEmpty = value.length === 0;
+    const typeStyle = isEmpty ? typography.captureHero : typography.capture;
+    const resolvedPlaceholderColor =
+      placeholderTextColor ??
+      (isEmpty ? colors.captureInvitation : colors.capturePlaceholder);
 
     return (
       <TextInput
@@ -56,10 +60,10 @@ export const CaptureInput = forwardRef<TextInput, CaptureInputProps>(
             color: colors.fg,
             minHeight,
             maxHeight,
-            fontFamily: capture.fontFamily,
-            fontSize: capture.fontSize,
-            letterSpacing: capture.letterSpacing,
-            lineHeight: capture.lineHeight,
+            fontFamily: typeStyle.fontFamily,
+            fontSize: typeStyle.fontSize,
+            letterSpacing: typeStyle.letterSpacing,
+            lineHeight: typeStyle.lineHeight,
             paddingHorizontal: 0,
             paddingTop: captureInputPaddingTop,
             paddingBottom: captureInputPaddingBottom,
@@ -68,7 +72,7 @@ export const CaptureInput = forwardRef<TextInput, CaptureInputProps>(
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={placeholderTextColor}
+        placeholderTextColor={resolvedPlaceholderColor}
         onFocus={onFocus}
         onBlur={onBlur}
         multiline

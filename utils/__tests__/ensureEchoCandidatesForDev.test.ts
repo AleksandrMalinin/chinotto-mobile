@@ -31,4 +31,17 @@ describe('ensureEchoCandidatesForDev', () => {
     expect(out[0]?.id).toBe('s5');
     process.env.NODE_ENV = env;
   });
+
+  it('does not re-inject suppressed dev candidates after dismiss', () => {
+    const env = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'development';
+    const stream = Array.from({ length: 6 }, (_, index) => ({
+      id: `s${index}`,
+      text: `thought ${index}`,
+      createdAt: `2025-01-0${index + 1}T00:00:00.000Z`,
+    }));
+    const suppressed = new Set(['s5']);
+    expect(ensureEchoCandidatesForDev([], stream, suppressed)).toEqual([]);
+    process.env.NODE_ENV = env;
+  });
 });

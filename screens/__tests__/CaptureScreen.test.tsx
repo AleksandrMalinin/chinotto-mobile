@@ -92,6 +92,19 @@ jest.mock('../../storage/firstLaunchCapturePrefs', () => ({
   clearFirstLaunchEmptyCaptureRevealDone: jest.fn(() => Promise.resolve()),
 }));
 
+jest.mock('../../storage/spatialGesturePrefs', () => ({
+  getDevGestureHintsPreviewEnabled: jest.fn(() => Promise.resolve(false)),
+  getTemporalMapHintDismissed: jest.fn(() => Promise.resolve(true)),
+  setTemporalMapHintDismissed: jest.fn(() => Promise.resolve()),
+  clearSpatialGestureHints: jest.fn(() => Promise.resolve()),
+  toggleDevGestureHintsPreviewEnabled: jest.fn(() => Promise.resolve(false)),
+}));
+
+jest.mock('../../storage/devFirstInstallPreviewPrefs', () => ({
+  getDevFirstInstallStreamPreviewEnabled: jest.fn(() => Promise.resolve(false)),
+  toggleDevFirstInstallStreamPreviewEnabled: jest.fn(() => Promise.resolve(false)),
+}));
+
 jest.mock('../DeleteAccountScreen', () => ({
   DeleteAccountScreen: () => null,
 }));
@@ -414,6 +427,37 @@ describe('CaptureScreen', () => {
     } finally {
       focusSpy.mockRestore();
     }
+  });
+
+  it('defers widget thought sheet until allowCaptureFocus becomes true', async () => {
+    const widgetEntry = {
+      id: 'widget-thought',
+      text: 'From widget',
+      createdAt: '2025-03-10T16:00:00.000Z',
+    };
+    jest.mocked(entryRepository.getEntryById).mockResolvedValue(widgetEntry);
+
+    const { rerender, findByTestId, queryByTestId } = render(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <CaptureScreen allowCaptureFocus={false} thoughtEntryRequestId="widget-thought" />
+      </SafeAreaProvider>
+    );
+
+    await findByTestId('capture-input');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(queryByTestId('entry-read-sheet')).toBeNull();
+
+    rerender(
+      <SafeAreaProvider initialMetrics={safeAreaMetrics}>
+        <CaptureScreen allowCaptureFocus thoughtEntryRequestId="widget-thought" />
+      </SafeAreaProvider>
+    );
+
+    await waitFor(() => {
+      expect(queryByTestId('entry-read-sheet')).toBeTruthy();
+    });
   });
 
   it('opens read sheet with full entry text when a recent row is pressed', async () => {
@@ -779,7 +823,9 @@ describe('CaptureScreen', () => {
       fireEvent.press(getByTestId('header-logo'));
       fireEvent.press(getByTestId('settings-open-dev-menu'));
 
-      expect(jest.mocked(devMenuModule.showDevMenu)).toHaveBeenCalledTimes(1);
+      await waitFor(() => {
+        expect(jest.mocked(devMenuModule.showDevMenu)).toHaveBeenCalledTimes(1);
+      });
     } finally {
       RN.Platform.OS = prevOs;
     }
@@ -809,6 +855,10 @@ describe('CaptureScreen', () => {
       await findByTestId('capture-input');
       fireEvent.press(getByTestId('header-logo'));
       fireEvent.press(getByTestId('settings-open-dev-menu'));
+
+      await waitFor(() => {
+        expect(jest.mocked(devMenuModule.showDevMenu)).toHaveBeenCalledTimes(1);
+      });
 
       const opts = jest.mocked(devMenuModule.showDevMenu).mock.calls[0][0];
       await act(async () => {

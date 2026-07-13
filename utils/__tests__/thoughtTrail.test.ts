@@ -65,7 +65,7 @@ describe('buildThoughtTrailLinkedIds', () => {
     expect(linked.has('d')).toBe(false);
   });
 
-  it('includes keyword-related neighbors in trail for peel and sheet', () => {
+  it('includes keyword-related neighbors in trail for sheet thread panel', () => {
     const anchor = {
       id: 'c',
       text: 'AI: test',

@@ -92,9 +92,10 @@ describe('useEchoResurface', () => {
 
     expect(result.current.echoCandidates).toHaveLength(1);
     act(() => {
-      result.current.dismissEcho();
+      result.current.dismissEcho('echo-1');
     });
     expect(result.current.echoCandidates).toHaveLength(0);
+    expect(result.current.dismissedEchoIds.has('echo-1')).toBe(true);
 
     await act(async () => {
       appStateHandler?.('background');

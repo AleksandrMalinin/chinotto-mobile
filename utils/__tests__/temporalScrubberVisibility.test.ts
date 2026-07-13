@@ -2,6 +2,7 @@ import {
   isTemporalScrubberEligible,
   isTemporalScrubberVisible,
   shouldPeekTemporalScrubber,
+  shouldShowTemporalMapGestureHint,
 } from '../temporalScrubberVisibility';
 import {
   TEMPORAL_NAV_MIN_ENTRY_COUNT,
@@ -125,5 +126,53 @@ describe('temporalScrubberVisibility', () => {
         scrollVelocityY: 0,
       }),
     ).toBe(false);
+  });
+
+  it('shouldShowTemporalMapGestureHint stays off when the stream has no rows', () => {
+    expect(
+      shouldShowTemporalMapGestureHint({
+        devPreviewActive: true,
+        readSheetOpen: false,
+        recallSearchActive: false,
+        devHintSuppressed: false,
+        baseVisible: true,
+        interfaceGuideVisible: false,
+        hintDismissed: false,
+        scrubberEligible: true,
+        streamScrollY: TEMPORAL_NAV_MIN_SCROLL_Y,
+        hasStreamEntries: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowTemporalMapGestureHint({
+        devPreviewActive: false,
+        readSheetOpen: false,
+        recallSearchActive: false,
+        devHintSuppressed: false,
+        baseVisible: true,
+        interfaceGuideVisible: false,
+        hintDismissed: false,
+        scrubberEligible: true,
+        streamScrollY: TEMPORAL_NAV_MIN_SCROLL_Y,
+        hasStreamEntries: false,
+      }),
+    ).toBe(false);
+  });
+
+  it('shouldShowTemporalMapGestureHint shows in dev preview only with stream rows', () => {
+    expect(
+      shouldShowTemporalMapGestureHint({
+        devPreviewActive: true,
+        readSheetOpen: false,
+        recallSearchActive: false,
+        devHintSuppressed: false,
+        baseVisible: true,
+        interfaceGuideVisible: false,
+        hintDismissed: false,
+        scrubberEligible: false,
+        streamScrollY: 0,
+        hasStreamEntries: true,
+      }),
+    ).toBe(true);
   });
 });

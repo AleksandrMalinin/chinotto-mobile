@@ -3,7 +3,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useRef } from 'react';
 import { Animated, Platform, Pressable, StyleSheet, View } from 'react-native';
 
-import { captureInputPaddingTop, type AppTheme } from '../theme';
+import type { AppTheme } from '../theme';
+import {
+  captureMicMarginTop,
+  MIC_LISTENING_SHADOW_RADIUS,
+  MIC_OUTER,
+} from './voiceCaptureAlignment';
 
 export type VoiceCaptureControlPhase = 'idle' | 'listening';
 
@@ -13,7 +18,13 @@ export type VoiceMicButtonProps = {
   theme: AppTheme;
   /** `capture` = beside composer; `inline` = sheet toolbar / edit chrome. */
   placement?: 'capture' | 'inline';
+  /** Match active capture line height (hero when empty, capture when typing). */
+  captureLineHeight?: number;
 };
+
+const MIC_INNER = 30;
+const MIC_ICON_SIZE = 17;
+const MIC_LISTENING_SCALE = 1.04;
 
 /** Mic beside capture field; scale pulse while listening is the only listening affordance. */
 export function VoiceMicButton({
@@ -21,6 +32,7 @@ export function VoiceMicButton({
   onPress,
   theme: t,
   placement = 'capture',
+  captureLineHeight,
 }: VoiceMicButtonProps) {
   const listening = phase === 'listening';
   const micScale = useRef(new Animated.Value(1)).current;
@@ -64,13 +76,9 @@ export function VoiceMicButton({
       ? 0.26
       : 0.06;
   const { capture } = t.typography;
+  const activeCaptureLineHeight = captureLineHeight ?? capture.lineHeight;
   const micMarginTop =
-    placement === 'inline'
-      ? 0
-      : captureInputPaddingTop +
-        capture.lineHeight / 2 -
-        MIC_OUTER / 2 +
-        Platform.select({ ios: -2, default: -3 });
+    placement === 'inline' ? 0 : captureMicMarginTop(activeCaptureLineHeight);
 
   return (
     <Pressable
@@ -120,7 +128,7 @@ export function VoiceMicButton({
           >
             <Ionicons
               name={listening ? 'mic' : 'mic-outline'}
-              size={20}
+              size={MIC_ICON_SIZE}
               color={listening ? t.colors.accent : t.sunlightMode ? t.colors.muted : t.colors.fgDim}
             />
           </View>
@@ -130,34 +138,20 @@ export function VoiceMicButton({
   );
 }
 
-const MIC_OUTER = 42;
-const MIC_INNER = 36;
-const MIC_LISTENING_SCALE = 1.04;
-const MIC_LISTENING_SHADOW_RADIUS = 10;
-
-/** Room beside capture for listening glow (iOS shadow extends outside layout bounds). */
-export const VOICE_MIC_CLUSTER_OVERFLOW_PAD_HORIZONTAL = Math.ceil(MIC_LISTENING_SHADOW_RADIUS * 0.85);
-
-export const VOICE_MIC_CLUSTER_WIDTH =
-  MIC_OUTER + 2 * VOICE_MIC_CLUSTER_OVERFLOW_PAD_HORIZONTAL;
-
-/** Pad the action cluster so mic ring alignment (negative marginTop) isn't clipped by overflow:hidden. */
-export const VOICE_MIC_CLUSTER_OVERFLOW_PAD_TOP = Math.max(
-  0,
-  -(
-    captureInputPaddingTop +
-    26 / 2 -
-    MIC_OUTER / 2 +
-    (Platform.OS === 'ios' ? -2 : -3)
-  ),
-);
+export {
+  MIC_LISTENING_SHADOW_RADIUS,
+  VOICE_MIC_CLUSTER_OVERFLOW_PAD_HORIZONTAL,
+  VOICE_MIC_CLUSTER_OVERFLOW_PAD_TOP,
+  VOICE_MIC_CLUSTER_WIDTH,
+  voiceMicClusterOverflowPadTop,
+} from './voiceCaptureAlignment';
 
 const styles = StyleSheet.create({
   micGradientRing: {
     width: MIC_OUTER,
     height: MIC_OUTER,
     borderRadius: MIC_OUTER / 2,
-    padding: 3,
+    padding: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
